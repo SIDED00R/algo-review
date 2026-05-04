@@ -51,16 +51,18 @@ header {
 }
 .header-inner {
   max-width: 960px; margin: 0 auto;
-  display: flex; align-items: center; gap: 24px;
-  padding: 0 20px; height: 58px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; height: 58px; overflow: hidden;
 }
 .logo { font-size: 1.1rem; font-weight: 700; color: var(--accent2); white-space: nowrap; }
 
-nav { display: flex; gap: 4px; }
+nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+nav::-webkit-scrollbar { display: none; }
 .tab-btn {
   background: none; border: none; color: var(--text-muted);
   padding: 6px 14px; border-radius: 8px; cursor: pointer;
   font-size: 0.9rem; font-weight: 500; transition: all .2s;
+  white-space: nowrap; flex-shrink: 0;
 }
 .tab-btn:hover { color: var(--text); background: var(--surface2); }
 .tab-btn.active { color: var(--accent); background: rgba(108,141,250,.12); }
