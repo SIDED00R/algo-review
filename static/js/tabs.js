@@ -14,5 +14,26 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'history') loadHistory();
     if (btn.dataset.tab === 'import') loadImportedHistory();
     if (btn.dataset.tab === 'stats') loadTierChart();
+
+    /* 모바일: 탭 선택 후 nav 닫기 */
+    closeNav();
   });
+});
+
+/* 햄버거 메뉴 토글 */
+const menuToggle = document.getElementById('menu-toggle');
+const mainNav = document.getElementById('main-nav');
+
+function closeNav() {
+  mainNav?.classList.remove('open');
+  if (menuToggle) {
+    menuToggle.classList.remove('open');
+    menuToggle.setAttribute('aria-expanded', 'false');
+  }
+}
+
+menuToggle?.addEventListener('click', () => {
+  const isOpen = mainNav.classList.toggle('open');
+  menuToggle.classList.toggle('open', isOpen);
+  menuToggle.setAttribute('aria-expanded', String(isOpen));
 });
