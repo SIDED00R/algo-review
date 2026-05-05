@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>알고리즘 코드 리뷰 & 문제 추천</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260430" />
+  <link rel="stylesheet" href="/static/style.css?v=20260505" />
   <!-- CodeMirror 5 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
@@ -22,7 +22,7 @@
   <header>
     <div class="header-inner">
       <span class="logo">🧠 알고리즘 코드 리뷰</span>
-      <nav>
+      <nav id="main-nav">
         <button class="tab-btn active" data-tab="review">코드 리뷰</button>
         <button class="tab-btn" data-tab="recommend">문제 추천</button>
         <button class="tab-btn" data-tab="stats">통계</button>
@@ -30,14 +30,29 @@
         <button class="tab-btn" data-tab="history">리뷰 기록</button>
         <button class="tab-btn" data-tab="import">기록 가져오기</button>
       </nav>
-      <div id="github-status-badge" style="display:none;align-items:center;gap:8px;font-size:.82rem">
-        <img id="github-avatar" src="" width="22" height="22" style="border-radius:50%;display:none" />
-        <span id="github-username-badge" style="color:var(--green);font-weight:600"></span>
-        <select id="github-repo-select" style="font-size:.78rem;padding:3px 6px;max-width:180px" title="GitHub 저장소 선택"></select>
-        <button id="github-disconnect-btn" style="font-size:.72rem;padding:2px 8px;background:none;border:1px solid var(--text-muted);border-radius:4px;color:var(--text-muted);cursor:pointer">연결 해제</button>
+      <div class="header-actions">
+        <div class="github-wrap">
+          <button id="github-icon-btn" class="github-icon-btn" title="GitHub">🐙</button>
+          <div id="github-dropdown" class="github-dropdown hidden">
+            <div id="github-status-badge" style="display:none">
+              <div class="github-user-row">
+                <img id="github-avatar" src="" width="28" height="28" style="border-radius:50%;display:none" />
+                <span id="github-username-badge"></span>
+              </div>
+              <select id="github-repo-select" title="GitHub 저장소 선택"></select>
+              <button id="github-disconnect-btn" class="github-disconnect-btn">연결 해제</button>
+            </div>
+            <div id="github-connect-inner" style="display:none">
+              <p class="github-dropdown-desc">GitHub에 연결하면 풀이를 자동으로 저장할 수 있습니다.</p>
+              <button id="github-connect-btn" class="btn-primary" style="width:100%">🐙 GitHub 연결</button>
+            </div>
+          </div>
+        </div>
+        <button id="theme-toggle" class="theme-btn" title="테마 변경">🌙</button>
+        <button id="menu-toggle" class="menu-btn" aria-label="메뉴 열기" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
       </div>
-      <button id="github-connect-btn" class="btn-primary" style="font-size:.8rem;padding:5px 12px">🐙 GitHub 연결</button>
-      <button id="theme-toggle" class="theme-btn" title="테마 변경">🌙</button>
     </div>
   </header>
 
@@ -365,9 +380,9 @@
   <script src="/static/js/utils.js?v=20260430"></script>
   <!-- 기능별 모듈 -->
   <script src="/static/js/theme.js?v=20260430"></script>
-  <script src="/static/js/github.js?v=20260430"></script>
+  <script src="/static/js/github.js?v=20260505"></script>
   <script src="/static/js/tier-chart.js?v=20260430"></script>
-  <script src="/static/js/tabs.js?v=20260430"></script>
+  <script src="/static/js/tabs.js?v=20260505"></script>
   <script src="/static/js/review.js?v=20260430"></script>
   <script src="/static/js/recommend.js?v=20260430"></script>
   <script src="/static/js/problem-modal.js?v=20260430"></script>

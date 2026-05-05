@@ -4,15 +4,24 @@ async function loadGithubStatus() {
   try {
     const res = await fetch('/auth/github/status');
     const data = await res.json();
-    const connectBtn = document.getElementById('github-connect-btn');
+    const iconBtn = document.getElementById('github-icon-btn');
     const statusBadge = document.getElementById('github-status-badge');
+    const connectInner = document.getElementById('github-connect-inner');
     const usernameBadge = document.getElementById('github-username-badge');
+    const avatar = document.getElementById('github-avatar');
     const repoSelect = document.getElementById('github-repo-select');
 
     if (data.connected) {
-      connectBtn.style.display = 'none';
-      statusBadge.style.display = 'flex';
+      iconBtn.classList.add('connected');
+      iconBtn.title = `GitHub: @${data.username}`;
+      statusBadge.style.display = 'block';
+      connectInner.style.display = 'none';
       usernameBadge.textContent = `@${data.username}`;
+
+      if (data.avatar_url) {
+        avatar.src = data.avatar_url;
+        avatar.style.display = 'inline-block';
+      }
 
       try {
         const repoRes = await fetch('/auth/github/repos');
@@ -33,11 +42,28 @@ async function loadGithubStatus() {
         });
       });
     } else {
-      connectBtn.style.display = '';
+      iconBtn.classList.remove('connected');
+      iconBtn.title = 'GitHub 연결';
       statusBadge.style.display = 'none';
+      connectInner.style.display = 'block';
     }
   } catch {}
 }
+
+/* 드롭다운 토글 */
+document.getElementById('github-icon-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const dropdown = document.getElementById('github-dropdown');
+  dropdown.classList.toggle('hidden');
+});
+
+/* 외부 클릭 시 드롭다운 닫기 */
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.github-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('github-dropdown')?.classList.add('hidden');
+  }
+});
 
 document.getElementById('github-connect-btn')?.addEventListener('click', () => {
   window.location.href = '/auth/github';

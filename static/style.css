@@ -56,8 +56,8 @@ header {
 }
 .logo { font-size: 1.1rem; font-weight: 700; color: var(--accent2); white-space: nowrap; }
 
-nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
-nav::-webkit-scrollbar { display: none; }
+#main-nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; flex: 1; }
+#main-nav::-webkit-scrollbar { display: none; }
 .tab-btn {
   background: none; border: none; color: var(--text-muted);
   padding: 6px 14px; border-radius: 8px; cursor: pointer;
@@ -67,12 +67,79 @@ nav::-webkit-scrollbar { display: none; }
 .tab-btn:hover { color: var(--text); background: var(--surface2); }
 .tab-btn.active { color: var(--accent); background: rgba(108,141,250,.12); }
 
+/* ── 헤더 우측 액션 그룹 ── */
+.header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
+
+/* ── GitHub 드롭다운 ── */
+.github-wrap { position: relative; }
+.github-icon-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  font-size: 1.1rem; transition: background .2s; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.github-icon-btn:hover { background: var(--border); }
+.github-icon-btn.connected { border-color: var(--green); }
+.github-dropdown {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; width: 260px;
+  box-shadow: var(--shadow); z-index: 200;
+}
+.github-user-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+#github-username-badge { color: var(--green); font-weight: 600; font-size: .88rem; }
+#github-repo-select { width: 100%; font-size: .82rem; margin-bottom: 8px; }
+.github-disconnect-btn {
+  width: 100%; font-size: .8rem; padding: 5px 10px;
+  background: none; border: 1px solid var(--text-muted);
+  border-radius: 6px; color: var(--text-muted); cursor: pointer;
+  transition: border-color .2s, color .2s;
+}
+.github-disconnect-btn:hover { border-color: var(--red); color: var(--red); }
+.github-dropdown-desc { font-size: .82rem; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
+
+/* ── 테마 버튼 ── */
 .theme-btn {
-  margin-left: auto; background: var(--surface2); border: 1px solid var(--border);
+  background: var(--surface2); border: 1px solid var(--border);
   border-radius: 8px; padding: 5px 10px; cursor: pointer;
   font-size: 1rem; transition: background .2s; flex-shrink: 0;
 }
 .theme-btn:hover { background: var(--border); }
+
+/* ── 햄버거 버튼 (모바일 전용) ── */
+.menu-btn {
+  display: none; flex-direction: column; justify-content: center; gap: 5px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; cursor: pointer; width: 38px; height: 38px;
+}
+.menu-btn span {
+  display: block; height: 2px; background: var(--text);
+  border-radius: 2px; transition: transform .25s, opacity .25s;
+}
+.menu-btn.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.menu-btn.open span:nth-child(2) { opacity: 0; }
+.menu-btn.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+  .header-inner {
+    flex-wrap: wrap; height: auto; min-height: 58px;
+    padding: 10px 16px; gap: 10px;
+  }
+  .logo { flex: 1; }
+  .header-actions { margin-left: 0; }
+  .menu-btn { display: flex; }
+  #main-nav {
+    display: none; flex-direction: column; gap: 4px;
+    width: 100%; order: 3; flex: none;
+    padding: 8px 0; border-top: 1px solid var(--border);
+  }
+  #main-nav.open { display: flex; }
+  .tab-btn { text-align: left; padding: 10px 14px; font-size: .95rem; }
+  .github-dropdown { right: 0; left: auto; width: 240px; }
+}
 
 /* ── 메인 ── */
 main { max-width: 960px; margin: 0 auto; padding: 28px 20px 60px; }
