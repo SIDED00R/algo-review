@@ -5,6 +5,7 @@ import requests
 from lxml import etree
 from fastapi import APIRouter, HTTPException
 from demo_mode import IS_DEMO, DEMO_CF_PROBLEM
+import clients as api_client
 
 _MAX_TOKENS = int(os.environ.get("OPENAI_MAX_TOKENS", "2000"))
 _TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
@@ -65,17 +66,6 @@ async def get_cf_problem(problem_ref: str):
 
     tree = etree.fromstring(resp.text.encode(), etree.HTMLParser())
 
-    def _xpath_text(expr: str) -> str:
-        nodes = tree.xpath(expr)
-        if not nodes:
-            return ""
-        el = nodes[0]
-        for st in el.xpath('.//*[contains(@class,"section-title")]'):
-            parent = st.getparent()
-            if parent is not None:
-                parent.remove(st)
-        return " ".join(el.itertext()).strip()
-
     def _limit_value(xpath_expr: str) -> str:
         nodes = tree.xpath(xpath_expr)
         if not nodes:
@@ -86,14 +76,14 @@ async def get_cf_problem(problem_ref: str):
         full_text = " ".join(el.itertext()).strip()
         return full_text.replace(prop_text, "", 1).strip()
 
-    title = _xpath_text('//div[@class="title"]') or f"CF {problem_ref}"
+    title = api_client.cf_xpath_text(tree, '//div[@class="title"]') or f"CF {problem_ref}"
     time_limit   = _limit_value('//div[contains(@class,"time-limit")]')
     memory_limit = _limit_value('//div[contains(@class,"memory-limit")]')
 
     BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
-    statement_text = _xpath_text(f'{BASE}/div[2]')
-    input_text     = _xpath_text(f'{BASE}/div[3]')
-    output_text    = _xpath_text(f'{BASE}/div[4]')
+    statement_text = api_client.cf_xpath_text(tree, f'{BASE}/div[2]')
+    input_text     = api_client.cf_xpath_text(tree, f'{BASE}/div[3]')
+    output_text    = api_client.cf_xpath_text(tree, f'{BASE}/div[4]')
 
     note_nodes = tree.xpath('//*[contains(@class,"note")]')
     note_text = " ".join(note_nodes[0].itertext()).strip() if note_nodes else ""

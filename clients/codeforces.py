@@ -71,6 +71,18 @@ def get_codeforces_problem_statement(problem_ref: str) -> str:
     return "문제 설명 자동 수집에 실패했습니다. 제목, 난이도, 태그 기준으로 제한적으로 분석합니다."
 
 
+def cf_xpath_text(tree, expr: str) -> str:
+    nodes = tree.xpath(expr)
+    if not nodes:
+        return ""
+    el = nodes[0]
+    for st in el.xpath('.//*[contains(@class,"section-title")]'):
+        p = st.getparent()
+        if p is not None:
+            p.remove(st)
+    return " ".join(el.itertext()).strip()
+
+
 def get_cf_problem_sections(problem_ref: str) -> dict:
     try:
         from lxml import etree
@@ -82,22 +94,10 @@ def get_cf_problem_sections(problem_ref: str) -> dict:
 
         tree = etree.fromstring(resp.text.encode(), etree.HTMLParser())
         BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
-
-        def _xtext(expr: str) -> str:
-            nodes = tree.xpath(expr)
-            if not nodes:
-                return ""
-            el = nodes[0]
-            for st in el.xpath('.//*[contains(@class,"section-title")]'):
-                p = st.getparent()
-                if p is not None:
-                    p.remove(st)
-            return " ".join(el.itertext()).strip()
-
         return {
-            "description": _xtext(f'{BASE}/div[2]'),
-            "input":       _xtext(f'{BASE}/div[3]'),
-            "output":      _xtext(f'{BASE}/div[4]'),
+            "description": cf_xpath_text(tree, f'{BASE}/div[2]'),
+            "input":       cf_xpath_text(tree, f'{BASE}/div[3]'),
+            "output":      cf_xpath_text(tree, f'{BASE}/div[4]'),
         }
     except Exception:
         return {"description": "", "input": "", "output": ""}
