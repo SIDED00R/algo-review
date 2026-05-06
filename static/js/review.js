@@ -32,7 +32,7 @@ reviewBtn.addEventListener('click', async () => {
   const result = document.getElementById('review-result');
 
   if (!problemId) { showError(result, '문제 번호를 입력하세요.'); return; }
-  if (!code)      { showError(result, '코드를 입력하세요.'); return; }
+  if (!code) { showError(result, '코드를 입력하세요.'); return; }
 
   setLoading(reviewBtn, true);
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 코드를 분석 중입니다... (10~20초 소요)</div>';
@@ -60,34 +60,36 @@ reviewBtn.addEventListener('click', async () => {
 
 function renderReview(container, d) {
   const tc = tierClass(d.tier);
-  const tagsHtml = d.tags.map(t => `<span class="tag">${t}</span>`).join('');
-  const strengthsHtml = (d.strengths || []).map(s => `<li>${s}</li>`).join('') || '<li>-</li>';
-  const weaknessesHtml = (d.weaknesses || []).map(w => `<li>${w}</li>`).join('') || '<li>-</li>';
+  const tagsHtml = d.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+  const strengthsHtml = (d.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('') || '<li>-</li>';
+  const weaknessesHtml = (d.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('') || '<li>-</li>';
   const feedbackHtml = marked.parse(d.feedback || '');
-  const label = problemLabel(d);
+  const label = escapeHtml(problemLabel(d));
+  const title = escapeHtml(d.title);
+  const tierName = escapeHtml(d.tier_name);
   const betterAlgo = d.better_algorithm
-    ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.85rem;color:var(--yellow)">${d.better_algorithm}</div></div>`
+    ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.85rem;color:var(--yellow)">${escapeHtml(d.better_algorithm)}</div></div>`
     : '';
 
   container.innerHTML = `
     <div class="result-card">
       <div class="problem-header">
         <span class="problem-title">
-          <a href="${problemUrl(d)}" target="_blank" style="color:inherit;text-decoration:none">
-            ${label}. ${d.title}
+          <a href="${escapeHtml(problemUrl(d))}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">
+            ${label}. ${title}
           </a>
         </span>
-        <span class="tier-badge ${tc}">${d.tier_name}</span>
+        <span class="tier-badge ${tc}">${tierName}</span>
       </div>
       <div class="tag-list">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>
       <div class="summary-grid">
         <div class="summary-item">
           <div class="summary-label">효율성 평가</div>
-          <div class="summary-value ${effClass(d.efficiency)}">${effLabel(d.efficiency)}</div>
+          <div class="summary-value ${effClass(d.efficiency)}">${escapeHtml(effLabel(d.efficiency))}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">시간복잡도</div>
-          <div class="summary-value">${d.complexity}</div>
+          <div class="summary-value">${escapeHtml(d.complexity || 'N/A')}</div>
         </div>
         ${betterAlgo}
       </div>
@@ -117,6 +119,7 @@ function renderReview(container, d) {
     btn.disabled = true;
     btn.textContent = '올리는 중...';
     msg.textContent = '';
+    msg.style.color = '';
     try {
       const res = await fetch('/api/push-review', {
         method: 'POST',
@@ -132,19 +135,20 @@ function renderReview(container, d) {
           url: d.problem_url,
           ...(d.platform === 'codeforces' && _currentProblem?.ref === d.problem_ref ? {
             description: _currentProblem.sections?.statement || '',
-            input_desc:  _currentProblem.sections?.input     || '',
-            output_desc: _currentProblem.sections?.output    || '',
+            input_desc: _currentProblem.sections?.input || '',
+            output_desc: _currentProblem.sections?.output || '',
           } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'push 실패');
       btn.textContent = '✓ 완료';
-      msg.innerHTML = `<span style="color:var(--green)">🐙 <b>${data.repo}</b>에 push 완료</span>`;
+      msg.innerHTML = `<span style="color:var(--green)">🐙 <b>${escapeHtml(data.repo || '')}</b>에 push 완료</span>`;
     } catch (e) {
       btn.textContent = '🐙 GitHub에 올리기';
       btn.disabled = false;
-      msg.innerHTML = `<span style="color:var(--red)">${e.message}</span>`;
+      msg.textContent = e.message;
+      msg.style.color = 'var(--red)';
     }
   });
 }

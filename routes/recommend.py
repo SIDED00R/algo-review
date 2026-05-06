@@ -1,7 +1,7 @@
 import db
 import clients as api_client
 import recommender
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS
 
 router = APIRouter()
@@ -9,6 +9,10 @@ router = APIRouter()
 
 @router.get("/api/recommend")
 def get_recommendations(platform: str = Query("codeforces")):
+    platform = (platform or "codeforces").strip().lower()
+    if platform not in {"boj", "codeforces"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
+
     if IS_DEMO:
         return {**DEMO_RECOMMENDATIONS, "platform": platform}
     if platform == "codeforces":

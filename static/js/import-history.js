@@ -52,8 +52,8 @@ async function loadImportedHistory() {
       </div>`;
 
     const TIER_RANGES = {
-      bronze:[1,5], silver:[6,10], gold:[11,15],
-      platinum:[16,20], diamond:[21,25], ruby:[26,30], unrated:[0,0],
+      bronze: [1, 5], silver: [6, 10], gold: [11, 15],
+      platinum: [16, 20], diamond: [21, 25], ruby: [26, 30], unrated: [0, 0],
     };
 
     let importPage = 1;
@@ -76,10 +76,10 @@ async function loadImportedHistory() {
       });
 
       result.sort((a, b) => {
-        if (sort === 'id-asc')    return problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true });
-        if (sort === 'id-desc')   return problemLabel(b).localeCompare(problemLabel(a), undefined, { numeric: true });
+        if (sort === 'id-asc') return problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true });
+        if (sort === 'id-desc') return problemLabel(b).localeCompare(problemLabel(a), undefined, { numeric: true });
         if (sort === 'tier-desc') return b.tier - a.tier;
-        if (sort === 'tier-asc')  return a.tier - b.tier;
+        if (sort === 'tier-asc') return a.tier - b.tier;
         return 0;
       });
       return result;
@@ -130,26 +130,26 @@ async function loadImportedHistory() {
         const cardKey = `${p.platform || 'boj'}-${p.problem_ref || p.problem_id}`;
         const platformBadge = (p.platform || 'boj') === 'codeforces' ? 'Codeforces' : 'BOJ';
         const actionBtns = p.has_code
-          ? `<button class="btn-sm btn-code btn-view-code" data-platform="${p.platform || 'boj'}" data-problem-ref="${p.problem_ref || p.problem_id}" data-box-key="${cardKey}">코드 보기</button>
-             <button class="btn-sm btn-ai btn-review-imported" data-platform="${p.platform || 'boj'}" data-problem-ref="${p.problem_ref || p.problem_id}">AI 리뷰</button>`
+          ? `<button class="btn-sm btn-code btn-view-code" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}" data-box-key="${escapeHtml(cardKey)}">코드 보기</button>
+             <button class="btn-sm btn-ai btn-review-imported" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">AI 리뷰</button>`
           : `<span style="font-size:.75rem;color:var(--text-muted)">코드 없음</span>`;
         return `
-          <div class="history-card" data-platform="${p.platform || 'boj'}" data-problem-ref="${p.problem_ref || p.problem_id}">
+          <div class="history-card" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">
             <div class="history-card-info">
               <div class="history-card-title">
-                <a href="${problemUrl(p)}" target="_blank" style="color:inherit;text-decoration:none">
-                  ${problemLabel(p)}. ${p.title}
+                <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">
+                  ${escapeHtml(problemLabel(p))}. ${escapeHtml(p.title)}
                 </a>
               </div>
-              <div class="history-card-meta">${platformBadge}${p.language ? ` · ${p.language}` : ''}</div>
+              <div class="history-card-meta">${escapeHtml(platformBadge)}${p.language ? ` · ${escapeHtml(p.language)}` : ''}</div>
             </div>
             <div class="history-card-right">
-              <span class="tier-badge ${tc}" style="font-size:.75rem">${p.tier_name}</span>
+              <span class="tier-badge ${tc}" style="font-size:.75rem">${escapeHtml(p.tier_name || '')}</span>
               ${actionBtns}
-              <span style="font-size:.78rem;color:var(--text-muted)">${p.imported_at.slice(0,10)}</span>
+              <span style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(String(p.imported_at || '').slice(0, 10))}</span>
             </div>
           </div>
-          <div id="code-view-${cardKey}" class="hidden"></div>`;
+          <div id="code-view-${escapeHtml(cardKey)}" class="hidden"></div>`;
       }).join('');
 
       container.querySelectorAll('.btn-view-code').forEach(btn => {

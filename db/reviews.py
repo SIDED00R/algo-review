@@ -103,6 +103,7 @@ def get_total_review_count(platform: str | None = None) -> int:
     cur = conn.cursor()
     p = _ph()
     if platform:
+        platform = platform.strip().lower()
         cur.execute(
             f"SELECT COUNT(DISTINCT problem_ref) FROM reviews WHERE platform = {p}",
             (platform,),
@@ -285,14 +286,24 @@ def get_tier_history() -> list:
     return rows
 
 
-def get_review_history(limit: int = 10) -> list:
+def get_review_history(limit: int = 10, platform: str | None = None) -> list:
     p = _ph()
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(f"""
-        SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, efficiency, created_at
-        FROM reviews ORDER BY created_at DESC LIMIT {p}
-    """, (limit,))
+    if platform:
+        platform = platform.strip().lower()
+        cur.execute(f"""
+            SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, efficiency, created_at
+            FROM reviews
+            WHERE platform = {p}
+            ORDER BY created_at DESC
+            LIMIT {p}
+        """, (platform, limit))
+    else:
+        cur.execute(f"""
+            SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, efficiency, created_at
+            FROM reviews ORDER BY created_at DESC LIMIT {p}
+        """, (limit,))
     rows = _rows_to_dicts(cur, cur.fetchall())
     if USE_POSTGRES:
         cur.close()
@@ -334,8 +345,17 @@ def get_average_cf_rating() -> float:
         """, ("codeforces",))
     else:
         cur.execute(f"""
-            SELECT tier_name FROM reviews WHERE platform = {p}
-            GROUP BY problem_ref
+            SELECT r.tier_name
+            FROM reviews r
+            JOIN (
+                SELECT problem_ref, MAX(created_at) AS max_created_at
+                FROM reviews
+                WHERE platform = {p}
+                GROUP BY problem_ref
+            ) latest
+              ON latest.problem_ref = r.problem_ref
+             AND latest.max_created_at = r.created_at
+            WHERE r.platform = {p}
         """, ("codeforces",))
     rows = cur.fetchall()
     if USE_POSTGRES:
