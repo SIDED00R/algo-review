@@ -1,5 +1,5 @@
 """
-백준 코드 리뷰 + 문제 추천 CLI
+Algo Review CLI
 """
 import sys
 import os
@@ -298,7 +298,7 @@ MENU = {
 def print_menu():
     console.print(Panel(
         "\n".join(f"  [bold cyan]{k}[/]  {v[0]}" for k, v in MENU.items()),
-        title="[bold magenta]백준 코드 리뷰 & 문제 추천[/]",
+        title="[bold magenta]Algo Review[/]",
         border_style="magenta",
     ))
 
@@ -306,7 +306,7 @@ def print_menu():
 def main():
     db.init_db()
 
-    console.print("[bold magenta]백준 코드 리뷰 & 문제 추천 시스템[/]")
+    console.print("[bold magenta]Algo Review 시스템[/]")
     console.print("[dim]OpenAI API + solved.ac 기반[/]\n")
 
     while True:
