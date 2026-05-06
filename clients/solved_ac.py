@@ -1,7 +1,6 @@
 import time
 import requests
 from bs4 import BeautifulSoup
-from functools import lru_cache
 
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
 
