@@ -496,6 +496,22 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
 .tc-badge { font-weight: 700; margin-right: 8px; }
 .tc-detail { margin-top: 8px; font-size: .82rem; }
 .tc-detail pre { background: var(--surface2); border-radius: 4px; padding: 6px 8px; margin: 3px 0 6px; font-size: .8rem; white-space: pre-wrap; word-break: break-all; }
+
+/* 커스텀 예제 */
+.pm-custom-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.pm-custom-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pm-custom-label { font-size: .8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+.pm-custom-add-btn { font-size: .78rem; padding: 3px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; }
+.pm-custom-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+.pm-custom-case { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+.pm-custom-case-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pm-custom-case label { font-size: .75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 3px; }
+.pm-custom-case textarea { width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: monospace; font-size: .8rem; padding: 5px 7px; resize: vertical; min-height: 56px; }
+.pm-custom-case textarea:focus { outline: none; border-color: var(--accent); }
+.pm-custom-case-footer { display: flex; justify-content: flex-end; margin-top: 6px; }
+.pm-custom-delete-btn { font-size: .75rem; padding: 2px 9px; background: transparent; border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); cursor: pointer; }
+.pm-custom-delete-btn:hover { border-color: var(--red); color: var(--red); }
+
 .btn-review { background: var(--green); color: #000; }
 .btn-review:hover { opacity: .88; }
 

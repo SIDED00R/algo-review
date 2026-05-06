@@ -16,6 +16,8 @@ async function openProblemModal(ref, title, tierName) {
   document.getElementById('pm-statement').classList.add('hidden');
   document.getElementById('pm-statement').innerHTML = '';
   document.getElementById('pm-test-results').innerHTML = '';
+  document.getElementById('pm-custom-cases').innerHTML = '';
+  _customCaseCount = 0;
   document.getElementById('pm-review-btn').classList.add('hidden');
   window.setEditorValue('pm-code', '');
 
@@ -92,23 +94,68 @@ function closeProblemModal() {
   document.getElementById('problem-modal').classList.add('hidden');
 }
 
+let _customCaseCount = 0;
+
+function addCustomCase() {
+  const id = ++_customCaseCount;
+  const el = document.createElement('div');
+  el.className = 'pm-custom-case';
+  el.id = `pm-custom-${id}`;
+  el.innerHTML = `
+    <div class="pm-custom-case-row">
+      <div>
+        <label>입력</label>
+        <textarea id="pm-custom-input-${id}" placeholder="입력값을 입력하세요"></textarea>
+      </div>
+      <div>
+        <label>기대 출력</label>
+        <textarea id="pm-custom-output-${id}" placeholder="기대 출력값을 입력하세요"></textarea>
+      </div>
+    </div>
+    <div class="pm-custom-case-footer">
+      <button class="pm-custom-delete-btn" onclick="removeCustomCase(${id})">삭제</button>
+    </div>`;
+  document.getElementById('pm-custom-cases').appendChild(el);
+}
+
+function removeCustomCase(id) {
+  document.getElementById(`pm-custom-${id}`)?.remove();
+}
+
+function getCustomCases() {
+  return [...document.querySelectorAll('.pm-custom-case')].map(el => {
+    const idMatch = el.id.match(/pm-custom-(\d+)/);
+    if (!idMatch) return null;
+    const id = idMatch[1];
+    return {
+      input: document.getElementById(`pm-custom-input-${id}`)?.value ?? '',
+      output: document.getElementById(`pm-custom-output-${id}`)?.value ?? '',
+    };
+  }).filter(Boolean);
+}
+
 async function runSamples() {
-  if (!_currentProblem?.samples?.length) {
-    document.getElementById('pm-test-results').innerHTML =
-      '<div class="alert alert-info">예제 데이터가 없습니다.</div>';
-    return;
-  }
+  const builtinSamples = _currentProblem?.samples || [];
+  const customCases = getCustomCases();
+  const allCases = [
+    ...builtinSamples.map(s => ({ ...s, isCustom: false })),
+    ...customCases.map(s => ({ input: s.input, output: s.output, isCustom: true })),
+  ];
 
   const code = window.getEditorValue('pm-code').trim();
+  const resultsEl = document.getElementById('pm-test-results');
+
   if (!code) {
-    document.getElementById('pm-test-results').innerHTML =
-      '<div class="alert alert-info">코드를 먼저 작성해주세요.</div>';
+    resultsEl.innerHTML = '<div class="alert alert-info">코드를 먼저 작성해주세요.</div>';
+    return;
+  }
+  if (!allCases.length) {
+    resultsEl.innerHTML = '<div class="alert alert-info">예제 데이터가 없습니다.</div>';
     return;
   }
 
   const language = document.getElementById('pm-language').value;
   const btn = document.getElementById('pm-run-btn');
-  const resultsEl = document.getElementById('pm-test-results');
 
   btn.disabled = true;
   btn.textContent = '실행 중...';
@@ -117,10 +164,11 @@ async function runSamples() {
 
   let allPassed = true;
 
-  for (let i = 0; i < _currentProblem.samples.length; i++) {
-    const sample = _currentProblem.samples[i];
+  for (let i = 0; i < allCases.length; i++) {
+    const sample = allCases[i];
     const tcId = `tc-${i}`;
-    resultsEl.innerHTML += `<div class="test-case pending" id="${tcId}"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span> 테스트 ${i + 1} 실행 중...</div>`;
+    const label = sample.isCustom ? `커스텀 ${i - builtinSamples.length + 1}` : `테스트 ${i + 1}`;
+    resultsEl.innerHTML += `<div class="test-case pending" id="${tcId}"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span> ${label} 실행 중...</div>`;
 
     try {
       const res = await fetch('/api/execute', {
@@ -144,14 +192,14 @@ async function runSamples() {
 
       document.getElementById(tcId).outerHTML = `
         <div class="test-case ${passed ? 'pass' : 'fail'}">
-          <span class="tc-badge">${passed ? '✅ 통과' : '❌ 실패'}</span>테스트 ${i + 1}
+          <span class="tc-badge">${passed ? '✅ 통과' : '❌ 실패'}</span>${label}
           <span style="color:var(--text-muted);font-size:.78rem;margin-left:8px">${result.time_ms}ms</span>
           ${detailHtml}
         </div>`;
     } catch (e) {
       allPassed = false;
       document.getElementById(tcId).outerHTML =
-        `<div class="test-case fail"><span class="tc-badge">❌</span>테스트 ${i + 1} — 오류: ${escapeHtml(e.message)}</div>`;
+        `<div class="test-case fail"><span class="tc-badge">❌</span>${label} — 오류: ${escapeHtml(e.message)}</div>`;
     }
   }
 
