@@ -2,7 +2,7 @@
 
 알고리즘 풀이 코드를 AI로 분석하고, 학습 기록을 바탕으로 약한 태그를 추적하는 웹앱입니다.
 
-**라이브 데모**: https://boj-review-demo-707325519995.asia-northeast3.run.app/
+**라이브 데모**: https://algo-review-demo-707325519995.asia-northeast3.run.app/
 
 > 데모는 실제 API 없이 샘플 데이터로 동작합니다. 모든 기능을 자유롭게 체험해보세요.
 
@@ -102,7 +102,7 @@ python -m uvicorn server:app --reload
 ### Cloud Run (SQLite)
 
 ```bash
-gcloud run deploy boj-review \
+gcloud run deploy algo-review \
   --source . \
   --region asia-northeast3
 ```
@@ -110,7 +110,7 @@ gcloud run deploy boj-review \
 ### Cloud Run + Cloud SQL (PostgreSQL)
 
 ```bash
-gcloud run deploy boj-review \
+gcloud run deploy algo-review \
   --source . \
   --region asia-northeast3 \
   --add-cloudsql-instances PROJECT:REGION:INSTANCE
@@ -141,7 +141,7 @@ CODEFORCES_API_SECRET=...
 실제 API 없이 샘플 데이터로 동작하는 데모 서버를 별도로 배포할 수 있습니다.
 
 ```bash
-gcloud run deploy boj-review-demo \
+gcloud run deploy algo-review-demo \
   --source . \
   --region asia-northeast3 \
   --set-env-vars "DEMO_MODE=true"
