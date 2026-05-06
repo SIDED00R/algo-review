@@ -15,7 +15,7 @@ async function loadHistory() {
     const res = await fetch('/api/reviews/grouped');
     const text = await res.text();
     let data;
-    try { data = JSON.parse(text); } catch(e) { throw new Error('서버 응답 오류: ' + text.slice(0,100)); }
+    try { data = JSON.parse(text); } catch (e) { throw new Error('서버 응답 오류: ' + text.slice(0, 100)); }
     if (!res.ok) throw new Error(data.detail || '실패');
     allReviewProblems = data.problems || [];
     renderHistoryControls(list);
@@ -56,7 +56,7 @@ function renderHistoryControls(container) {
   container.innerHTML = '';
   container.appendChild(ctrl);
 
-  ['h-search','h-tier','h-eff','h-sort'].forEach(id => {
+  ['h-search', 'h-tier', 'h-eff', 'h-sort'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => {
       renderProblemList(container, getFilteredReviews());
     });
@@ -69,12 +69,12 @@ function getFilteredReviews() {
   const eff = document.getElementById('h-eff')?.value || '';
   const sort = document.getElementById('h-sort')?.value || 'recent';
 
-  const TIER_GROUP = { bronze:[1,5], silver:[6,10], gold:[11,15], platinum:[16,20], diamond:[21,25] };
+  const TIER_GROUP = { bronze: [1, 5], silver: [6, 10], gold: [11, 15], platinum: [16, 20], diamond: [21, 25] };
 
   let list = allReviewProblems.filter(p => {
-    if (q && !`${problemLabel(p)} ${p.title} ${(p.tags||[]).join(' ')}`.toLowerCase().includes(q)) return false;
+    if (q && !`${problemLabel(p)} ${p.title} ${(p.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
     if (tier) {
-      const [lo,hi] = TIER_GROUP[tier] || [0,30];
+      const [lo, hi] = TIER_GROUP[tier] || [0, 30];
       if (p.tier < lo || p.tier > hi) return false;
     }
     if (eff) {
@@ -84,10 +84,10 @@ function getFilteredReviews() {
     return true;
   });
 
-  if (sort === 'recent') list.sort((a,b) => b.last_submitted.localeCompare(a.last_submitted));
-  else if (sort === 'tier_desc') list.sort((a,b) => b.tier - a.tier);
-  else if (sort === 'tier_asc') list.sort((a,b) => a.tier - b.tier);
-  else if (sort === 'pid_asc') list.sort((a,b) => problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true }));
+  if (sort === 'recent') list.sort((a, b) => b.last_submitted.localeCompare(a.last_submitted));
+  else if (sort === 'tier_desc') list.sort((a, b) => b.tier - a.tier);
+  else if (sort === 'tier_asc') list.sort((a, b) => a.tier - b.tier);
+  else if (sort === 'pid_asc') list.sort((a, b) => problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true }));
   return list;
 }
 
@@ -115,19 +115,19 @@ function renderProblemList(container, problems) {
     div.innerHTML = `
       <div class="history-card-info">
         <div class="history-card-title">
-          <a href="${problemUrl(p)}" target="_blank"
+          <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer"
              style="color:inherit;text-decoration:none"
              onclick="event.stopPropagation()">
-            ${problemLabel(p)}. ${p.title}
+            ${escapeHtml(problemLabel(p))}. ${escapeHtml(p.title)}
           </a>
         </div>
-        <div class="history-card-meta">${(p.tags || []).slice(0,3).join(' · ')}</div>
+        <div class="history-card-meta">${escapeHtml((p.tags || []).slice(0, 3).join(' · '))}</div>
       </div>
       <div class="history-card-right">
-        <span class="tier-badge ${tc}" style="font-size:.75rem">${p.tier_name}</span>
-        <span class="${effClass(lastEff)}" style="font-size:.82rem">${effLabel(lastEff)}</span>
+        <span class="tier-badge ${tc}" style="font-size:.75rem">${escapeHtml(p.tier_name || '')}</span>
+        <span class="${effClass(lastEff)}" style="font-size:.82rem">${escapeHtml(effLabel(lastEff))}</span>
         <span style="font-size:.78rem;color:var(--text-muted)">
-          제출 ${p.submission_count}회 · ${p.last_submitted.slice(0,10)}
+          제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(String(p.last_submitted || '').slice(0, 10))}
         </span>
       </div>`;
     div.addEventListener('click', () => openReviewModal(div.dataset.platform, div.dataset.problemRef));
@@ -151,23 +151,23 @@ async function openReviewModal(platform, problemRef) {
 
     const first = reviews[0];
     const tc = tierClass(first.tier);
-    const tagsHtml = (first.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
+    const tagsHtml = (first.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
     const tabsHtml = reviews.map((r, i) => `
       <button class="submission-tab ${i === 0 ? 'active' : ''}" data-idx="${i}">
         <span style="font-weight:600">제출 ${reviews.length - i}회차</span>
-        <span class="${effClass(r.efficiency)}" style="font-size:.78rem">${effLabel(r.efficiency)}</span>
-        <span style="color:var(--text-muted);font-size:.75rem">${r.created_at.slice(0,10)}</span>
+        <span class="${effClass(r.efficiency)}" style="font-size:.78rem">${escapeHtml(effLabel(r.efficiency))}</span>
+        <span style="color:var(--text-muted);font-size:.75rem">${escapeHtml(String(r.created_at || '').slice(0, 10))}</span>
       </button>`).join('');
 
     content.innerHTML = `
       <div class="problem-header" style="margin-bottom:12px">
         <span class="problem-title">
-          <a href="${problemUrl(first)}" target="_blank" style="color:inherit;text-decoration:none">
-            ${problemLabel(first)}. ${first.title}
+          <a href="${escapeHtml(problemUrl(first))}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">
+            ${escapeHtml(problemLabel(first))}. ${escapeHtml(first.title)}
           </a>
         </span>
-        <span class="tier-badge ${tc}">${first.tier_name}</span>
+        <span class="tier-badge ${tc}">${escapeHtml(first.tier_name || '')}</span>
         <span style="font-size:.82rem;color:var(--text-muted);margin-left:auto">총 ${reviews.length}회 제출</span>
       </div>
       <div class="tag-list" style="margin-bottom:16px">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>
@@ -176,17 +176,17 @@ async function openReviewModal(platform, problemRef) {
 
     function renderDetail(idx) {
       const r = reviews[idx];
-      const sl = (r.strengths || []).map(s => `<li>${s}</li>`).join('');
-      const wl = (r.weaknesses || []).map(w => `<li>${w}</li>`).join('');
+      const sl = (r.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+      const wl = (r.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('');
       const hasPoints = sl || wl;
       document.getElementById('submission-detail-area').innerHTML = `
         <div class="summary-grid" style="margin:16px 0">
           <div class="summary-item">
             <div class="summary-label">효율성</div>
-            <div class="summary-value ${effClass(r.efficiency)}">${effLabel(r.efficiency)}</div>
+            <div class="summary-value ${effClass(r.efficiency)}">${escapeHtml(effLabel(r.efficiency))}</div>
           </div>
-          ${r.complexity ? `<div class="summary-item"><div class="summary-label">시간복잡도</div><div class="summary-value">${r.complexity}</div></div>` : ''}
-          ${r.better_algorithm ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.82rem;color:var(--yellow)">${r.better_algorithm}</div></div>` : ''}
+          ${r.complexity ? `<div class="summary-item"><div class="summary-label">시간복잡도</div><div class="summary-value">${escapeHtml(r.complexity)}</div></div>` : ''}
+          ${r.better_algorithm ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.82rem;color:var(--yellow)">${escapeHtml(r.better_algorithm)}</div></div>` : ''}
         </div>
         ${hasPoints ? `
         <div class="points-grid" style="margin-bottom:16px">
@@ -213,7 +213,7 @@ async function openReviewModal(platform, problemRef) {
 
     renderDetail(0);
   } catch (e) {
-    content.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
+    content.innerHTML = `<div class="alert alert-error">❌ ${escapeHtml(e.message)}</div>`;
   }
 }
 
