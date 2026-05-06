@@ -1,6 +1,8 @@
 import os
 import asyncio
 import re
+import requests
+from lxml import etree
 from fastapi import APIRouter, HTTPException
 from demo_mode import IS_DEMO, DEMO_CF_PROBLEM
 
@@ -11,30 +13,7 @@ _API_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "15"))
 router = APIRouter()
 
 
-def _translate_cf_problem(text: str, title: str) -> str:
-    try:
-        from openai import OpenAI as _OpenAI
-        client = _OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-        resp = client.chat.completions.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-            messages=[
-                {"role": "system", "content": (
-                    "당신은 프로그래밍 문제 번역 전문가입니다. "
-                    "Codeforces 문제를 한국어로 번역합니다. "
-                    "수식($...$, $$...$$)은 그대로 유지하고, 문제의 의미를 정확하게 전달하세요. "
-                    "번역문만 출력하세요."
-                )},
-                {"role": "user", "content": f"제목: {title}\n\n{text}"},
-            ],
-            max_tokens=_MAX_TOKENS,
-            temperature=_TEMPERATURE,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"[번역 실패: {e}]\n\n{text}"
-
-
-def _translate_cf_text(text: str, title: str, section_name: str) -> str:
+def _translate_cf_text(text: str, title: str) -> str:
     try:
         from openai import OpenAI as _OpenAI
         client = _OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
@@ -62,16 +41,13 @@ def _translate_cf_text(text: str, title: str, section_name: str) -> str:
         result = resp.choices[0].message.content.strip()
         return result if result else text
     except Exception:
-        return _translate_cf_problem(text, title)
+        return text
 
 
 @router.get("/api/problem/cf/{problem_ref}")
 async def get_cf_problem(problem_ref: str):
     if IS_DEMO:
         return DEMO_CF_PROBLEM
-
-    import requests as _req
-    from lxml import etree
 
     m = re.match(r'^(\d+)([A-Za-z]\d*)$', problem_ref.strip())
     if not m:
@@ -80,7 +56,7 @@ async def get_cf_problem(problem_ref: str):
 
     url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
     try:
-        resp = _req.get(url, timeout=10, headers={
+        resp = requests.get(url, timeout=10, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
         resp.raise_for_status()
@@ -134,16 +110,16 @@ async def get_cf_problem(problem_ref: str):
                 "output": "\n".join(out_pre.itertext()).strip(),
             })
 
-    async def _translate_async(text, section):
+    async def _translate_async(text):
         if not text:
             return ""
-        return await asyncio.to_thread(_translate_cf_text, text, title, section)
+        return await asyncio.to_thread(_translate_cf_text, text, title)
 
     statement_ko, input_ko, output_ko, note_ko = await asyncio.gather(
-        _translate_async(statement_text, "statement"),
-        _translate_async(input_text,     "input"),
-        _translate_async(output_text,    "output"),
-        _translate_async(note_text,      "note"),
+        _translate_async(statement_text),
+        _translate_async(input_text),
+        _translate_async(output_text),
+        _translate_async(note_text),
     )
 
     return {

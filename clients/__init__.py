@@ -10,7 +10,6 @@ from clients.solved_ac import (
     get_tag_key_by_name,
     get_user_submissions,
     get_submission_code,
-    _build_tier_key_map,
 )
 from clients.codeforces import (
     CODEFORCES_API_BASE,
@@ -43,7 +42,7 @@ __all__ = [
     "TIER_NAMES", "HEADERS", "SOLVED_AC_BASE",
     "get_problems_bulk", "get_problem_info", "get_problem_statement",
     "get_boj_problem_sections", "search_problems_by_tag", "get_tag_key_by_name",
-    "get_user_submissions", "get_submission_code", "_build_tier_key_map",
+    "get_user_submissions", "get_submission_code",
     "CODEFORCES_API_BASE", "CODEFORCES_HEADERS",
     "normalize_codeforces_problem_ref", "get_codeforces_problem_info",
     "get_codeforces_problem_statement", "get_cf_problem_sections",

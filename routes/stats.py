@@ -1,7 +1,6 @@
 import db
 import clients as api_client
 from fastapi import APIRouter
-from typing import Optional
 
 router = APIRouter()
 
@@ -12,7 +11,7 @@ def get_tier_history():
 
 
 @router.get("/api/stats")
-def get_stats(platform: Optional[str] = "boj"):
+def get_stats(platform: str | None = "boj"):
     history = db.get_review_history(20)
     total_reviews = db.get_total_review_count(platform)
 

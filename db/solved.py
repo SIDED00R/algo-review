@@ -77,12 +77,7 @@ def get_cached_problem_info(problem_id: int) -> dict | None:
     """, (problem_id,))
     row = cur.fetchone()
     if not row:
-        cur.execute("""
-            SELECT title, tier, tier_name, tags
-            FROM solved_history
-            WHERE platform = 'boj' AND problem_id = ?
-            LIMIT 1
-        """ if not USE_POSTGRES else f"""
+        cur.execute(f"""
             SELECT title, tier, tier_name, tags
             FROM solved_history
             WHERE platform = 'boj' AND problem_id = {p}

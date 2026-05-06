@@ -39,7 +39,7 @@ def push_review_to_github(req: PushReviewRequest):
         folder = f"Codeforces/{req.problem_ref}. {req.title}"
         msg = f"[Codeforces] {req.problem_ref}. {req.title}"
         if not req.description:
-            sections = api_client.get_cf_problem_sections(req.problem_ref, translate=False)
+            sections = api_client.get_cf_problem_sections(req.problem_ref)
             description = sections.get("description", "")
             input_desc  = sections.get("input", "")
             output_desc = sections.get("output", "")

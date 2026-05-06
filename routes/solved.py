@@ -101,6 +101,4 @@ def get_solved_history_detail(platform: str, problem_ref: str):
 @router.get("/api/solved-history")
 def get_solved_history():
     rows = db.get_solved_history()
-    for r in rows:
-        r["tier_name"] = api_client.TIER_NAMES.get(r["tier"], "?")
     return {"problems": rows}

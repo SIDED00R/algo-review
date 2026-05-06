@@ -1,5 +1,4 @@
 import re
-import os
 import time
 import random
 import hashlib
@@ -10,9 +9,6 @@ from bs4 import BeautifulSoup
 
 CODEFORCES_API_BASE = "https://codeforces.com/api"
 
-_MAX_TOKENS = int(os.environ.get("OPENAI_MAX_TOKENS", "2000"))
-_TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
-_API_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "15"))
 CODEFORCES_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
@@ -75,8 +71,7 @@ def get_codeforces_problem_statement(problem_ref: str) -> str:
     return "문제 설명 자동 수집에 실패했습니다. 제목, 난이도, 태그 기준으로 제한적으로 분석합니다."
 
 
-def get_cf_problem_sections(problem_ref: str, translate: bool = False) -> dict:
-    """Codeforces 문제 섹션 XPath 추출. translate=True 시 한국어 번역."""
+def get_cf_problem_sections(problem_ref: str) -> dict:
     try:
         from lxml import etree
 
@@ -99,49 +94,10 @@ def get_cf_problem_sections(problem_ref: str, translate: bool = False) -> dict:
                     p.remove(st)
             return " ".join(el.itertext()).strip()
 
-        raw = {
+        return {
             "description": _xtext(f'{BASE}/div[2]'),
             "input":       _xtext(f'{BASE}/div[3]'),
             "output":      _xtext(f'{BASE}/div[4]'),
-        }
-
-        if not translate:
-            return raw
-
-        from openai import OpenAI as _OAI
-
-        title_nodes = tree.xpath('//div[contains(@class,"title")]')
-        title = " ".join(title_nodes[0].itertext()).strip() if title_nodes else problem_ref
-
-        def _translate(text: str) -> str:
-            if not text:
-                return ""
-            try:
-                client = _OAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-                res = client.chat.completions.create(
-                    model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-                    messages=[
-                        {"role": "system", "content": (
-                            "You are a competitive programming translator. "
-                            "Translate the given text to natural Korean. "
-                            "Keep all mathematical formulas, variable names, numbers, and constraints exactly as written. "
-                            "Do NOT add any section headers or labels. "
-                            "Return the translated text only."
-                        )},
-                        {"role": "user", "content": f"Problem: {title}\n\nTranslate:\n\n{text}"},
-                    ],
-                    max_tokens=_MAX_TOKENS,
-                    temperature=_TEMPERATURE,
-                )
-                result = res.choices[0].message.content.strip()
-                return result if result else text
-            except Exception:
-                return text
-
-        return {
-            "description": _translate(raw["description"]),
-            "input":       _translate(raw["input"]),
-            "output":      _translate(raw["output"]),
         }
     except Exception:
         return {"description": "", "input": "", "output": ""}
@@ -238,9 +194,8 @@ def get_codeforces_user_submissions(handle: str, count: int = 1000,
 
 def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
                                exclude_refs: set) -> list[dict]:
-    url = "https://codeforces.com/api/problemset.problems"
     try:
-        resp = requests.get(url, params={"tags": tag}, timeout=10)
+        resp = requests.get(f"{CODEFORCES_API_BASE}/problemset.problems", params={"tags": tag}, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         if data.get("status") != "OK":
