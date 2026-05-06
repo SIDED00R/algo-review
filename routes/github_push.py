@@ -49,9 +49,10 @@ def push_review_to_github(req: PushReviewRequest):
     readme = build_readme(req.platform, req.problem_ref, req.title,
                           req.tier_name, req.tags, req.language, url,
                           description, input_desc, output_desc)
-    api_client.push_file_to_github(github_repo, github_token, f"{folder}/README.md", readme, msg)
-    ok = api_client.push_file_to_github(github_repo, github_token,
-                                        f"{folder}/{req.problem_ref}{ext}", req.code, msg)
+    ok = api_client.push_files_to_github(github_repo, github_token, [
+        {"path": f"{folder}/README.md", "content": readme},
+        {"path": f"{folder}/{req.problem_ref}{ext}", "content": req.code},
+    ], msg)
     if not ok:
         raise HTTPException(status_code=500, detail="GitHub push에 실패했습니다.")
     return {"pushed": True, "repo": github_repo, "path": folder}
