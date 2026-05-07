@@ -17,8 +17,8 @@ router = APIRouter()
 
 _STATE_TTL = 300  # seconds
 _HMAC_KEY = os.environ.get("GITHUB_CLIENT_SECRET", "").encode() or b"dev-fallback-key"
-# 사용된 nonce 추적 — 1회 소비로 replay 방지. 단일 사용자 앱이므로 집합 크기는 TTL 내 요청 수에 비례해 미미.
-_USED_NONCES: set[str] = set()
+# 사용된 nonce → 만료 시각. TTL 만료된 것만 정리해 1000개 일괄 삭제로 인한 replay 창 재개를 방지.
+_USED_NONCES: dict[str, float] = {}
 
 
 def _new_state() -> str:
@@ -40,16 +40,19 @@ def _validate_state(state: str) -> tuple[bool, str]:
         return False, ""
     if (time.time() - int(ts_str)) >= _STATE_TTL:
         return False, ""
-    if nonce in _USED_NONCES:
+    if nonce in _USED_NONCES and _USED_NONCES[nonce] > time.time():
         return False, ""
     return True, nonce
 
 
 def _consume_nonce(nonce: str) -> None:
-    """트랜잭션 성공 후에만 호출 — 이 시점 이후 같은 nonce 재사용 불가."""
-    _USED_NONCES.add(nonce)
-    if len(_USED_NONCES) > 1000:
-        _USED_NONCES.clear()
+    """트랜잭션 성공 후에만 호출. 만료된 항목만 정리해 유효 기간 내 nonce는 항상 차단."""
+    now = time.time()
+    _USED_NONCES[nonce] = now + _STATE_TTL
+    # 만료된 항목만 제거 — 일괄 삭제 금지 (삭제 직후 기존 nonce replay 가능해짐)
+    expired = [k for k, exp in _USED_NONCES.items() if exp <= now]
+    for k in expired:
+        del _USED_NONCES[k]
 
 
 def _github_oauth_settings():

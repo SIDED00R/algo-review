@@ -161,7 +161,11 @@ def get_weak_tags(top_n: int = 5) -> list:
     return [r["tag"] for r in rows]
 
 
+_AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
+
+
 def get_average_tier() -> float:
+    """최근 30개 고유 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다."""
     conn = get_connection()
     cur = conn.cursor()
     if USE_POSTGRES:
@@ -170,16 +174,16 @@ def get_average_tier() -> float:
                 SELECT DISTINCT ON (platform, problem_ref) tier, created_at
                 FROM reviews WHERE tier > 0
                 ORDER BY platform, problem_ref, created_at ASC
-            ) t ORDER BY created_at ASC
-        """)
+            ) t ORDER BY created_at DESC LIMIT %s
+        """, (_AVG_TIER_WINDOW,))
     else:
         cur.execute("""
             SELECT tier FROM (
                 SELECT tier, MIN(created_at) AS first_at
                 FROM reviews WHERE tier > 0
                 GROUP BY platform, problem_ref
-            ) ORDER BY first_at ASC
-        """)
+            ) ORDER BY first_at DESC LIMIT ?
+        """, (_AVG_TIER_WINDOW,))
     rows = cur.fetchall()
     if USE_POSTGRES:
         cur.close()
@@ -188,8 +192,7 @@ def get_average_tier() -> float:
     if not rows:
         return 10.0
 
-    total = sum(row[0] for row in rows)
-    return total / len(rows)
+    return sum(row[0] for row in rows) / len(rows)
 
 
 def get_problems_grouped() -> list:
