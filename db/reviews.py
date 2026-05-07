@@ -161,7 +161,11 @@ def get_weak_tags(top_n: int = 5) -> list:
     return [r["tag"] for r in rows]
 
 
+_AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
+
+
 def get_average_tier() -> float:
+    """최근 30개 고유 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다."""
     conn = get_connection()
     cur = conn.cursor()
     if USE_POSTGRES:
@@ -169,17 +173,23 @@ def get_average_tier() -> float:
             SELECT tier FROM (
                 SELECT DISTINCT ON (platform, problem_ref) tier, created_at
                 FROM reviews WHERE tier > 0
-                ORDER BY platform, problem_ref, created_at ASC
-            ) t ORDER BY created_at ASC
-        """)
+                ORDER BY platform, problem_ref, created_at DESC
+            ) t ORDER BY created_at DESC LIMIT %s
+        """, (_AVG_TIER_WINDOW,))
     else:
+        # MAX(created_at) 기준 행의 tier를 정확히 선택 — non-aggregated tier는 GROUP BY에서 보장 안 됨
         cur.execute("""
-            SELECT tier FROM (
-                SELECT tier, MIN(created_at) AS first_at
+            SELECT r.tier FROM reviews r
+            INNER JOIN (
+                SELECT platform, problem_ref, MAX(created_at) AS last_at
                 FROM reviews WHERE tier > 0
                 GROUP BY platform, problem_ref
-            ) ORDER BY first_at ASC
-        """)
+            ) latest ON r.platform = latest.platform
+                    AND r.problem_ref = latest.problem_ref
+                    AND r.created_at = latest.last_at
+            WHERE r.tier > 0
+            ORDER BY latest.last_at DESC LIMIT ?
+        """, (_AVG_TIER_WINDOW,))
     rows = cur.fetchall()
     if USE_POSTGRES:
         cur.close()
@@ -188,15 +198,7 @@ def get_average_tier() -> float:
     if not rows:
         return 10.0
 
-    max_avg = 0.0
-    running_sum = 0.0
-    for i, row in enumerate(rows, 1):
-        running_sum += row[0]
-        running_avg = running_sum / i
-        if running_avg > max_avg:
-            max_avg = running_avg
-
-    return max_avg
+    return sum(row[0] for row in rows) / len(rows)
 
 
 def get_problems_grouped() -> list:
@@ -379,18 +381,22 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
 
     if platform:
         p = _ph()
-        cur.execute(f"SELECT tags, created_at FROM reviews WHERE platform = {p}", (platform,))
+        cur.execute(f"SELECT tags, efficiency, created_at FROM reviews WHERE platform = {p}", (platform,))
         review_rows = _rows_to_dicts(cur, cur.fetchall())
         cur.execute(f"SELECT tags, imported_at FROM solved_history WHERE platform = {p}", (platform,))
         solved_rows = _rows_to_dicts(cur, cur.fetchall())
     else:
-        cur.execute("SELECT tags, created_at FROM reviews")
+        cur.execute("SELECT tags, efficiency, created_at FROM reviews")
         review_rows = _rows_to_dicts(cur, cur.fetchall())
         cur.execute("SELECT tags, imported_at FROM solved_history")
         solved_rows = _rows_to_dicts(cur, cur.fetchall())
 
-    cur.execute("SELECT tag, poor_count, total_count FROM tag_stats")
-    stat_rows = _rows_to_dicts(cur, cur.fetchall())
+    # tag_stats는 BOJ 전용. CF(또는 플랫폼 지정 시)는 reviews에서 직접 poor_ratio 계산.
+    if platform and platform != "boj":
+        stat_rows = []
+    else:
+        cur.execute("SELECT tag, poor_count, total_count FROM tag_stats")
+        stat_rows = _rows_to_dicts(cur, cur.fetchall())
 
     if USE_POSTGRES:
         cur.close()
@@ -418,9 +424,26 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
                 tag_data[tag]["last_date"] = date
 
     poor_map = {}
-    for s in stat_rows:
-        if s["total_count"] > 0:
-            poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
+    if stat_rows:
+        # BOJ: tag_stats의 누적 집계 사용
+        for s in stat_rows:
+            if s["total_count"] > 0:
+                poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
+    else:
+        # 비-BOJ(CF 등): reviews에서 직접 poor_ratio 계산
+        tag_eff: dict[str, dict] = {}
+        for row in review_rows:
+            tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
+            eff = row.get("efficiency", "poor")
+            for tag in tags:
+                if tag not in tag_eff:
+                    tag_eff[tag] = {"good": 0, "total": 0}
+                tag_eff[tag]["total"] += 1
+                if eff == "good":
+                    tag_eff[tag]["good"] += 1
+        for tag, counts in tag_eff.items():
+            if counts["total"] > 0:
+                poor_map[tag] = 1 - counts["good"] / counts["total"]
 
     return [
         {

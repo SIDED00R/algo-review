@@ -171,17 +171,29 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
     return results
 
 
+_TAG_KEY_CACHE: dict[str, str] = {}
+
+
 def get_tag_key_by_name(tag_name: str) -> str:
+    cached = _TAG_KEY_CACHE.get(tag_name.lower())
+    if cached is not None:
+        return cached
+
     url = f"{SOLVED_AC_BASE}/tag/list"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
         items = resp.json().get("items", [])
+        # 전체 목록을 캐시에 저장해 다음 호출은 네트워크를 타지 않는다
         for item in items:
+            key = item.get("key", "")
             display_names = item.get("displayNames", [])
-            names = [d["name"].lower() for d in display_names]
-            if tag_name.lower() in names or item.get("key", "").lower() == tag_name.lower():
-                return item["key"]
+            for d in display_names:
+                _TAG_KEY_CACHE[d["name"].lower()] = key
+            _TAG_KEY_CACHE[key.lower()] = key
+        result = _TAG_KEY_CACHE.get(tag_name.lower())
+        if result:
+            return result
     except Exception:
         pass
     return tag_name.lower().replace(" ", "_")

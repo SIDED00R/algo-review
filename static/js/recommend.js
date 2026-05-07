@@ -50,23 +50,24 @@ function renderRecommend(container, data) {
   `;
 
   for (const rec of data.recommendations) {
-    html += `<div class="rec-tag-title">📌 ${rec.tag}</div><div class="rec-problems">`;
+    html += `<div class="rec-tag-title">📌 ${escapeHtml(rec.tag)}</div><div class="rec-problems">`;
     for (const p of rec.problems) {
       const ptc = tierClass(p.tier);
       const isCF = p.url && p.url.includes('codeforces');
       if (isCF) {
-        const safeTitle = p.title.replace(/'/g, "\\'");
-        const safeTier = p.tier_name.replace(/'/g, "\\'");
         html += `
-          <div class="rec-problem-card cf-clickable" onclick="openProblemModal('${p.id}', '${safeTitle}', '${safeTier}')">
-            <span>${p.id}. ${p.title}</span>
-            <span class="tier-badge ${ptc}">${p.tier_name}</span>
+          <div class="rec-problem-card cf-clickable"
+               data-ref="${escapeHtml(String(p.id))}"
+               data-title="${escapeHtml(p.title)}"
+               data-tier="${escapeHtml(p.tier_name)}">
+            <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
+            <span class="tier-badge ${ptc}">${escapeHtml(p.tier_name)}</span>
           </div>`;
       } else {
         html += `
           <div class="rec-problem-card">
-            <a href="${p.url || 'https://boj.kr/' + p.id}" target="_blank">${p.id}. ${p.title}</a>
-            <span class="tier-badge ${ptc}">${p.tier_name}</span>
+            <a href="${escapeHtml(p.url || 'https://boj.kr/' + p.id)}" target="_blank">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
+            <span class="tier-badge ${ptc}">${escapeHtml(p.tier_name)}</span>
           </div>`;
       }
     }
@@ -74,4 +75,10 @@ function renderRecommend(container, data) {
   }
   html += `</div>`;
   container.innerHTML = html;
+
+  container.querySelectorAll('.cf-clickable').forEach(el => {
+    el.addEventListener('click', () => {
+      openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
+    });
+  });
 }

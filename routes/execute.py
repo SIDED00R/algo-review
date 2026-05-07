@@ -14,6 +14,8 @@ router = APIRouter()
 _SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
 _BASE_ENV = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
 _COMPILE_TIMEOUT = int(os.environ.get("COMPILE_TIMEOUT", "30"))
+# preexec_fn은 멀티스레드 서버(FastAPI threadpool)에서 fork 후 exec 전 deadlock 위험이 있어 사용하지 않는다.
+# 메모리·프로세스 제한은 Cloud Run 서비스 설정(컨테이너 메모리 상한)과 timeout에 위임한다.
 
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
