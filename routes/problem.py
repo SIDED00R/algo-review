@@ -13,8 +13,9 @@ _API_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "15"))
 
 router = APIRouter()
 
-# problem_ref → 번역 결과 전체 캐시 (프로세스 재시작 전까지 유효)
-_PROBLEM_CACHE: dict[str, dict] = {}
+# problem_ref → 번역 결과 캐시. 최대 200개 LRU — 초과 시 가장 오래된 항목 제거.
+_PROBLEM_CACHE_MAX = 200
+_PROBLEM_CACHE: dict[str, dict] = {}  # 삽입 순서 보장(Python 3.7+) → FIFO eviction
 
 
 def _translate_cf_text(text: str, title: str) -> str:
@@ -134,5 +135,7 @@ async def get_cf_problem(problem_ref: str):
         "contest_id": contest_id,
         "index": index,
     }
+    if len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
+        _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
     _PROBLEM_CACHE[ref_key] = result
     return result

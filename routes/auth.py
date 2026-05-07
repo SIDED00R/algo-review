@@ -1,6 +1,7 @@
 import os
 import hmac
 import hashlib
+import secrets
 import time
 import logging
 import db
@@ -15,27 +16,38 @@ _logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _STATE_TTL = 300  # seconds
-# GITHUB_CLIENT_SECRET을 HMAC 서명 키로 재사용 — 별도 환경변수 없이 안전
 _HMAC_KEY = os.environ.get("GITHUB_CLIENT_SECRET", "").encode() or b"dev-fallback-key"
+# 사용된 nonce 추적 — 1회 소비로 replay 방지. 단일 사용자 앱이므로 집합 크기는 TTL 내 요청 수에 비례해 미미.
+_USED_NONCES: set[str] = set()
 
 
 def _new_state() -> str:
-    """현재 타임스탬프를 HMAC-SHA256으로 서명 — stateless, 인스턴스·재시작 무관."""
+    """nonce + 타임스탬프를 HMAC-SHA256으로 서명. 각 OAuth 시작마다 고유."""
+    nonce = secrets.token_urlsafe(16)
     ts = str(int(time.time()))
-    sig = hmac.new(_HMAC_KEY, ts.encode(), hashlib.sha256).hexdigest()
-    return f"{ts}.{sig}"
+    sig = hmac.new(_HMAC_KEY, f"{nonce}.{ts}".encode(), hashlib.sha256).hexdigest()
+    return f"{nonce}.{ts}.{sig}"
 
 
 def _verify_state(state: str) -> bool:
-    """서명 검증 + TTL 확인. 타이밍 공격 방지를 위해 compare_digest 사용."""
+    """서명 검증 + TTL + 1회 소비 확인. 타이밍 공격 방지를 위해 compare_digest 사용."""
     try:
-        ts_str, sig = state.split(".", 1)
+        nonce, ts_str, sig = state.split(".", 2)
     except ValueError:
         return False
-    expected = hmac.new(_HMAC_KEY, ts_str.encode(), hashlib.sha256).hexdigest()
+    expected = hmac.new(_HMAC_KEY, f"{nonce}.{ts_str}".encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
         return False
-    return (time.time() - int(ts_str)) < _STATE_TTL
+    if (time.time() - int(ts_str)) >= _STATE_TTL:
+        return False
+    if nonce in _USED_NONCES:
+        return False
+    _USED_NONCES.add(nonce)
+    # TTL 만료된 nonce는 주기적으로 정리 (집합이 무한 증가하지 않도록)
+    # 단순히 크기가 1000을 넘으면 전체 초기화 — TTL 5분 내 1000건 로그인은 비현실적
+    if len(_USED_NONCES) > 1000:
+        _USED_NONCES.clear()
+    return True
 
 
 def _github_oauth_settings():
