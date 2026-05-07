@@ -356,7 +356,7 @@ def get_average_cf_rating() -> float:
               ON latest.problem_ref = r.problem_ref
              AND latest.max_created_at = r.created_at
             WHERE r.platform = {p}
-        """, ("codeforces",))
+        """, ("codeforces", "codeforces"))
     rows = cur.fetchall()
     if USE_POSTGRES:
         cur.close()
