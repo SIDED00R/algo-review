@@ -1,6 +1,7 @@
 import os
 import asyncio
 import re
+import time
 import requests
 from lxml import etree
 from fastapi import APIRouter, HTTPException
@@ -13,9 +14,31 @@ _API_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "15"))
 
 router = APIRouter()
 
-# problem_ref → 번역 결과 캐시. 최대 200개 LRU — 초과 시 가장 오래된 항목 제거.
+# problem_ref → {"result": dict, "expires": float|None}
+# expires=None: 영구 캐시(번역 성공), expires=timestamp: 단기 TTL(번역 실패 — 60초 후 재시도)
 _PROBLEM_CACHE_MAX = 200
-_PROBLEM_CACHE: dict[str, dict] = {}  # 삽입 순서 보장(Python 3.7+) → FIFO eviction
+_PROBLEM_CACHE: dict[str, dict] = {}
+_FALLBACK_TTL = 60  # 번역 실패 시 재시도까지 대기 시간(초)
+
+
+def _cache_get(ref_key: str) -> dict | None:
+    entry = _PROBLEM_CACHE.get(ref_key)
+    if entry is None:
+        return None
+    expires = entry.get("expires")
+    if expires is not None and time.time() > expires:
+        del _PROBLEM_CACHE[ref_key]
+        return None
+    return entry["result"]
+
+
+def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
+    if len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
+        _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
+    _PROBLEM_CACHE[ref_key] = {
+        "result": result,
+        "expires": None if translation_ok else time.time() + _FALLBACK_TTL,
+    }
 
 
 def _translate_cf_text(text: str, title: str) -> str:
@@ -53,8 +76,9 @@ async def get_cf_problem(problem_ref: str):
         return DEMO_CF_PROBLEM
 
     ref_key = problem_ref.strip().upper()
-    if ref_key in _PROBLEM_CACHE:
-        return _PROBLEM_CACHE[ref_key]
+    cached = _cache_get(ref_key)
+    if cached is not None:
+        return cached
 
     m = re.match(r'^(\d+)([A-Za-z]\d*)$', problem_ref.strip())
     if not m:
@@ -140,9 +164,7 @@ async def get_cf_problem(problem_ref: str):
         "contest_id": contest_id,
         "index": index,
     }
-    # 번역이 하나라도 실패했으면 캐시에 저장하지 않음 — 오류 결과가 고착되는 것을 방지
-    if s_ok and i_ok and o_ok and n_ok:
-        if len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
-            _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
-        _PROBLEM_CACHE[ref_key] = result
+    all_ok = s_ok and i_ok and o_ok and n_ok
+    # 번역 성공 시 영구 캐시, 실패 시 60초 단기 TTL — retry storm 방지
+    _cache_set(ref_key, result, all_ok)
     return result

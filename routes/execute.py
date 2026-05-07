@@ -14,26 +14,8 @@ router = APIRouter()
 _SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
 _BASE_ENV = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
 _COMPILE_TIMEOUT = int(os.environ.get("COMPILE_TIMEOUT", "30"))
-# 실행 바이너리: 512 MB / 컴파일러: 2 GB — Linux(Cloud Run) 전용
-_RUN_MEM_LIMIT  = 512 * 1024 * 1024
-_COMPILE_MEM_LIMIT = 2 * 1024 * 1024 * 1024
-_PROC_LIMIT = 64
-
-
-def _make_resource_limits(mem_bytes: int):
-    """지정 메모리 한도로 subprocess preexec_fn 반환 — Linux 전용."""
-    def _set():
-        try:
-            import resource  # noqa: PLC0415
-            resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-            resource.setrlimit(resource.RLIMIT_NPROC, (_PROC_LIMIT, _PROC_LIMIT))
-        except Exception:
-            pass
-    return _set if sys.platform != "win32" else None
-
-
-_PREEXEC_RUN     = _make_resource_limits(_RUN_MEM_LIMIT)
-_PREEXEC_COMPILE = _make_resource_limits(_COMPILE_MEM_LIMIT)
+# preexec_fn은 멀티스레드 서버(FastAPI threadpool)에서 fork 후 exec 전 deadlock 위험이 있어 사용하지 않는다.
+# 메모리·프로세스 제한은 Cloud Run 서비스 설정(컨테이너 메모리 상한)과 timeout에 위임한다.
 
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
@@ -46,7 +28,6 @@ def _run_python(code: str, stdin: str, timeout: int) -> dict:
             text=True,
             timeout=timeout,
             env=env,
-            preexec_fn=_PREEXEC_RUN,
         )
         return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
     except subprocess.TimeoutExpired:
@@ -68,7 +49,6 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 text=True,
                 timeout=_COMPILE_TIMEOUT,
                 env=_BASE_ENV,
-                preexec_fn=_PREEXEC_COMPILE,
             )
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
@@ -82,7 +62,6 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 text=True,
                 timeout=timeout,
                 env=_BASE_ENV,
-                preexec_fn=_PREEXEC_RUN,
             )
             return {"stdout": run_result.stdout, "stderr": run_result.stderr, "exit_code": run_result.returncode}
         except subprocess.TimeoutExpired:

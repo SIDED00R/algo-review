@@ -173,16 +173,16 @@ def get_average_tier() -> float:
             SELECT tier FROM (
                 SELECT DISTINCT ON (platform, problem_ref) tier, created_at
                 FROM reviews WHERE tier > 0
-                ORDER BY platform, problem_ref, created_at ASC
+                ORDER BY platform, problem_ref, created_at DESC
             ) t ORDER BY created_at DESC LIMIT %s
         """, (_AVG_TIER_WINDOW,))
     else:
         cur.execute("""
             SELECT tier FROM (
-                SELECT tier, MIN(created_at) AS first_at
+                SELECT tier, MAX(created_at) AS last_at
                 FROM reviews WHERE tier > 0
                 GROUP BY platform, problem_ref
-            ) ORDER BY first_at DESC LIMIT ?
+            ) ORDER BY last_at DESC LIMIT ?
         """, (_AVG_TIER_WINDOW,))
     rows = cur.fetchall()
     if USE_POSTGRES:
