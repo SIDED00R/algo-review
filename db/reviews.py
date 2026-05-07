@@ -177,12 +177,18 @@ def get_average_tier() -> float:
             ) t ORDER BY created_at DESC LIMIT %s
         """, (_AVG_TIER_WINDOW,))
     else:
+        # MAX(created_at) 기준 행의 tier를 정확히 선택 — non-aggregated tier는 GROUP BY에서 보장 안 됨
         cur.execute("""
-            SELECT tier FROM (
-                SELECT tier, MAX(created_at) AS last_at
+            SELECT r.tier FROM reviews r
+            INNER JOIN (
+                SELECT platform, problem_ref, MAX(created_at) AS last_at
                 FROM reviews WHERE tier > 0
                 GROUP BY platform, problem_ref
-            ) ORDER BY last_at DESC LIMIT ?
+            ) latest ON r.platform = latest.platform
+                    AND r.problem_ref = latest.problem_ref
+                    AND r.created_at = latest.last_at
+            WHERE r.tier > 0
+            ORDER BY latest.last_at DESC LIMIT ?
         """, (_AVG_TIER_WINDOW,))
     rows = cur.fetchall()
     if USE_POSTGRES:
