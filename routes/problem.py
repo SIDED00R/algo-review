@@ -19,34 +19,32 @@ _PROBLEM_CACHE: dict[str, dict] = {}  # 삽입 순서 보장(Python 3.7+) → FI
 
 
 def _translate_cf_text(text: str, title: str) -> str:
-    try:
-        from openai import OpenAI as _OpenAI
-        client = _OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-        resp = client.chat.completions.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-            messages=[
-                {"role": "system", "content": (
-                    "You are a competitive programming translator. "
-                    "Translate the given text segment from a Codeforces problem into natural Korean. "
-                    "IMPORTANT RULES: "
-                    "1. Always return the full translated text. Never return empty output. "
-                    "2. Wrap ALL mathematical expressions, variables, and constraints in LaTeX delimiters: "
-                    "   use $...$ for inline math (e.g., $n$, $1 \\le n \\le 10^5$, $x_i$) "
-                    "   and $$...$$ for display math. "
-                    "3. Do NOT add any section headers or labels (e.g., do not write '문제:', '입력:', '출력:'). "
-                    "4. Translate all English prose naturally to Korean. "
-                    "5. If the text is already in Korean or has nothing to translate, return it as-is."
-                )},
-                {"role": "user", "content": f"Problem: {title}\n\nTranslate this text:\n\n{text}"},
-            ],
-            max_tokens=_MAX_TOKENS,
-            temperature=_TEMPERATURE,
-            timeout=_API_TIMEOUT,
-        )
-        result = resp.choices[0].message.content.strip()
-        return result if result else text
-    except Exception:
-        return text
+    """번역 성공 시 번역문 반환. 실패 시 예외를 그대로 전파 (캐시 오염 방지)."""
+    from openai import OpenAI as _OpenAI
+    client = _OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+    resp = client.chat.completions.create(
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        messages=[
+            {"role": "system", "content": (
+                "You are a competitive programming translator. "
+                "Translate the given text segment from a Codeforces problem into natural Korean. "
+                "IMPORTANT RULES: "
+                "1. Always return the full translated text. Never return empty output. "
+                "2. Wrap ALL mathematical expressions, variables, and constraints in LaTeX delimiters: "
+                "   use $...$ for inline math (e.g., $n$, $1 \\le n \\le 10^5$, $x_i$) "
+                "   and $$...$$ for display math. "
+                "3. Do NOT add any section headers or labels (e.g., do not write '문제:', '입력:', '출력:'). "
+                "4. Translate all English prose naturally to Korean. "
+                "5. If the text is already in Korean or has nothing to translate, return it as-is."
+            )},
+            {"role": "user", "content": f"Problem: {title}\n\nTranslate this text:\n\n{text}"},
+        ],
+        max_tokens=_MAX_TOKENS,
+        temperature=_TEMPERATURE,
+        timeout=_API_TIMEOUT,
+    )
+    result = resp.choices[0].message.content.strip()
+    return result if result else text
 
 
 @router.get("/api/problem/cf/{problem_ref}")
@@ -108,16 +106,23 @@ async def get_cf_problem(problem_ref: str):
                 "output": "\n".join(out_pre.itertext()).strip(),
             })
 
-    async def _translate_async(text):
+    async def _translate_async(text: str) -> tuple[str, bool]:
+        """(번역문, 성공여부) 반환 — 실패 시 원문과 False."""
         if not text:
-            return ""
-        return await asyncio.to_thread(_translate_cf_text, text, title)
+            return "", True
+        try:
+            translated = await asyncio.to_thread(_translate_cf_text, text, title)
+            return translated, True
+        except Exception:
+            return text, False
 
-    statement_ko, input_ko, output_ko, note_ko = await asyncio.gather(
-        _translate_async(statement_text),
-        _translate_async(input_text),
-        _translate_async(output_text),
-        _translate_async(note_text),
+    (statement_ko, s_ok), (input_ko, i_ok), (output_ko, o_ok), (note_ko, n_ok) = (
+        await asyncio.gather(
+            _translate_async(statement_text),
+            _translate_async(input_text),
+            _translate_async(output_text),
+            _translate_async(note_text),
+        )
     )
 
     result = {
@@ -135,7 +140,9 @@ async def get_cf_problem(problem_ref: str):
         "contest_id": contest_id,
         "index": index,
     }
-    if len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
-        _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
-    _PROBLEM_CACHE[ref_key] = result
+    # 번역이 하나라도 실패했으면 캐시에 저장하지 않음 — 오류 결과가 고착되는 것을 방지
+    if s_ok and i_ok and o_ok and n_ok:
+        if len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
+            _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
+        _PROBLEM_CACHE[ref_key] = result
     return result

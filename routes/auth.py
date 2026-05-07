@@ -6,7 +6,7 @@ import time
 import logging
 import db
 import clients as api_client
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from routes.models import SetRepoRequest
 from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS
@@ -66,18 +66,36 @@ def github_oauth_start():
     if not client_id:
         raise HTTPException(status_code=500, detail="GITHUB_CLIENT_ID가 설정되지 않았습니다.")
     state = _new_state()
+    nonce = state.split(".")[0]
     callback_url = f"{app_url}/auth/github/callback"
     github_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={client_id}&scope=repo&redirect_uri={callback_url}&state={state}"
     )
-    return RedirectResponse(github_url)
+    redirect = RedirectResponse(github_url)
+    # nonce를 HttpOnly 쿠키로 브라우저에 바인딩 — 다른 브라우저의 콜백 재사용 차단
+    redirect.set_cookie(
+        key="oauth_nonce",
+        value=nonce,
+        httponly=True,
+        samesite="lax",
+        secure=app_url.startswith("https://"),
+        max_age=_STATE_TTL,
+        path="/",
+    )
+    return redirect
 
 
 @router.get("/auth/github/callback")
-def github_oauth_callback(code: str = "", error: str = "", state: str = ""):
+def github_oauth_callback(request: Request, code: str = "", error: str = "", state: str = ""):
     client_id, client_secret, app_url = _github_oauth_settings()
     if error or not code:
+        return RedirectResponse(f"{app_url}/?github=error")
+    # 쿠키 nonce와 state nonce가 일치해야 콜백이 같은 브라우저에서 시작됐음을 보장
+    cookie_nonce = request.cookies.get("oauth_nonce", "")
+    state_nonce = state.split(".")[0] if state else ""
+    if not cookie_nonce or not hmac.compare_digest(cookie_nonce, state_nonce):
+        _logger.warning("GitHub OAuth callback: nonce mismatch (possible CSRF)")
         return RedirectResponse(f"{app_url}/?github=error")
     if not _verify_state(state):
         _logger.warning("GitHub OAuth callback: invalid or expired state token")
@@ -90,7 +108,9 @@ def github_oauth_callback(code: str = "", error: str = "", state: str = ""):
     except Exception:
         _logger.exception("GitHub OAuth callback failed")
         return RedirectResponse(f"{app_url}/?github=error")
-    return RedirectResponse(f"{app_url}/?github=connected&user={username}")
+    redirect = RedirectResponse(f"{app_url}/?github=connected&user={username}")
+    redirect.delete_cookie("oauth_nonce", path="/")
+    return redirect
 
 
 @router.get("/auth/github/status")
