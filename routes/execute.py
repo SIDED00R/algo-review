@@ -64,7 +64,7 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 text=True,
                 timeout=_COMPILE_TIMEOUT,
                 env=_BASE_ENV,
-                preexec_fn=_PREEXEC,
+                # 컴파일러 자체는 리소스 제한 없음 — 템플릿 중 작업 등에서 512MB 초과 가능
             )
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}

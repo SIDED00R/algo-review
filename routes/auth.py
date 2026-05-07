@@ -29,25 +29,27 @@ def _new_state() -> str:
     return f"{nonce}.{ts}.{sig}"
 
 
-def _verify_state(state: str) -> bool:
-    """서명 검증 + TTL + 1회 소비 확인. 타이밍 공격 방지를 위해 compare_digest 사용."""
+def _validate_state(state: str) -> tuple[bool, str]:
+    """서명+TTL+중복 검증만 수행. nonce를 반환하되 소비하지 않음."""
     try:
         nonce, ts_str, sig = state.split(".", 2)
     except ValueError:
-        return False
+        return False, ""
     expected = hmac.new(_HMAC_KEY, f"{nonce}.{ts_str}".encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
-        return False
+        return False, ""
     if (time.time() - int(ts_str)) >= _STATE_TTL:
-        return False
+        return False, ""
     if nonce in _USED_NONCES:
-        return False
+        return False, ""
+    return True, nonce
+
+
+def _consume_nonce(nonce: str) -> None:
+    """트랜잭션 성공 후에만 호출 — 이 시점 이후 같은 nonce 재사용 불가."""
     _USED_NONCES.add(nonce)
-    # TTL 만료된 nonce는 주기적으로 정리 (집합이 무한 증가하지 않도록)
-    # 단순히 크기가 1000을 넘으면 전체 초기화 — TTL 5분 내 1000건 로그인은 비현실적
     if len(_USED_NONCES) > 1000:
         _USED_NONCES.clear()
-    return True
 
 
 def _github_oauth_settings():
@@ -97,7 +99,8 @@ def github_oauth_callback(request: Request, code: str = "", error: str = "", sta
     if not cookie_nonce or not hmac.compare_digest(cookie_nonce, state_nonce):
         _logger.warning("GitHub OAuth callback: nonce mismatch (possible CSRF)")
         return RedirectResponse(f"{app_url}/?github=error")
-    if not _verify_state(state):
+    valid, nonce = _validate_state(state)
+    if not valid:
         _logger.warning("GitHub OAuth callback: invalid or expired state token")
         return RedirectResponse(f"{app_url}/?github=error")
     try:
@@ -107,7 +110,10 @@ def github_oauth_callback(request: Request, code: str = "", error: str = "", sta
         db.save_github_settings(access_token=token, github_username=username)
     except Exception:
         _logger.exception("GitHub OAuth callback failed")
+        # nonce를 소비하지 않아 재시도 가능
         return RedirectResponse(f"{app_url}/?github=error")
+    # 트랜잭션 성공 후 nonce 소비 — 이후 같은 state로 재진입 불가
+    _consume_nonce(nonce)
     redirect = RedirectResponse(f"{app_url}/?github=connected&user={username}")
     redirect.delete_cookie("oauth_nonce", path="/")
     return redirect
