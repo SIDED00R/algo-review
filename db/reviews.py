@@ -54,7 +54,7 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
           complexity, better_algorithm or "", json.dumps(strengths, ensure_ascii=False),
           json.dumps(weaknesses, ensure_ascii=False), datetime.now().isoformat()))
 
-    if is_first_submission:
+    if is_first_submission and platform == "boj":
         for tag in tags:
             if USE_POSTGRES:
                 cur.execute(f"""
@@ -372,18 +372,22 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
 
     if platform:
         p = _ph()
-        cur.execute(f"SELECT tags, created_at FROM reviews WHERE platform = {p}", (platform,))
+        cur.execute(f"SELECT tags, efficiency, created_at FROM reviews WHERE platform = {p}", (platform,))
         review_rows = _rows_to_dicts(cur, cur.fetchall())
         cur.execute(f"SELECT tags, imported_at FROM solved_history WHERE platform = {p}", (platform,))
         solved_rows = _rows_to_dicts(cur, cur.fetchall())
     else:
-        cur.execute("SELECT tags, created_at FROM reviews")
+        cur.execute("SELECT tags, efficiency, created_at FROM reviews")
         review_rows = _rows_to_dicts(cur, cur.fetchall())
         cur.execute("SELECT tags, imported_at FROM solved_history")
         solved_rows = _rows_to_dicts(cur, cur.fetchall())
 
-    cur.execute("SELECT tag, poor_count, total_count FROM tag_stats")
-    stat_rows = _rows_to_dicts(cur, cur.fetchall())
+    # tag_stats는 BOJ 전용. CF(또는 플랫폼 지정 시)는 reviews에서 직접 poor_ratio 계산.
+    if platform and platform != "boj":
+        stat_rows = []
+    else:
+        cur.execute("SELECT tag, poor_count, total_count FROM tag_stats")
+        stat_rows = _rows_to_dicts(cur, cur.fetchall())
 
     if USE_POSTGRES:
         cur.close()
@@ -411,9 +415,26 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
                 tag_data[tag]["last_date"] = date
 
     poor_map = {}
-    for s in stat_rows:
-        if s["total_count"] > 0:
-            poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
+    if stat_rows:
+        # BOJ: tag_stats의 누적 집계 사용
+        for s in stat_rows:
+            if s["total_count"] > 0:
+                poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
+    else:
+        # 비-BOJ(CF 등): reviews에서 직접 poor_ratio 계산
+        tag_eff: dict[str, dict] = {}
+        for row in review_rows:
+            tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
+            eff = row.get("efficiency", "poor")
+            for tag in tags:
+                if tag not in tag_eff:
+                    tag_eff[tag] = {"good": 0, "total": 0}
+                tag_eff[tag]["total"] += 1
+                if eff == "good":
+                    tag_eff[tag]["good"] += 1
+        for tag, counts in tag_eff.items():
+            if counts["total"] > 0:
+                poor_map[tag] = 1 - counts["good"] / counts["total"]
 
     return [
         {

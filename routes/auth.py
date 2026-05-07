@@ -1,5 +1,6 @@
 import os
-import secrets
+import hmac
+import hashlib
 import time
 import logging
 import db
@@ -13,24 +14,28 @@ _logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# CSRF state 토큰: {token: expires_at} — 5분 유효, 단일 서버 메모리 저장
-_OAUTH_STATES: dict[str, float] = {}
 _STATE_TTL = 300  # seconds
+# GITHUB_CLIENT_SECRET을 HMAC 서명 키로 재사용 — 별도 환경변수 없이 안전
+_HMAC_KEY = os.environ.get("GITHUB_CLIENT_SECRET", "").encode() or b"dev-fallback-key"
 
 
 def _new_state() -> str:
-    token = secrets.token_urlsafe(32)
-    _OAUTH_STATES[token] = time.time() + _STATE_TTL
-    return token
+    """현재 타임스탬프를 HMAC-SHA256으로 서명 — stateless, 인스턴스·재시작 무관."""
+    ts = str(int(time.time()))
+    sig = hmac.new(_HMAC_KEY, ts.encode(), hashlib.sha256).hexdigest()
+    return f"{ts}.{sig}"
 
 
-def _consume_state(token: str) -> bool:
-    """검증 후 즉시 삭제. 만료된 항목도 정리."""
-    now = time.time()
-    expired = [k for k, exp in _OAUTH_STATES.items() if exp < now]
-    for k in expired:
-        del _OAUTH_STATES[k]
-    return bool(_OAUTH_STATES.pop(token, None))
+def _verify_state(state: str) -> bool:
+    """서명 검증 + TTL 확인. 타이밍 공격 방지를 위해 compare_digest 사용."""
+    try:
+        ts_str, sig = state.split(".", 1)
+    except ValueError:
+        return False
+    expected = hmac.new(_HMAC_KEY, ts_str.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        return False
+    return (time.time() - int(ts_str)) < _STATE_TTL
 
 
 def _github_oauth_settings():
@@ -62,7 +67,7 @@ def github_oauth_callback(code: str = "", error: str = "", state: str = ""):
     client_id, client_secret, app_url = _github_oauth_settings()
     if error or not code:
         return RedirectResponse(f"{app_url}/?github=error")
-    if not _consume_state(state):
+    if not _verify_state(state):
         _logger.warning("GitHub OAuth callback: invalid or expired state token")
         return RedirectResponse(f"{app_url}/?github=error")
     try:
