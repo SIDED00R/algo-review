@@ -170,6 +170,16 @@ def init_db():
         )
     """)
 
+    # 자주 쓰이는 필터/정렬 컬럼 인덱스 — IF NOT EXISTS로 중복 실행 안전
+    for ddl in [
+        "CREATE INDEX IF NOT EXISTS idx_reviews_platform        ON reviews (platform)",
+        "CREATE INDEX IF NOT EXISTS idx_reviews_platform_ref    ON reviews (platform, problem_ref)",
+        "CREATE INDEX IF NOT EXISTS idx_reviews_created_at      ON reviews (created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_solved_platform_ref     ON solved_history (platform, problem_ref)",
+        "CREATE INDEX IF NOT EXISTS idx_solved_imported_at      ON solved_history (imported_at)",
+    ]:
+        cur.execute(ddl)
+
     conn.commit()
     if USE_POSTGRES:
         cur.close()

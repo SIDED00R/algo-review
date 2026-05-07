@@ -16,7 +16,7 @@ reportBtn.addEventListener('click', async () => {
       <div class="result-card">
         <div class="feedback-box">
           <h4>📊 종합 분석 리포트</h4>
-          <div class="markdown-body">${marked.parse(data.report)}</div>
+          <div class="markdown-body">${DOMPurify.sanitize(marked.parse(data.report))}</div>
         </div>
       </div>`;
   } catch (e) {

@@ -13,6 +13,9 @@ _API_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "15"))
 
 router = APIRouter()
 
+# problem_ref → 번역 결과 전체 캐시 (프로세스 재시작 전까지 유효)
+_PROBLEM_CACHE: dict[str, dict] = {}
+
 
 def _translate_cf_text(text: str, title: str) -> str:
     try:
@@ -49,6 +52,10 @@ def _translate_cf_text(text: str, title: str) -> str:
 async def get_cf_problem(problem_ref: str):
     if IS_DEMO:
         return DEMO_CF_PROBLEM
+
+    ref_key = problem_ref.strip().upper()
+    if ref_key in _PROBLEM_CACHE:
+        return _PROBLEM_CACHE[ref_key]
 
     m = re.match(r'^(\d+)([A-Za-z]\d*)$', problem_ref.strip())
     if not m:
@@ -112,7 +119,7 @@ async def get_cf_problem(problem_ref: str):
         _translate_async(note_text),
     )
 
-    return {
+    result = {
         "title": title,
         "time_limit": time_limit,
         "memory_limit": memory_limit,
@@ -127,3 +134,5 @@ async def get_cf_problem(problem_ref: str):
         "contest_id": contest_id,
         "index": index,
     }
+    _PROBLEM_CACHE[ref_key] = result
+    return result

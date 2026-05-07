@@ -63,7 +63,7 @@ function renderReview(container, d) {
   const tagsHtml = d.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
   const strengthsHtml = (d.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('') || '<li>-</li>';
   const weaknessesHtml = (d.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('') || '<li>-</li>';
-  const feedbackHtml = marked.parse(d.feedback || '');
+  const feedbackHtml = DOMPurify.sanitize(marked.parse(d.feedback || ''));
   const label = escapeHtml(problemLabel(d));
   const title = escapeHtml(d.title);
   const tierName = escapeHtml(d.tier_name);

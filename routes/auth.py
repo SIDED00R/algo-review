@@ -1,4 +1,6 @@
 import os
+import secrets
+import time
 import logging
 import db
 import clients as api_client
@@ -10,6 +12,25 @@ from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS
 _logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# CSRF state 토큰: {token: expires_at} — 5분 유효, 단일 서버 메모리 저장
+_OAUTH_STATES: dict[str, float] = {}
+_STATE_TTL = 300  # seconds
+
+
+def _new_state() -> str:
+    token = secrets.token_urlsafe(32)
+    _OAUTH_STATES[token] = time.time() + _STATE_TTL
+    return token
+
+
+def _consume_state(token: str) -> bool:
+    """검증 후 즉시 삭제. 만료된 항목도 정리."""
+    now = time.time()
+    expired = [k for k, exp in _OAUTH_STATES.items() if exp < now]
+    for k in expired:
+        del _OAUTH_STATES[k]
+    return bool(_OAUTH_STATES.pop(token, None))
 
 
 def _github_oauth_settings():
@@ -27,18 +48,22 @@ def github_oauth_start():
     client_id, _, app_url = _github_oauth_settings()
     if not client_id:
         raise HTTPException(status_code=500, detail="GITHUB_CLIENT_ID가 설정되지 않았습니다.")
+    state = _new_state()
     callback_url = f"{app_url}/auth/github/callback"
     github_url = (
         f"https://github.com/login/oauth/authorize"
-        f"?client_id={client_id}&scope=repo&redirect_uri={callback_url}"
+        f"?client_id={client_id}&scope=repo&redirect_uri={callback_url}&state={state}"
     )
     return RedirectResponse(github_url)
 
 
 @router.get("/auth/github/callback")
-def github_oauth_callback(code: str = "", error: str = ""):
+def github_oauth_callback(code: str = "", error: str = "", state: str = ""):
     client_id, client_secret, app_url = _github_oauth_settings()
     if error or not code:
+        return RedirectResponse(f"{app_url}/?github=error")
+    if not _consume_state(state):
+        _logger.warning("GitHub OAuth callback: invalid or expired state token")
         return RedirectResponse(f"{app_url}/?github=error")
     try:
         token = api_client.exchange_github_code(code, client_id, client_secret)

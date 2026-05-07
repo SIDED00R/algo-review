@@ -14,6 +14,22 @@ router = APIRouter()
 _SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
 _BASE_ENV = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
 _COMPILE_TIMEOUT = int(os.environ.get("COMPILE_TIMEOUT", "30"))
+# 메모리 한도: 512 MB (가상 주소 공간), 프로세스 한도: 64개 — Linux(Cloud Run) 전용
+_MEM_LIMIT_BYTES = 512 * 1024 * 1024
+_PROC_LIMIT = 64
+
+
+def _set_resource_limits():
+    """subprocess preexec_fn — Linux에서만 동작하며, 실패해도 무시한다."""
+    try:
+        import resource  # noqa: PLC0415
+        resource.setrlimit(resource.RLIMIT_AS, (_MEM_LIMIT_BYTES, _MEM_LIMIT_BYTES))
+        resource.setrlimit(resource.RLIMIT_NPROC, (_PROC_LIMIT, _PROC_LIMIT))
+    except Exception:
+        pass
+
+
+_PREEXEC = _set_resource_limits if sys.platform != "win32" else None
 
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
@@ -26,6 +42,7 @@ def _run_python(code: str, stdin: str, timeout: int) -> dict:
             text=True,
             timeout=timeout,
             env=env,
+            preexec_fn=_PREEXEC,
         )
         return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
     except subprocess.TimeoutExpired:
@@ -47,6 +64,7 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 text=True,
                 timeout=_COMPILE_TIMEOUT,
                 env=_BASE_ENV,
+                preexec_fn=_PREEXEC,
             )
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
@@ -60,6 +78,7 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 text=True,
                 timeout=timeout,
                 env=_BASE_ENV,
+                preexec_fn=_PREEXEC,
             )
             return {"stdout": run_result.stdout, "stderr": run_result.stderr, "exit_code": run_result.returncode}
         except subprocess.TimeoutExpired:

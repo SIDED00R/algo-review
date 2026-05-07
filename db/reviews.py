@@ -54,7 +54,7 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
           complexity, better_algorithm or "", json.dumps(strengths, ensure_ascii=False),
           json.dumps(weaknesses, ensure_ascii=False), datetime.now().isoformat()))
 
-    if is_first_submission and platform == "boj":
+    if is_first_submission:
         for tag in tags:
             if USE_POSTGRES:
                 cur.execute(f"""
@@ -188,15 +188,8 @@ def get_average_tier() -> float:
     if not rows:
         return 10.0
 
-    max_avg = 0.0
-    running_sum = 0.0
-    for i, row in enumerate(rows, 1):
-        running_sum += row[0]
-        running_avg = running_sum / i
-        if running_avg > max_avg:
-            max_avg = running_avg
-
-    return max_avg
+    total = sum(row[0] for row in rows)
+    return total / len(rows)
 
 
 def get_problems_grouped() -> list:

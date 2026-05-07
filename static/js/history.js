@@ -195,7 +195,7 @@ async function openReviewModal(platform, problemRef) {
         </div>` : ''}
         <div class="feedback-box" style="margin-bottom:16px">
           <h4>피드백</h4>
-          <div class="markdown-body">${marked.parse(r.feedback || '')}</div>
+          <div class="markdown-body">${DOMPurify.sanitize(marked.parse(r.feedback || ''))}</div>
         </div>
         <div>
           <h4 style="font-size:.85rem;color:var(--text-muted);margin-bottom:8px">제출 코드</h4>
