@@ -8,9 +8,11 @@ function outputMatches(actual, expected) {
   return aLines.every((a, i) => {
     const e = eLines[i];
     if (a === e) return true;
-    const aNum = parseFloat(a);
-    const eNum = parseFloat(e);
-    return !isNaN(aNum) && !isNaN(eNum) && Math.abs(aNum - eNum) < 1e-6;
+    const aNum = Number(a.trim());
+    const eNum = Number(e.trim());
+    return a.trim() !== '' && e.trim() !== '' &&
+      !isNaN(aNum) && !isNaN(eNum) &&
+      Math.abs(aNum - eNum) < 1e-6;
   });
 }
 
@@ -32,7 +34,10 @@ async function openProblemModal(ref, title, tierName) {
   document.getElementById('pm-test-results').innerHTML = '';
   document.getElementById('pm-custom-cases').innerHTML = '';
   _customCaseCount = 0;
-  document.getElementById('pm-review-btn').classList.add('hidden');
+  const _rb = document.getElementById('pm-review-btn');
+  _rb.classList.add('hidden');
+  _rb.textContent = '코드 리뷰 진행 →';
+  _rb.title = '';
   window.setEditorValue('pm-code', '');
 
   try {
@@ -224,7 +229,15 @@ async function runSamples() {
   btn.disabled = false;
   btn.textContent = '▶ 예제 실행';
 
-  document.getElementById('pm-review-btn').classList.remove('hidden');
+  const reviewBtn = document.getElementById('pm-review-btn');
+  reviewBtn.classList.remove('hidden');
+  if (allPassed) {
+    reviewBtn.textContent = '코드 리뷰 진행 →';
+    reviewBtn.title = '';
+  } else {
+    reviewBtn.textContent = '⚠️ 예제 실패 — 그래도 리뷰 진행';
+    reviewBtn.title = '일부 예제가 통과되지 않았습니다. 다중 정답 문제라면 진행해도 됩니다.';
+  }
 }
 
 function proceedToReview() {
