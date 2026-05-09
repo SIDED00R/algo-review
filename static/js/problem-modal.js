@@ -8,10 +8,10 @@ function outputMatches(actual, expected) {
   return aLines.every((a, i) => {
     const e = eLines[i];
     if (a === e) return true;
-    const dec = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+    const dec = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
     const at = a.trim(), et = e.trim();
     return dec.test(at) && dec.test(et) &&
-      Math.abs(Number(at) - Number(et)) < 1e-6;
+      Math.abs(parseFloat(at) - parseFloat(et)) < 1e-6;
   });
 }
 
