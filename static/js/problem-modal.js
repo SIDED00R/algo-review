@@ -1,5 +1,19 @@
 /* 문제 풀기 모달 — CF 문제 표시, 코드 실행, 리뷰 이동만 담당 */
 
+function outputMatches(actual, expected) {
+  if (actual === expected) return true;
+  const aLines = actual.split('\n');
+  const eLines = expected.split('\n');
+  if (aLines.length !== eLines.length) return false;
+  return aLines.every((a, i) => {
+    const e = eLines[i];
+    if (a === e) return true;
+    const aNum = parseFloat(a);
+    const eNum = parseFloat(e);
+    return !isNaN(aNum) && !isNaN(eNum) && Math.abs(aNum - eNum) < 1e-6;
+  });
+}
+
 let _currentProblem = null;
 
 async function openProblemModal(ref, title, tierName) {
@@ -184,7 +198,7 @@ async function runSamples() {
 
       const actual = (result.stdout || '').trimEnd();
       const expected = sample.output.trimEnd();
-      const passed = actual === expected && result.exit_code === 0;
+      const passed = outputMatches(actual, expected) && result.exit_code === 0;
       if (!passed) allPassed = false;
 
       const detailHtml = !passed ? `
@@ -210,9 +224,7 @@ async function runSamples() {
   btn.disabled = false;
   btn.textContent = '▶ 예제 실행';
 
-  if (allPassed) {
-    document.getElementById('pm-review-btn').classList.remove('hidden');
-  }
+  document.getElementById('pm-review-btn').classList.remove('hidden');
 }
 
 function proceedToReview() {
