@@ -60,10 +60,14 @@ async function openProblemModal(ref, title, tierName) {
     const sectionsHtml = sectionDefs
       .filter(({ key }) => sections[key])
       .map(({ key, label }) => {
-        const escaped = sections[key]
-          .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/)
-          .map((part, i) => i % 2 === 1 ? part : escapeHtml(part).replace(/\n/g, '<br>'))
-          .join('');
+        const parts = sections[key].split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/);
+        const escaped = parts.map((part, i) => {
+          if (i % 2 === 1) return part;
+          let text = part;
+          if (i > 0) text = text.replace(/^\n+/, '');
+          if (i < parts.length - 1) text = text.replace(/\n+$/, '');
+          return escapeHtml(text).replace(/\n/g, '<br>');
+        }).join('');
         return `
         <div class="pm-section-card">
           <h3>${label}</h3>
