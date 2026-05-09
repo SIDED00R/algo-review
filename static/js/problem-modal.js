@@ -8,11 +8,10 @@ function outputMatches(actual, expected) {
   return aLines.every((a, i) => {
     const e = eLines[i];
     if (a === e) return true;
-    const aNum = Number(a.trim());
-    const eNum = Number(e.trim());
-    return a.trim() !== '' && e.trim() !== '' &&
-      !isNaN(aNum) && !isNaN(eNum) &&
-      Math.abs(aNum - eNum) < 1e-6;
+    const dec = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+    const at = a.trim(), et = e.trim();
+    return dec.test(at) && dec.test(et) &&
+      Math.abs(Number(at) - Number(et)) < 1e-6;
   });
 }
 
