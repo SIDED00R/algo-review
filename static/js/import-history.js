@@ -1,5 +1,3 @@
-/* 가져온 기록 목록 표시 — loadImportedHistory와 requestImportedReview만 담당 */
-
 async function loadImportedHistory() {
   const list = document.getElementById('import-history-list');
   if (!list) return;

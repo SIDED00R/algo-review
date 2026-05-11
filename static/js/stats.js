@@ -1,5 +1,3 @@
-/* 풀이 통계 탭 — 태그별 통계 및 최근 기록 표시만 담당 */
-
 let selectedStatsPlatform = 'boj';
 
 const statsBtn = document.getElementById('stats-btn');

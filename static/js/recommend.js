@@ -1,5 +1,3 @@
-/* 문제 추천 탭 — 추천 API 호출 및 결과 렌더링만 담당 */
-
 const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
 

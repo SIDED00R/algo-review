@@ -1,6 +1,3 @@
-"""
-OpenAI API를 사용한 코드 분석 모듈
-"""
 import os
 import json
 from openai import OpenAI

@@ -1,6 +1,3 @@
-"""
-FastAPI 웹 서버 — 앱 초기화 및 라우터 등록만 담당
-"""
 import os
 from pathlib import Path
 from fastapi import FastAPI

@@ -1,5 +1,3 @@
-/* Codeforces 제출 기록 가져오기 버튼 핸들러만 담당 */
-
 const cfImportBtn = document.getElementById('cf-import-btn');
 if (cfImportBtn) {
   cfImportBtn.dataset.label = 'Codeforces에서 가져오기';

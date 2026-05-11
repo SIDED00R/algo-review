@@ -1,5 +1,3 @@
-/* BOJ 제출 기록 가져오기 버튼 핸들러만 담당 */
-
 const importBtn = document.getElementById('import-btn');
 importBtn.dataset.label = '가져오기';
 

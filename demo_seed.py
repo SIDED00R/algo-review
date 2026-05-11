@@ -1,4 +1,3 @@
-"""데모 환경 초기 데이터 시딩 — DEMO_MODE=true 일 때만 호출됨"""
 import db
 
 

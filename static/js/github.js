@@ -1,5 +1,3 @@
-/* GitHub OAuth 연결 UI — GitHub 인증 상태 표시 및 연결/해제만 담당 */
-
 async function loadGithubStatus() {
   try {
     const res = await fetch('/auth/github/status');
@@ -50,14 +48,12 @@ async function loadGithubStatus() {
   } catch {}
 }
 
-/* 드롭다운 토글 */
 document.getElementById('github-icon-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   const dropdown = document.getElementById('github-dropdown');
   dropdown.classList.toggle('hidden');
 });
 
-/* 외부 클릭 시 드롭다운 닫기 */
 document.addEventListener('click', (e) => {
   const wrap = document.querySelector('.github-wrap');
   if (wrap && !wrap.contains(e.target)) {

@@ -1,5 +1,3 @@
-/* 탭 전환 — 탭 버튼 클릭 시 탭 섹션 전환만 담당 */
-
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -20,7 +18,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-/* 햄버거 메뉴 토글 */
 const menuToggle = document.getElementById('menu-toggle');
 const mainNav = document.getElementById('main-nav');
 

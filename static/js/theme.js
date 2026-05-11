@@ -1,5 +1,3 @@
-/* 테마 토글 — 다크/라이트 모드 전환만 담당 */
-
 const themeBtn = document.getElementById('theme-toggle');
 const savedTheme = localStorage.getItem('theme') || 'dark';
 if (savedTheme === 'light') {

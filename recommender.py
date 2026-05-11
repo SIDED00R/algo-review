@@ -1,7 +1,3 @@
-"""
-취약점 기반 문제 추천 모듈
-점수 = 적게 풀수록(0.5) + AI poor 비율(0.3) + 오래 전에 풀수록(0.2)
-"""
 from datetime import datetime
 from clients import search_problems_by_tag, search_cf_problems_by_tag, get_tag_key_by_name, TIER_NAMES
 import db

@@ -1,5 +1,3 @@
-/* 코드 리뷰 탭 — 코드 리뷰 요청 및 결과 렌더링만 담당 */
-
 const platformSelect = document.getElementById('problem-platform');
 const problemIdInput = document.getElementById('problem-id');
 const problemIdLabel = document.getElementById('problem-id-label');

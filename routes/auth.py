@@ -22,7 +22,6 @@ _USED_NONCES: dict[str, float] = {}
 
 
 def _new_state() -> str:
-    """nonce + 타임스탬프를 HMAC-SHA256으로 서명. 각 OAuth 시작마다 고유."""
     nonce = secrets.token_urlsafe(16)
     ts = str(int(time.time()))
     sig = hmac.new(_HMAC_KEY, f"{nonce}.{ts}".encode(), hashlib.sha256).hexdigest()

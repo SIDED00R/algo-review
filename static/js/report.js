@@ -1,5 +1,3 @@
-/* 종합 리포트 탭 — 리포트 생성 요청 및 마크다운 렌더링만 담당 */
-
 const reportBtn = document.getElementById('report-btn');
 reportBtn.dataset.label = '리포트 생성';
 

@@ -1,6 +1,3 @@
-"""
-Algo Review CLI
-"""
 import sys
 import os
 from pathlib import Path
@@ -21,10 +18,6 @@ import recommender
 
 console = Console()
 
-
-# ──────────────────────────────────────────────
-# 헬퍼
-# ──────────────────────────────────────────────
 
 def check_api_key():
     if not os.environ.get("OPENAI_API_KEY"):
@@ -77,14 +70,9 @@ def read_code_from_file(path: str) -> str:
     return p.read_text(encoding="utf-8")
 
 
-# ──────────────────────────────────────────────
-# 메뉴 액션
-# ──────────────────────────────────────────────
-
 def action_review():
     check_api_key()
 
-    # 문제 번호 입력
     while True:
         pid_str = Prompt.ask("[bold]백준 문제 번호[/]")
         if pid_str.isdigit():
@@ -92,7 +80,6 @@ def action_review():
             break
         console.print("[red]숫자를 입력하세요.[/]")
 
-    # 코드 입력 방식 선택
     mode = Prompt.ask("코드 입력 방식", choices=["직접입력", "파일경로"], default="직접입력")
     if mode == "파일경로":
         fpath = Prompt.ask("파일 경로")
@@ -104,7 +91,6 @@ def action_review():
         console.print("[red]코드가 비어있습니다.[/]")
         return
 
-    # 문제 정보 가져오기
     with console.status("[cyan]문제 정보 가져오는 중...[/]"):
         try:
             problem_info = api_client.get_problem_info(problem_id)
@@ -121,7 +107,6 @@ def action_review():
         border_style="cyan",
     ))
 
-    # 문제 설명 크롤링
     with console.status("[cyan]문제 설명 크롤링 중...[/]"):
         statement = api_client.get_problem_statement(problem_id)
 
@@ -132,7 +117,6 @@ def action_review():
             console.print(f"[red]코드 분석 실패: {e}[/]")
             return
 
-    # 분석 결과 출력
     console.print()
     console.print(Panel(
         f"효율성: {efficiency_badge(result['efficiency'])}\n"
@@ -156,7 +140,6 @@ def action_review():
     console.print("\n[bold]상세 피드백[/]")
     console.print(Markdown(result.get("feedback", "")))
 
-    # DB 저장
     db.save_review(
         problem_id=problem_id,
         title=problem_info["title"],
@@ -225,7 +208,6 @@ def action_stats():
         console.print("[yellow]아직 저장된 기록이 없습니다.[/]")
         return
 
-    # 태그 통계 테이블
     table = Table(title="태그별 풀이 통계", box=box.ROUNDED)
     table.add_column("태그", min_width=20)
     table.add_column("총횟수", justify="right", width=8)
@@ -246,7 +228,6 @@ def action_stats():
 
     console.print(table)
 
-    # 최근 기록
     if history:
         console.print()
         htable = Table(title="최근 풀이 기록", box=box.SIMPLE)
@@ -281,10 +262,6 @@ def action_report():
 
     console.print(Panel(Markdown(report), title="[bold]종합 분석 리포트[/]", border_style="magenta"))
 
-
-# ──────────────────────────────────────────────
-# 메인 루프
-# ──────────────────────────────────────────────
 
 MENU = {
     "1": ("코드 리뷰", action_review),
