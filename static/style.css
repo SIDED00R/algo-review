@@ -525,3 +525,37 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
 /* 추천 문제 카드에서 클릭 커서 */
 .rec-problem-card.cf-clickable { cursor: pointer; transition: background .15s; }
 .rec-problem-card.cf-clickable:hover { background: var(--surface2); }
+
+/* ── CodeMirror 자동완성 힌트 UI ── */
+.CodeMirror-hints {
+  z-index: 10000 !important;
+  background: #1e2030;
+  border: 1px solid #3b4261;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: .82rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  min-width: 160px;
+}
+.CodeMirror-hint {
+  color: #c0caf5;
+  padding: 4px 14px 4px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.CodeMirror-hint-active {
+  background: #2d3f76;
+  color: #7aa2f7;
+  border-left-color: #7aa2f7;
+}
+body.light .CodeMirror-hints {
+  background: #ffffff;
+  border-color: #d0d4e8;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+}
+body.light .CodeMirror-hint { color: #1a1d2e; }
+body.light .CodeMirror-hint-active { background: #e8eeff; color: #4a6cf7; border-left-color: #4a6cf7; }
