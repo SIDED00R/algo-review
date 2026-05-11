@@ -8,13 +8,28 @@ router = APIRouter()
 
 
 @router.get("/api/recommend")
-def get_recommendations(platform: str = Query("codeforces")):
+def get_recommendations(platform: str = Query("codeforces"), exclude: str = Query("")):
     platform = (platform or "codeforces").strip().lower()
     if platform not in {"boj", "codeforces"}:
         raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
 
     if IS_DEMO:
         return {**DEMO_RECOMMENDATIONS, "platform": platform}
+
+    extra_exclude: set = set()
+    if exclude:
+        for raw in exclude.split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            if platform == "boj":
+                try:
+                    extra_exclude.add(int(raw))
+                except ValueError:
+                    pass
+            else:
+                extra_exclude.add(raw)
+
     if platform == "codeforces":
         avg_rating = db.get_average_cf_rating()
         avg_tier = 0
@@ -32,7 +47,7 @@ def get_recommendations(platform: str = Query("codeforces")):
         return {"avg_tier": avg_tier, "tier_name": tier_name,
                 "weak_tags": [], "recommendations": [], "platform": platform}
 
-    recs = recommender.get_recommendations(top_weak_tags=3, platform=platform)
+    recs = recommender.get_recommendations(top_weak_tags=3, platform=platform, extra_exclude=extra_exclude)
 
     return {
         "avg_tier": avg_tier,

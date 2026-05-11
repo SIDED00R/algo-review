@@ -53,13 +53,13 @@ def get_weak_tags_scored(top_n: int = 5, platform: str | None = None) -> list[st
     return [d["tag"] for d in scored[:top_n]]
 
 
-def get_recommendations(top_weak_tags: int = 3, platform: str = "boj") -> list[dict]:
+def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exclude: set | None = None) -> list[dict]:
     """
     취약 태그 + 현재 수준 기반 문제 추천
     반환: [{"tag": ..., "problems": [{id, title, tier, tier_name, url?}]}]
     """
     if platform == "codeforces":
-        return _get_cf_recommendations(top_weak_tags)
+        return _get_cf_recommendations(top_weak_tags, extra_exclude=extra_exclude)
 
     weak_tags = get_weak_tags_scored(top_weak_tags, platform="boj")
     if not weak_tags:
@@ -71,7 +71,7 @@ def get_recommendations(top_weak_tags: int = 3, platform: str = "boj") -> list[d
     hard_min = min(30, int(avg_tier) + TIER_RANGE_HARD_LOW)
     hard_max = min(30, int(avg_tier) + TIER_RANGE_HARD_HIGH)
 
-    solved_ids = db.get_solved_problem_ids()
+    solved_ids = db.get_solved_problem_ids() | (extra_exclude or set())
 
     recommendations = []
     for tag_name in weak_tags:
@@ -99,7 +99,7 @@ def get_recommendations(top_weak_tags: int = 3, platform: str = "boj") -> list[d
     return recommendations
 
 
-def _get_cf_recommendations(top_weak_tags: int = 3) -> list[dict]:
+def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = None) -> list[dict]:
     weak_tags = get_weak_tags_scored(top_weak_tags, platform="codeforces")
     if not weak_tags:
         return []
@@ -110,7 +110,7 @@ def _get_cf_recommendations(top_weak_tags: int = 3) -> list[dict]:
     cf_hard_min = min(3500, int(avg_rating) + 200)
     cf_hard_max = min(3500, int(avg_rating) + 700)
 
-    exclude_refs = db.get_solved_cf_refs()
+    exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
 
     recommendations = []
     for tag in weak_tags:

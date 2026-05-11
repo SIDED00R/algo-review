@@ -3,14 +3,18 @@
 const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
 
-recommendBtn.addEventListener('click', async () => {
+// 현재 세션에서 이미 본 문제 ID 목록 (페이지 이탈 시 자동 초기화)
+const _shownIds = new Set();
+
+async function fetchRecommend(excludeIds = new Set()) {
   const result = document.getElementById('recommend-result');
   setLoading(recommendBtn, true);
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 추천 문제를 검색 중입니다...</div>';
 
   try {
     const platform = document.getElementById('recommend-platform')?.value || 'codeforces';
-    const res = await fetch(`/api/recommend?platform=${encodeURIComponent(platform)}`);
+    const excludeParam = excludeIds.size > 0 ? `&exclude=${[...excludeIds].join(',')}` : '';
+    const res = await fetch(`/api/recommend?platform=${encodeURIComponent(platform)}${excludeParam}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '추천 실패');
     renderRecommend(result, data);
@@ -19,7 +23,9 @@ recommendBtn.addEventListener('click', async () => {
   } finally {
     setLoading(recommendBtn, false);
   }
-});
+}
+
+recommendBtn.addEventListener('click', () => fetchRecommend());
 
 function renderRecommend(container, data) {
   if (!data.recommendations || data.recommendations.length === 0) {
@@ -73,12 +79,24 @@ function renderRecommend(container, data) {
     }
     html += `</div>`;
   }
-  html += `</div>`;
+  html += `</div>
+    <div style="text-align:center;margin-top:1.2rem">
+      <button id="recommend-reset-btn" class="btn-secondary">🔄 다른 목록 추천받기</button>
+    </div>`;
   container.innerHTML = html;
+
+  // 현재 렌더된 문제 ID를 세션 목록에 누적
+  for (const rec of data.recommendations) {
+    for (const p of rec.problems) {
+      _shownIds.add(String(p.id));
+    }
+  }
 
   container.querySelectorAll('.cf-clickable').forEach(el => {
     el.addEventListener('click', () => {
       openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
     });
   });
+
+  document.getElementById('recommend-reset-btn').addEventListener('click', () => fetchRecommend(new Set(_shownIds)));
 }

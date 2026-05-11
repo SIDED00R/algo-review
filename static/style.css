@@ -200,6 +200,13 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
 .btn-primary:hover { opacity: .88; }
 .btn-primary:active { transform: scale(.98); }
 .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-secondary {
+  background: transparent; color: var(--accent); border: 1.5px solid var(--accent);
+  padding: 8px 20px; border-radius: 8px; font-size: 0.9rem;
+  font-weight: 600; cursor: pointer; transition: background .2s, opacity .2s;
+}
+.btn-secondary:hover { background: var(--accent); color: #fff; }
+.btn-secondary:active { opacity: .85; }
 
 /* ── 플랫폼 토글 ── */
 .platform-toggle { display: flex; gap: 8px; }
