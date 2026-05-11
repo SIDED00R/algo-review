@@ -1,5 +1,44 @@
 /* CodeMirror 에디터 초기화 — 에디터 생성/관리만 담당 */
 (function () {
+  const PYTHON_WORDS = [
+    'False','None','True','and','as','assert','async','await','break','class',
+    'continue','def','del','elif','else','except','finally','for','from',
+    'global','if','import','in','is','lambda','nonlocal','not','or','pass',
+    'raise','return','try','while','with','yield',
+    'print','input','len','range','int','str','float','list','dict','set',
+    'tuple','bool','type','isinstance','enumerate','zip','map','filter',
+    'sorted','reversed','sum','min','max','abs','round','open','append',
+    'extend','insert','remove','pop','index','count','sort','upper','lower',
+    'strip','split','join','format','replace','startswith','endswith','find',
+    'sys','math','collections','defaultdict','Counter','deque','heapq','bisect',
+  ];
+  const CPP_WORDS = [
+    'int','long','double','float','char','bool','void','string','vector','map',
+    'set','pair','queue','stack','deque','unordered_map','unordered_set',
+    'priority_queue','if','else','for','while','do','return','break','continue',
+    'class','struct','namespace','using','include','define','cout','cin','endl',
+    'printf','scanf','auto','const','static','typedef','typename','sort',
+    'reverse','find','lower_bound','upper_bound','push_back','pop_back',
+    'begin','end','size','empty','first','second','make_pair','min','max',
+    'abs','swap','ios_base','sync_with_stdio','tie','NULL','nullptr',
+  ];
+
+  function makeHintFn(keywords) {
+    return function(cm) {
+      const cursor = cm.getCursor();
+      const token = cm.getTokenAt(cursor);
+      const prefix = token.type === 'string' || token.type === 'comment' ? null : token.string;
+      if (!prefix) return;
+      const anyResult = CodeMirror.hint.anyword(cm) || { list: [], from: cursor, to: cursor };
+      const existing = new Set(anyResult.list);
+      const kwMatches = prefix.length >= 1
+        ? keywords.filter(k => k.startsWith(prefix) && !existing.has(k))
+        : [];
+      anyResult.list = [...kwMatches, ...anyResult.list];
+      return anyResult.list.length ? anyResult : undefined;
+    };
+  }
+
   const LANG_MAP = {
     'GNU C++17': 'text/x-c++src', 'C': 'text/x-csrc', 'C#': 'text/x-csharp',
     'Python 3': 'python', 'PyPy3': 'python',
@@ -16,6 +55,10 @@
   function createEditor(id, mode) {
     const container = document.getElementById(id);
     if (!container) return;
+
+    const isPython = !mode || mode === 'python';
+    const hintFn = makeHintFn(isPython ? PYTHON_WORDS : CPP_WORDS);
+
     const cm = CodeMirror(container, {
       value: '',
       mode: mode || 'python',
@@ -31,15 +74,17 @@
       extraKeys: {
         'Ctrl-/': 'toggleComment',
         'Cmd-/': 'toggleComment',
-        'Ctrl-Space': cm => CodeMirror.showHint(cm, CodeMirror.hint.anyword, { completeSingle: false }),
+        'Ctrl-Space': cm => CodeMirror.showHint(cm, hintFn, { completeSingle: false }),
       },
     });
 
     cm.on('inputRead', (editor, change) => {
       if (!editor.state.completionActive && /\w/.test(change.text[0])) {
-        CodeMirror.showHint(editor, CodeMirror.hint.anyword, { completeSingle: false });
+        const fn = editor._hintFn || hintFn;
+        CodeMirror.showHint(editor, fn, { completeSingle: false });
       }
     });
+    cm._hintFn = hintFn;
 
     window.cmEditors[id] = cm;
     return cm;
@@ -52,7 +97,13 @@
     cm.setValue(value ?? '');
     setTimeout(() => cm.refresh(), 0);
   };
-  window.switchEditorLang = (id, mode) => window.cmEditors[id]?.setOption('mode', mode);
+  window.switchEditorLang = (id, mode) => {
+    const cm = window.cmEditors[id];
+    if (!cm) return;
+    cm.setOption('mode', mode);
+    const isPython = mode === 'python';
+    cm._hintFn = makeHintFn(isPython ? PYTHON_WORDS : CPP_WORDS);
+  };
 
   createEditor('code-input', 'python');
   createEditor('pm-code', 'python');
