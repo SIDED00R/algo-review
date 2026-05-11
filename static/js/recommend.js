@@ -3,7 +3,7 @@
 const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
 
-recommendBtn.addEventListener('click', async () => {
+async function fetchRecommend() {
   const result = document.getElementById('recommend-result');
   setLoading(recommendBtn, true);
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 추천 문제를 검색 중입니다...</div>';
@@ -19,7 +19,9 @@ recommendBtn.addEventListener('click', async () => {
   } finally {
     setLoading(recommendBtn, false);
   }
-});
+}
+
+recommendBtn.addEventListener('click', fetchRecommend);
 
 function renderRecommend(container, data) {
   if (!data.recommendations || data.recommendations.length === 0) {
@@ -73,7 +75,10 @@ function renderRecommend(container, data) {
     }
     html += `</div>`;
   }
-  html += `</div>`;
+  html += `</div>
+    <div style="text-align:center;margin-top:1.2rem">
+      <button id="recommend-reset-btn" class="btn-secondary">🔄 다른 목록 추천받기</button>
+    </div>`;
   container.innerHTML = html;
 
   container.querySelectorAll('.cf-clickable').forEach(el => {
@@ -81,4 +86,6 @@ function renderRecommend(container, data) {
       openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
     });
   });
+
+  document.getElementById('recommend-reset-btn').addEventListener('click', fetchRecommend);
 }
