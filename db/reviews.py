@@ -425,12 +425,10 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
 
     poor_map = {}
     if stat_rows:
-        # BOJ: tag_stats의 누적 집계 사용
         for s in stat_rows:
             if s["total_count"] > 0:
                 poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
     else:
-        # 비-BOJ(CF 등): reviews에서 직접 poor_ratio 계산
         tag_eff: dict[str, dict] = {}
         for row in review_rows:
             tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])

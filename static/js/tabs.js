@@ -1,5 +1,3 @@
-/* 탭 전환 — 탭 버튼 클릭 시 탭 섹션 전환만 담당 */
-
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -15,12 +13,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'import') loadImportedHistory();
     if (btn.dataset.tab === 'stats') loadTierChart();
 
-    /* 모바일: 탭 선택 후 nav 닫기 */
     closeNav();
   });
 });
 
-/* 햄버거 메뉴 토글 */
 const menuToggle = document.getElementById('menu-toggle');
 const mainNav = document.getElementById('main-nav');
 

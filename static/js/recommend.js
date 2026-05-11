@@ -1,5 +1,3 @@
-/* 문제 추천 탭 — 추천 API 호출 및 결과 렌더링만 담당 */
-
 const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
 
@@ -85,7 +83,6 @@ function renderRecommend(container, data) {
     </div>`;
   container.innerHTML = html;
 
-  // 현재 렌더된 문제 ID를 세션 목록에 누적
   for (const rec of data.recommendations) {
     for (const p of rec.problems) {
       _shownIds.add(String(p.id));

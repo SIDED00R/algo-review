@@ -1,5 +1,3 @@
-/* GitHub BaekjoonHub 저장소 가져오기 버튼 핸들러만 담당 */
-
 const ghImportBtn = document.getElementById('gh-import-btn');
 ghImportBtn.dataset.label = 'GitHub에서 가져오기';
 

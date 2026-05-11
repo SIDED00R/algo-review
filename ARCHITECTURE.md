@@ -6,7 +6,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │  Browser (static/js/*.js)                                       │
 │  editor · utils · theme · github · tier-chart · tabs           │
-│  review · recommend · problem-modal · cf-submit · stats         │
+│  review · recommend · problem-modal · stats                     │
 │  history · report                                               │
 │  import-history · import-github · import-boj · import-codeforces│
 └────────────────────────┬────────────────────────────────────────┘
@@ -14,7 +14,7 @@
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Routes (routes/)                                       │
 │  auth · review · github_push · problem · execute · recommend   │
-│  history · solved · stats · report · cf_submit                 │
+│  history · solved · stats · report                             │
 │  import_github · import_boj · import_codeforces                │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
@@ -22,7 +22,7 @@
 │  Service Layer  │             │  External Clients (clients/)      │
 │  analyzer.py    │             │  solved_ac · codeforces           │
 │  recommender.py │             │  github · utils                   │
-│  cf_submitter.py│             └──────────────┬────────────────────┘
+│                 │             └──────────────┬────────────────────┘
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
@@ -52,7 +52,6 @@
 |------|----------|
 | `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
-| `cf_submitter.py` | Codeforces 자동 제출 (selenium 기반) |
 
 ### DB 레이어 (`db/`)
 | 파일 | 단일 책임 |
@@ -89,7 +88,6 @@
 | `routes/import_github.py` | `POST /api/import-github` | BaekjoonHub 저장소 가져오기 |
 | `routes/import_boj.py` | `POST /api/import` | BOJ 제출 기록 크롤링 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
-| `routes/cf_submit.py` | `/api/cf-submit/*` | Codeforces 자동 제출 API |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
 | `routes/helpers.py` | — | GitHub용 README 빌더 |
 
@@ -104,7 +102,6 @@
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `problem-modal.js` | CF 문제 모달 (조회, 샘플 실행, 리뷰 이동) |
-| `cf-submit.js` | Codeforces 자동 제출 UI |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
@@ -126,7 +123,7 @@
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
 | `routes/github_push.py` | `clients.push_file_to_github` | 코드+README GitHub push |
-| `routes/problem.py` | `clients.get_cf_problem_sections` | CF 문제 스크래핑 + 한국어 번역 |
+| `routes/problem.py` | `clients.cf_xpath_text` | CF 문제 직접 스크래핑 + OpenAI 한국어 번역 |
 | `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | GPT-4o 종합 리포트 생성 |
@@ -163,9 +160,9 @@
 | 변수 | 필수 | 설명 |
 |------|------|------|
 | `OPENAI_API_KEY` | ✅ | GPT-4o 코드 리뷰 및 번역 |
-| `GITHUB_CLIENT_ID` | ✅ | GitHub OAuth 앱 Client ID |
-| `GITHUB_CLIENT_SECRET` | ✅ | GitHub OAuth 앱 Client Secret |
-| `APP_URL` | ✅ | 서버 공개 URL (OAuth redirect 용, 예: `https://myapp.run.app`) |
+| `GITHUB_CLIENT_ID` | — | GitHub OAuth 앱 Client ID |
+| `GITHUB_CLIENT_SECRET` | — | GitHub OAuth 앱 Client Secret |
+| `APP_URL` | — | 서버 공개 URL (OAuth redirect 용, 예: `https://myapp.run.app`) |
 | `CODEFORCES_API_KEY` | — | CF API 서명 (소스코드 가져오기용) |
 | `CODEFORCES_API_SECRET` | — | CF API 서명 |
 | `OPENAI_MODEL` | — | 사용할 OpenAI 모델 (기본값: `gpt-4o`) |

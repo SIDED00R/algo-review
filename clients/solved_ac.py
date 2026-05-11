@@ -184,7 +184,6 @@ def get_tag_key_by_name(tag_name: str) -> str:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
         items = resp.json().get("items", [])
-        # 전체 목록을 캐시에 저장해 다음 호출은 네트워크를 타지 않는다
         for item in items:
             key = item.get("key", "")
             display_names = item.get("displayNames", [])

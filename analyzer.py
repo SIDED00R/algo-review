@@ -1,6 +1,3 @@
-"""
-OpenAI API를 사용한 코드 분석 모듈
-"""
 import os
 import json
 from openai import OpenAI
@@ -14,18 +11,6 @@ _MAX_TOKENS_REPORT = int(os.environ.get("OPENAI_REPORT_MAX_TOKENS", "1024"))
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
-    """
-    GPT-4o로 코드 분석 수행
-    반환:
-    {
-        "efficiency": "good" | "ok" | "poor",
-        "complexity": "분석된 시간복잡도",
-        "better_algorithm": "더 적합한 알고리즘 (없으면 None)",
-        "feedback": "전체 피드백 텍스트",
-        "strengths": ["잘한 점 목록"],
-        "weaknesses": ["부족한 점 목록"],
-    }
-    """
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     tags_str = ", ".join(problem_info["tags"]) if problem_info["tags"] else "태그 없음"
@@ -95,9 +80,6 @@ efficiency 기준:
 
 
 def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -> str:
-    """
-    누적 데이터 기반 종합 분석 리포트 생성
-    """
     if not tag_stats:
         return "아직 분석 데이터가 없습니다. 더 많은 문제를 풀어보세요."
 

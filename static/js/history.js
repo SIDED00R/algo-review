@@ -1,5 +1,3 @@
-/* 리뷰 기록 탭 — 과거 리뷰 목록 조회 및 상세 모달만 담당 */
-
 const historyBtn = document.getElementById('history-btn');
 historyBtn.dataset.label = '기록 불러오기';
 historyBtn.addEventListener('click', loadHistory);

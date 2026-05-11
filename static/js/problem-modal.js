@@ -1,5 +1,3 @@
-/* 문제 풀기 모달 — CF 문제 표시, 코드 실행, 리뷰 이동만 담당 */
-
 function outputMatches(actual, expected) {
   if (actual === expected) return true;
   const aLines = actual.split('\n');

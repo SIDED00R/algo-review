@@ -46,7 +46,7 @@ def push_review_to_github(req: PushReviewRequest):
         else:
             description, input_desc, output_desc = req.description, req.input_desc, req.output_desc
 
-    readme = build_readme(req.platform, req.problem_ref, req.title,
+    readme = build_readme(req.problem_ref, req.title,
                           req.tier_name, req.tags, req.language, url,
                           description, input_desc, output_desc)
     ok = api_client.push_files_to_github(github_repo, github_token, [

@@ -42,7 +42,6 @@ def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
 
 
 def _normalize_cf_math(text: str) -> str:
-    """CF의 $$$...$$$  인라인 수식 표기를 $...$ 로 정규화"""
     return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
 
 
@@ -138,7 +137,6 @@ async def get_cf_problem(problem_ref: str):
             })
 
     async def _translate_async(text: str) -> tuple[str, bool]:
-        """(번역문, 성공여부) 반환 — 실패 시 원문과 False."""
         if not text:
             return "", True
         try:

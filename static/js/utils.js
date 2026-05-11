@@ -1,5 +1,3 @@
-/* 공통 유틸리티 — 여러 모듈에서 공유하는 순수 함수들 */
-
 function tierClass(tier) {
   if (tier === 0) return '';
   if (tier <= 5) return 'tier-bronze';

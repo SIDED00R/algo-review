@@ -63,7 +63,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             folder = f"Codeforces/{ref}. {sub['title']}"
             msg = f"[Codeforces] {ref}. {sub['title']}"
             cf_url = sub.get("problem_url", api_client.get_problem_url("codeforces", ref))
-            readme = build_readme("codeforces", ref, sub["title"],
+            readme = build_readme(ref, sub["title"],
                                   sub.get("tier_name", ""), sub.get("tags", []),
                                   sub.get("language", ""), cf_url)
             api_client.push_file_to_github(github_repo, github_token,

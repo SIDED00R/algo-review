@@ -1,9 +1,7 @@
-"""데모 환경 초기 데이터 시딩 — DEMO_MODE=true 일 때만 호출됨"""
 import db
 
 
 _REVIEWS = [
-    # BOJ — 그리디
     dict(problem_id=11399, title="ATM", tier=8, tier_name="Silver III",
          tags=["그리디", "정렬"], platform="boj", problem_ref="11399",
          efficiency="good", complexity="O(N log N)",
@@ -16,7 +14,6 @@ _REVIEWS = [
          feedback="A는 오름차순, B는 내림차순으로 정렬해 곱의 합을 최소화하는 그리디 전략이 정확합니다.",
          strengths=["정렬 기반 그리디 아이디어를 잘 적용했습니다"],
          weaknesses=[]),
-    # BOJ — DP
     dict(problem_id=1003, title="피보나치 함수", tier=7, tier_name="Silver IV",
          tags=["다이나믹 프로그래밍"], platform="boj", problem_ref="1003",
          efficiency="ok", complexity="O(N)",
@@ -31,7 +28,6 @@ _REVIEWS = [
          feedback="재귀만으로 풀어 지수 시간이 소요됩니다. DP 점화식을 도출하는 연습이 필요합니다.",
          strengths=["문제 구조를 재귀적으로 파악한 점은 좋습니다"],
          weaknesses=["메모이제이션 또는 반복 DP 미적용으로 지수 시간 복잡도입니다"]),
-    # BOJ — 그래프
     dict(problem_id=1260, title="DFS와 BFS", tier=9, tier_name="Silver II",
          tags=["그래프 이론", "DFS", "BFS"], platform="boj", problem_ref="1260",
          efficiency="good", complexity="O(V+E)",
@@ -45,14 +41,12 @@ _REVIEWS = [
          feedback="BFS 최단 경로 로직은 맞지만 list.pop(0) 사용으로 불필요한 비용이 있습니다.",
          strengths=["BFS로 최단 경로를 찾는 접근이 정확합니다"],
          weaknesses=["list.pop(0) 대신 deque.popleft() 사용을 권장합니다"]),
-    # BOJ — 이분탐색
     dict(problem_id=1654, title="랜선 자르기", tier=11, tier_name="Gold V",
          tags=["이분 탐색"], platform="boj", problem_ref="1654",
          efficiency="good", complexity="O(K log L)",
          feedback="이분 탐색 범위 설정과 조건 판별이 정확합니다. 전형적인 파라메트릭 서치 패턴입니다.",
          strengths=["이분 탐색 경계 조건이 정확합니다"],
          weaknesses=[]),
-    # Codeforces — greedy
     dict(problem_id=71001, title="Watermelon", tier=0, tier_name="CF 800",
          tags=["greedy", "math", "brute force"], platform="codeforces", problem_ref="4A",
          efficiency="good", complexity="O(1)",

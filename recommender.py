@@ -1,23 +1,16 @@
-"""
-취약점 기반 문제 추천 모듈
-점수 = 적게 풀수록(0.5) + AI poor 비율(0.3) + 오래 전에 풀수록(0.2)
-"""
 from datetime import datetime
 from clients import search_problems_by_tag, search_cf_problems_by_tag, get_tag_key_by_name, TIER_NAMES
 import db
 
-# 현재 수준: avg-1 ~ avg+2 / 도전 수준: avg+3 ~ avg+8
-TIER_RANGE_LOW       = 1   # 현재 수준 하한 오프셋
-TIER_RANGE_SAME_HIGH = 2   # 현재 수준 상한 오프셋
-TIER_RANGE_HARD_LOW  = 3   # 도전 수준 하한 오프셋
-TIER_RANGE_HARD_HIGH = 8   # 도전 수준 상한 오프셋
-# 현재 수준 1문제 + 도전 수준 2문제
+TIER_RANGE_LOW       = 1
+TIER_RANGE_SAME_HIGH = 2
+TIER_RANGE_HARD_LOW  = 3
+TIER_RANGE_HARD_HIGH = 8
 SAME_PER_TAG = 1
 HARD_PER_TAG = 2
 
 
 def _score_tags(tag_data: list) -> list:
-    """태그별 취약점 점수 계산 후 내림차순 정렬"""
     if not tag_data:
         return []
 
@@ -34,9 +27,9 @@ def _score_tags(tag_data: list) -> list:
     max_days = max(d["days_since"] for d in tag_data) or 1
 
     for d in tag_data:
-        count_score   = 1 - (d["solve_count"] / max_count)   # 적게 풀수록 높음
-        poor_score    = d["poor_ratio"]                        # AI poor 비율
-        recency_score = d["days_since"] / max_days             # 오래됐을수록 높음
+        count_score   = 1 - (d["solve_count"] / max_count)
+        poor_score    = d["poor_ratio"]
+        recency_score = d["days_since"] / max_days
         d["weakness_score"] = (
             count_score   * 0.5 +
             poor_score    * 0.3 +
@@ -54,10 +47,6 @@ def get_weak_tags_scored(top_n: int = 5, platform: str | None = None) -> list[st
 
 
 def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exclude: set | None = None) -> list[dict]:
-    """
-    취약 태그 + 현재 수준 기반 문제 추천
-    반환: [{"tag": ..., "problems": [{id, title, tier, tier_name, url?}]}]
-    """
     if platform == "codeforces":
         return _get_cf_recommendations(top_weak_tags, extra_exclude=extra_exclude)
 

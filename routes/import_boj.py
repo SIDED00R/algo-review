@@ -63,7 +63,7 @@ def import_history(req: ImportRequest):
                 folder = f"백준/{tier_cat}/{problem_id}번. {info['title']}"
                 msg = f"[BOJ] {problem_id}번. {info['title']}"
                 boj_url = f"https://www.acmicpc.net/problem/{problem_id}"
-                readme = build_readme("boj", str(problem_id), info["title"],
+                readme = build_readme(str(problem_id), info["title"],
                                       info.get("tier_name", ""), info.get("tags", []),
                                       sub.get("language", ""), boj_url)
                 api_client.push_file_to_github(github_repo, github_token,

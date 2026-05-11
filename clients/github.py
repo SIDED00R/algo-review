@@ -81,26 +81,22 @@ def push_file_to_github(repo: str, token: str, path: str, content: str, commit_m
 
 
 def push_files_to_github(repo: str, token: str, files: list[dict], commit_message: str) -> bool:
-    """files: [{"path": str, "content": str}, ...]  — 한 커밋으로 일괄 push"""
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "Authorization": f"token {token}",
     }
     base = f"https://api.github.com/repos/{repo}"
     try:
-        # 1. 현재 브랜치 HEAD SHA
         ref_resp = requests.get(f"{base}/git/ref/heads/main", headers=headers, timeout=10)
         if ref_resp.status_code == 404:
             ref_resp = requests.get(f"{base}/git/ref/heads/master", headers=headers, timeout=10)
         ref_resp.raise_for_status()
         head_sha = ref_resp.json()["object"]["sha"]
 
-        # 2. HEAD 커밋의 tree SHA
         commit_resp = requests.get(f"{base}/git/commits/{head_sha}", headers=headers, timeout=10)
         commit_resp.raise_for_status()
         base_tree_sha = commit_resp.json()["tree"]["sha"]
 
-        # 3. 새 tree 생성
         tree_items = [
             {"path": f["path"], "mode": "100644", "type": "blob",
              "content": f["content"]}
@@ -114,7 +110,6 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
         tree_resp.raise_for_status()
         new_tree_sha = tree_resp.json()["sha"]
 
-        # 4. 새 커밋 생성
         new_commit_resp = requests.post(
             f"{base}/git/commits",
             json={"message": commit_message, "tree": new_tree_sha, "parents": [head_sha]},
@@ -123,7 +118,6 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
         new_commit_resp.raise_for_status()
         new_commit_sha = new_commit_resp.json()["sha"]
 
-        # 5. 브랜치 ref 업데이트
         update_resp = requests.patch(
             f"{base}/git/refs/heads/main",
             json={"sha": new_commit_sha},

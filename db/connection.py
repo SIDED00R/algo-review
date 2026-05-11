@@ -35,7 +35,6 @@ def get_connection():
 
 
 def _ph():
-    """플레이스홀더: SQLite는 ?, PostgreSQL은 %s"""
     return "%s" if USE_POSTGRES else "?"
 
 

@@ -22,7 +22,6 @@ _USED_NONCES: dict[str, float] = {}
 
 
 def _new_state() -> str:
-    """nonce + 타임스탬프를 HMAC-SHA256으로 서명. 각 OAuth 시작마다 고유."""
     nonce = secrets.token_urlsafe(16)
     ts = str(int(time.time()))
     sig = hmac.new(_HMAC_KEY, f"{nonce}.{ts}".encode(), hashlib.sha256).hexdigest()
@@ -30,7 +29,7 @@ def _new_state() -> str:
 
 
 def _validate_state(state: str) -> tuple[bool, str]:
-    """서명+TTL+중복 검증만 수행. nonce를 반환하되 소비하지 않음."""
+    """nonce를 반환하되 소비하지 않음."""
     try:
         nonce, ts_str, sig = state.split(".", 2)
     except ValueError:
