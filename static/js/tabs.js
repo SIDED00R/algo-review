@@ -13,7 +13,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'import') loadImportedHistory();
     if (btn.dataset.tab === 'stats') loadTierChart();
 
-    /* 모바일: 탭 선택 후 nav 닫기 */
     closeNav();
   });
 });
