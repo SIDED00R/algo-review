@@ -42,7 +42,6 @@ def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
 
 
 def _normalize_cf_math(text: str) -> str:
-    """CF의 $$$...$$$  인라인 수식 표기를 $...$ 로 정규화"""
     return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
 
 

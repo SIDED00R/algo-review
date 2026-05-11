@@ -17,7 +17,6 @@ HARD_PER_TAG = 2
 
 
 def _score_tags(tag_data: list) -> list:
-    """태그별 취약점 점수 계산 후 내림차순 정렬"""
     if not tag_data:
         return []
 
@@ -54,10 +53,6 @@ def get_weak_tags_scored(top_n: int = 5, platform: str | None = None) -> list[st
 
 
 def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exclude: set | None = None) -> list[dict]:
-    """
-    취약 태그 + 현재 수준 기반 문제 추천
-    반환: [{"tag": ..., "problems": [{id, title, tier, tier_name, url?}]}]
-    """
     if platform == "codeforces":
         return _get_cf_recommendations(top_weak_tags, extra_exclude=extra_exclude)
 

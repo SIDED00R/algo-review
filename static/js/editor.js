@@ -42,7 +42,6 @@
       // anyword는 문서 전체 단어를 반환하므로 prefix로 필터
       const docWords = anyResult.list.filter(w => w.startsWith(prefix));
       const docSet = new Set(docWords);
-      // 키워드는 앞에, 문서 내 단어(변수 등)는 뒤에
       const kwMatches = keywords.filter(k => k.startsWith(prefix) && !docSet.has(k));
       const list = [...kwMatches, ...docWords];
       return list.length ? { list, from: anyResult.from, to: anyResult.to } : undefined;

@@ -85,7 +85,6 @@ function renderRecommend(container, data) {
     </div>`;
   container.innerHTML = html;
 
-  // 현재 렌더된 문제 ID를 세션 목록에 누적
   for (const rec of data.recommendations) {
     for (const p of rec.problems) {
       _shownIds.add(String(p.id));

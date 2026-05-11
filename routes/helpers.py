@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 
-def build_readme(platform: str, problem_ref: str, title: str,
+def build_readme(problem_ref: str, title: str,
                  tier_name: str, tags: list, language: str, url: str,
                  description: str = "", input_desc: str = "", output_desc: str = "") -> str:
     KST = timezone(timedelta(hours=9))

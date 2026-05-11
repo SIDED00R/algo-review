@@ -6,7 +6,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │  Browser (static/js/*.js)                                       │
 │  editor · utils · theme · github · tier-chart · tabs           │
-│  review · recommend · problem-modal · cf-submit · stats         │
+│  review · recommend · problem-modal · stats                     │
 │  history · report                                               │
 │  import-history · import-github · import-boj · import-codeforces│
 └────────────────────────┬────────────────────────────────────────┘
@@ -14,7 +14,7 @@
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Routes (routes/)                                       │
 │  auth · review · github_push · problem · execute · recommend   │
-│  history · solved · stats · report · cf_submit                 │
+│  history · solved · stats · report                             │
 │  import_github · import_boj · import_codeforces                │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
@@ -52,7 +52,6 @@
 |------|----------|
 | `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
-| `cf_submitter.py` | Codeforces 자동 제출 (selenium 기반) |
 
 ### DB 레이어 (`db/`)
 | 파일 | 단일 책임 |
@@ -89,7 +88,6 @@
 | `routes/import_github.py` | `POST /api/import-github` | BaekjoonHub 저장소 가져오기 |
 | `routes/import_boj.py` | `POST /api/import` | BOJ 제출 기록 크롤링 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
-| `routes/cf_submit.py` | `/api/cf-submit/*` | Codeforces 자동 제출 API |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
 | `routes/helpers.py` | — | GitHub용 README 빌더 |
 
@@ -104,7 +102,6 @@
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `problem-modal.js` | CF 문제 모달 (조회, 샘플 실행, 리뷰 이동) |
-| `cf-submit.js` | Codeforces 자동 제출 UI |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
