@@ -76,10 +76,14 @@ def cf_xpath_text(tree, expr: str) -> str:
     if not nodes:
         return ""
     el = nodes[0]
-    for st in el.xpath('.//*[contains(@class,"section-title")]'):
-        p = st.getparent()
+    # script/noscript/style 텍스트는 MathJax 마크업이라 itertext()에 포함되면 수식 중복 발생
+    for unwanted in el.xpath(
+        './/*[self::script or self::noscript or self::style'
+        ' or contains(@class,"section-title")]'
+    ):
+        p = unwanted.getparent()
         if p is not None:
-            p.remove(st)
+            p.remove(unwanted)
     return " ".join(el.itertext()).strip()
 
 
