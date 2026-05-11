@@ -23,6 +23,13 @@
     'abs','swap','ios_base','sync_with_stdio','tie','NULL','nullptr',
   ];
 
+  // mode 문자열 → 키워드 목록 (매핑 없는 언어는 anyword만 사용)
+  const MODE_WORDS = {
+    'python': PYTHON_WORDS,
+    'text/x-c++src': CPP_WORDS,
+    'text/x-csrc': CPP_WORDS,
+  };
+
   function makeHintFn(keywords) {
     return function(cm) {
       const cursor = cm.getCursor();
@@ -59,9 +66,6 @@
     const container = document.getElementById(id);
     if (!container) return;
 
-    const isPython = !mode || mode === 'python';
-    const hintFn = makeHintFn(isPython ? PYTHON_WORDS : CPP_WORDS);
-
     const cm = CodeMirror(container, {
       value: '',
       mode: mode || 'python',
@@ -77,17 +81,18 @@
       extraKeys: {
         'Ctrl-/': 'toggleComment',
         'Cmd-/': 'toggleComment',
-        'Ctrl-Space': cm => CodeMirror.showHint(cm, hintFn, { completeSingle: false }),
+        // cm._hintFn을 참조해 언어 변경 후에도 올바른 목록 사용
+        'Ctrl-Space': cm => CodeMirror.showHint(cm, cm._hintFn, { completeSingle: false }),
       },
     });
 
+    cm._hintFn = makeHintFn(MODE_WORDS[mode || 'python'] || []);
+
     cm.on('inputRead', (editor, change) => {
       if (!editor.state.completionActive && /\w/.test(change.text[0])) {
-        const fn = editor._hintFn || hintFn;
-        CodeMirror.showHint(editor, fn, { completeSingle: false });
+        CodeMirror.showHint(editor, editor._hintFn, { completeSingle: false });
       }
     });
-    cm._hintFn = hintFn;
 
     window.cmEditors[id] = cm;
     return cm;
@@ -104,8 +109,7 @@
     const cm = window.cmEditors[id];
     if (!cm) return;
     cm.setOption('mode', mode);
-    const isPython = mode === 'python';
-    cm._hintFn = makeHintFn(isPython ? PYTHON_WORDS : CPP_WORDS);
+    cm._hintFn = makeHintFn(MODE_WORDS[mode] || []);
   };
 
   createEditor('code-input', 'python');
