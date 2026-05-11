@@ -41,9 +41,15 @@ def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
     }
 
 
+def _normalize_cf_math(text: str) -> str:
+    """CF의 $$$...$$$  인라인 수식 표기를 $...$ 로 정규화"""
+    return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
+
+
 def _translate_cf_text(text: str, title: str) -> str:
     """번역 성공 시 번역문 반환. 실패 시 예외를 그대로 전파 (캐시 오염 방지)."""
     from openai import OpenAI as _OpenAI
+    text = _normalize_cf_math(text)
     client = _OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
     resp = client.chat.completions.create(
         model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
