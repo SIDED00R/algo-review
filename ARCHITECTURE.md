@@ -22,7 +22,7 @@
 │  Service Layer  │             │  External Clients (clients/)      │
 │  analyzer.py    │             │  solved_ac · codeforces           │
 │  recommender.py │             │  github · utils                   │
-│  cf_submitter.py│             └──────────────┬────────────────────┘
+│                 │             └──────────────┬────────────────────┘
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
@@ -123,7 +123,7 @@
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
 | `routes/github_push.py` | `clients.push_file_to_github` | 코드+README GitHub push |
-| `routes/problem.py` | `clients.get_cf_problem_sections` | CF 문제 스크래핑 + 한국어 번역 |
+| `routes/problem.py` | `clients.cf_xpath_text` | CF 문제 직접 스크래핑 + OpenAI 한국어 번역 |
 | `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | GPT-4o 종합 리포트 생성 |
@@ -160,9 +160,9 @@
 | 변수 | 필수 | 설명 |
 |------|------|------|
 | `OPENAI_API_KEY` | ✅ | GPT-4o 코드 리뷰 및 번역 |
-| `GITHUB_CLIENT_ID` | ✅ | GitHub OAuth 앱 Client ID |
-| `GITHUB_CLIENT_SECRET` | ✅ | GitHub OAuth 앱 Client Secret |
-| `APP_URL` | ✅ | 서버 공개 URL (OAuth redirect 용, 예: `https://myapp.run.app`) |
+| `GITHUB_CLIENT_ID` | — | GitHub OAuth 앱 Client ID |
+| `GITHUB_CLIENT_SECRET` | — | GitHub OAuth 앱 Client Secret |
+| `APP_URL` | — | 서버 공개 URL (OAuth redirect 용, 예: `https://myapp.run.app`) |
 | `CODEFORCES_API_KEY` | — | CF API 서명 (소스코드 가져오기용) |
 | `CODEFORCES_API_SECRET` | — | CF API 서명 |
 | `OPENAI_MODEL` | — | 사용할 OpenAI 모델 (기본값: `gpt-4o`) |
