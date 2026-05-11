@@ -16,9 +16,6 @@ CODEFORCES_HEADERS = {
 
 
 def normalize_codeforces_problem_ref(problem_ref: str) -> tuple[int, str]:
-    """
-    허용 형식: 4A / 4/A / 4-A / 4 A
-    """
     match = re.match(r"^\s*(\d+)\s*[-/_ ]?\s*([A-Za-z][A-Za-z0-9]*)\s*$", problem_ref or "")
     if not match:
         raise ValueError("Codeforces 문제는 '4A' 또는 '4/A' 형식으로 입력해주세요.")

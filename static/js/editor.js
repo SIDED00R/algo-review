@@ -1,4 +1,3 @@
-/* CodeMirror 에디터 초기화 — 에디터 생성/관리만 담당 */
 (function () {
   const PYTHON_WORDS = [
     'False','None','True','and','as','assert','async','await','break','class',

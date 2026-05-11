@@ -1,5 +1,3 @@
-/* 티어 변화 그래프 — Chart.js를 이용한 티어 추이 시각화만 담당 */
-
 const TIER_LABELS = {
   0:'Unrated',1:'Bronze V',2:'Bronze IV',3:'Bronze III',4:'Bronze II',5:'Bronze I',
   6:'Silver V',7:'Silver IV',8:'Silver III',9:'Silver II',10:'Silver I',

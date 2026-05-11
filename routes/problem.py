@@ -137,7 +137,6 @@ async def get_cf_problem(problem_ref: str):
             })
 
     async def _translate_async(text: str) -> tuple[str, bool]:
-        """(번역문, 성공여부) 반환 — 실패 시 원문과 False."""
         if not text:
             return "", True
         try:

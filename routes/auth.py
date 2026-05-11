@@ -29,7 +29,7 @@ def _new_state() -> str:
 
 
 def _validate_state(state: str) -> tuple[bool, str]:
-    """서명+TTL+중복 검증만 수행. nonce를 반환하되 소비하지 않음."""
+    """nonce를 반환하되 소비하지 않음."""
     try:
         nonce, ts_str, sig = state.split(".", 2)
     except ValueError:

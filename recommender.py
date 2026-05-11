@@ -2,12 +2,10 @@ from datetime import datetime
 from clients import search_problems_by_tag, search_cf_problems_by_tag, get_tag_key_by_name, TIER_NAMES
 import db
 
-# 현재 수준: avg-1 ~ avg+2 / 도전 수준: avg+3 ~ avg+8
-TIER_RANGE_LOW       = 1   # 현재 수준 하한 오프셋
-TIER_RANGE_SAME_HIGH = 2   # 현재 수준 상한 오프셋
-TIER_RANGE_HARD_LOW  = 3   # 도전 수준 하한 오프셋
-TIER_RANGE_HARD_HIGH = 8   # 도전 수준 상한 오프셋
-# 현재 수준 1문제 + 도전 수준 2문제
+TIER_RANGE_LOW       = 1
+TIER_RANGE_SAME_HIGH = 2
+TIER_RANGE_HARD_LOW  = 3
+TIER_RANGE_HARD_HIGH = 8
 SAME_PER_TAG = 1
 HARD_PER_TAG = 2
 
