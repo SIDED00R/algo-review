@@ -27,7 +27,20 @@
       tabSize: 4,
       indentWithTabs: false,
       lineWrapping: false,
+      styleActiveLine: true,
+      extraKeys: {
+        'Ctrl-/': 'toggleComment',
+        'Cmd-/': 'toggleComment',
+        'Ctrl-Space': cm => CodeMirror.showHint(cm, CodeMirror.hint.anyword, { completeSingle: false }),
+      },
     });
+
+    cm.on('inputRead', (editor, change) => {
+      if (!editor.state.completionActive && /\w/.test(change.text[0])) {
+        CodeMirror.showHint(editor, CodeMirror.hint.anyword, { completeSingle: false });
+      }
+    });
+
     window.cmEditors[id] = cm;
     return cm;
   }
