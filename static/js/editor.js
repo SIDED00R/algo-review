@@ -22,7 +22,6 @@
     'abs','swap','ios_base','sync_with_stdio','tie','NULL','nullptr',
   ];
 
-  // mode 문자열 → 키워드 목록 (매핑 없는 언어는 anyword만 사용)
   const MODE_WORDS = {
     'python': PYTHON_WORDS,
     'text/x-c++src': CPP_WORDS,

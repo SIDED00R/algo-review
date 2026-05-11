@@ -27,9 +27,9 @@ def _score_tags(tag_data: list) -> list:
     max_days = max(d["days_since"] for d in tag_data) or 1
 
     for d in tag_data:
-        count_score   = 1 - (d["solve_count"] / max_count)   # 적게 풀수록 높음
-        poor_score    = d["poor_ratio"]                        # AI poor 비율
-        recency_score = d["days_since"] / max_days             # 오래됐을수록 높음
+        count_score   = 1 - (d["solve_count"] / max_count)
+        poor_score    = d["poor_ratio"]
+        recency_score = d["days_since"] / max_days
         d["weakness_score"] = (
             count_score   * 0.5 +
             poor_score    * 0.3 +
