@@ -1,10 +1,11 @@
-// 커스텀 레이팅: 상위 20% 평균 티어 × 60 + 풀이량 보너스(최대 400)
-// base   = avg(top floor(N*0.2) tier values) * 60  → max 1800
-// volume = round(400 * (1 - 0.99^N))               → max 400  (N≈460 수렴)
-// rating = base + volume
+// 커스텀 레이팅 공식:
+//   base   = avg(top 20% tiers) × 60           max 1800
+//   volume = round(400 × (1 − 0.99^N))         max  400  (N≈460 수렴)
+//   trend  = (avg of last 10 tiers − avg_top20) × 8  ±200
+//   rating = base + volume + trend
 
 const RATING_TIERS = [
-  { min: 2100, label: 'Master' },
+  { min: 2200, label: 'Master' },
   { min: 1700, label: 'Ruby' },
   { min: 1200, label: 'Diamond' },
   { min: 750,  label: 'Platinum' },
@@ -61,12 +62,14 @@ async function loadTierChart() {
 
     const uniqueDates = Object.keys(byDate).sort();
 
-    // 내림차순 정렬 유지 — 상위 20% 평균 계산용
-    const tiersSorted = [];
+    const TREND_WINDOW = 10;
+    const tiersSorted = []; // 내림차순 정렬, 상위 20% 계산용
+    const lastTiers = [];   // 최근 10문제 큐
     const myTierLine = [];
 
     for (const d of uniqueDates) {
       for (const r of byDate[d]) {
+        // 내림차순 삽입
         let lo = 0, hi = tiersSorted.length;
         while (lo < hi) {
           const mid = (lo + hi) >> 1;
@@ -74,19 +77,27 @@ async function loadTierChart() {
           else hi = mid;
         }
         tiersSorted.splice(lo, 0, r.tier);
+
+        // 트렌드 윈도우
+        lastTiers.push(r.tier);
+        if (lastTiers.length > TREND_WINDOW) lastTiers.shift();
       }
 
       const N = tiersSorted.length;
       const topN = Math.max(1, Math.floor(N * 0.2));
       const topSlice = tiersSorted.slice(0, topN);
-      const avgTop = topSlice.reduce((s, v) => s + v, 0) / topN;
+      const avgTop20 = topSlice.reduce((s, v) => s + v, 0) / topN;
 
-      const base = avgTop * 60;
+      const base = avgTop20 * 60;
       const volume = Math.round(400 * (1 - Math.pow(0.99, N)));
-      myTierLine.push({ x: d, y: Math.round(base + volume) });
+
+      const avgLast = lastTiers.reduce((s, v) => s + v, 0) / lastTiers.length;
+      const trend = Math.max(-200, Math.min(200, Math.round((avgLast - avgTop20) * 8)));
+
+      myTierLine.push({ x: d, y: Math.round(base + volume + trend) });
     }
 
-    const maxScore = myTierLine.length ? myTierLine[myTierLine.length - 1].y : 50;
+    const maxScore = myTierLine.length ? Math.max(...myTierLine.map(p => p.y)) : 50;
     const yMax = Math.max(maxScore * 1.2, 50);
 
     const isDark = !document.body.classList.contains('light');
