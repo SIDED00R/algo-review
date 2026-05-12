@@ -1,11 +1,26 @@
-const TIER_LABELS = {
-  0:'Unrated',1:'Bronze V',2:'Bronze IV',3:'Bronze III',4:'Bronze II',5:'Bronze I',
-  6:'Silver V',7:'Silver IV',8:'Silver III',9:'Silver II',10:'Silver I',
-  11:'Gold V',12:'Gold IV',13:'Gold III',14:'Gold II',15:'Gold I',
-  16:'Platinum V',17:'Platinum IV',18:'Platinum III',19:'Platinum II',20:'Platinum I',
-  21:'Diamond V',22:'Diamond IV',23:'Diamond III',24:'Diamond II',25:'Diamond I',
-  26:'Ruby V',27:'Ruby IV',28:'Ruby III',29:'Ruby II',30:'Ruby I',
-};
+// 커스텀 레이팅 공식:
+//   base   = avg(top 20% tiers) × 60           max 1800
+//   volume = round(400 × (1 − 0.99^N))         max  400  (N≈460 수렴)
+//   trend  = (avg of last 10 tiers − avg_top20) × 8  ±200
+//   rating = base + volume + trend
+
+const RATING_TIERS = [
+  { min: 2200, label: 'Master' },
+  { min: 1700, label: 'Ruby' },
+  { min: 1200, label: 'Diamond' },
+  { min: 750,  label: 'Platinum' },
+  { min: 380,  label: 'Gold' },
+  { min: 120,  label: 'Silver' },
+  { min: 30,   label: 'Bronze' },
+  { min: 0,    label: 'Unrated' },
+];
+
+function getTierLabel(score) {
+  for (const { min, label } of RATING_TIERS) {
+    if (score >= min) return label;
+  }
+  return 'Unrated';
+}
 
 let tierChartInstance = null;
 
@@ -46,28 +61,58 @@ async function loadTierChart() {
     });
 
     const uniqueDates = Object.keys(byDate).sort();
-    let runningSum = 0, runningCount = 0, maxAvg = 0;
+
+    const TREND_WINDOW = 10;
+    const tiersSorted = []; // 내림차순 정렬, 상위 20% 계산용
+    const lastTiers = [];   // 최근 10문제 큐
     const myTierLine = [];
+
     for (const d of uniqueDates) {
       for (const r of byDate[d]) {
-        runningSum += r.tier;
-        runningCount++;
-        const avg = runningSum / runningCount;
-        if (avg > maxAvg) maxAvg = avg;
+        // 내림차순 삽입
+        let lo = 0, hi = tiersSorted.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (tiersSorted[mid] >= r.tier) lo = mid + 1;
+          else hi = mid;
+        }
+        tiersSorted.splice(lo, 0, r.tier);
+
+        // 트렌드 윈도우
+        lastTiers.push(r.tier);
+        if (lastTiers.length > TREND_WINDOW) lastTiers.shift();
       }
-      myTierLine.push({ x: d, y: maxAvg });
+
+      const N = tiersSorted.length;
+      const topN = Math.max(1, Math.floor(N * 0.2));
+      const topSlice = tiersSorted.slice(0, topN);
+      const avgTop20 = topSlice.reduce((s, v) => s + v, 0) / topN;
+
+      const base = avgTop20 * 60;
+      const volume = Math.round(400 * (1 - Math.pow(0.99, N)));
+
+      const avgLast = lastTiers.reduce((s, v) => s + v, 0) / lastTiers.length;
+      const trend = Math.max(-200, Math.min(200, Math.round((avgLast - avgTop20) * 8)));
+
+      myTierLine.push({ x: d, y: Math.round(base + volume + trend) });
     }
+
+    const maxScore = myTierLine.length ? Math.max(...myTierLine.map(p => p.y)) : 50;
+    const yMax = Math.max(maxScore * 1.2, 50);
 
     const isDark = !document.body.classList.contains('light');
     const gridColor = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)';
     const textColor = isDark ? '#8892a4' : '#5a6282';
+
+    const tickValues = RATING_TIERS.map(t => t.min);
+    const tickLabels = Object.fromEntries(RATING_TIERS.map(t => [t.min, t.label]));
 
     const ctx = document.getElementById('tier-chart').getContext('2d');
     tierChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
         datasets: [{
-          label: '내 티어',
+          label: '내 레이팅',
           data: myTierLine,
           borderColor: '#4ecca3',
           backgroundColor: 'rgba(78,204,163,0.08)',
@@ -86,7 +131,10 @@ async function loadTierChart() {
           legend: { labels: { color: textColor, font: { size: 12 } } },
           tooltip: {
             callbacks: {
-              label: ctx => `내 티어: ${TIER_LABELS[Math.round(ctx.parsed.y)] || ctx.parsed.y.toFixed(1)}`,
+              label: ctx => {
+                const score = Math.round(ctx.parsed.y);
+                return `레이팅: ${score} (${getTierLabel(score)})`;
+              },
             },
           },
         },
@@ -98,11 +146,16 @@ async function loadTierChart() {
             grid: { color: gridColor },
           },
           y: {
-            min: 0, max: 30,
+            min: 0,
+            suggestedMax: yMax,
+            afterBuildTicks(scale) {
+              scale.ticks = tickValues
+                .filter(v => v <= scale.max + 20)
+                .map(v => ({ value: v }));
+            },
             ticks: {
               color: textColor,
-              stepSize: 5,
-              callback: v => ({ 0:'Unrated',5:'Bronze I',10:'Silver I',15:'Gold I',20:'Platinum I',25:'Diamond I',30:'Ruby I' })[v] || '',
+              callback: v => tickLabels[v] ?? '',
             },
             grid: { color: gridColor },
           },
