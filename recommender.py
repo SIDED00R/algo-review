@@ -9,6 +9,10 @@ TIER_RANGE_HARD_HIGH = 8
 SAME_PER_TAG = 1
 HARD_PER_TAG = 2
 
+CF_RANGE_LOW       = 100
+CF_RANGE_SAME_HIGH = 100
+CF_RANGE_HARD_HIGH = 500
+
 
 def _score_tags(tag_data: list) -> list:
     if not tag_data:
@@ -94,10 +98,10 @@ def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = 
         return []
 
     avg_rating = db.get_average_cf_rating()
-    cf_same_min = max(800,  int(avg_rating) - 100)
-    cf_same_max = min(3500, int(avg_rating) + 100)
-    cf_hard_min = min(3500, int(avg_rating) + 100)
-    cf_hard_max = min(3500, int(avg_rating) + 500)
+    cf_same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
+    cf_same_max = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
+    cf_hard_min = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
+    cf_hard_max = min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)
 
     exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
 
