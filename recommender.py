@@ -94,10 +94,10 @@ def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = 
         return []
 
     avg_rating = db.get_average_cf_rating()
-    cf_same_min = max(800,  int(avg_rating) - 200)
+    cf_same_min = max(800,  int(avg_rating) - 100)
     cf_same_max = min(3500, int(avg_rating) + 100)
-    cf_hard_min = min(3500, int(avg_rating) + 200)
-    cf_hard_max = min(3500, int(avg_rating) + 700)
+    cf_hard_min = min(3500, int(avg_rating) + 100)
+    cf_hard_max = min(3500, int(avg_rating) + 500)
 
     exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
 

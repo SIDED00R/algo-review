@@ -20,7 +20,7 @@ async function openProblemModal(ref, title, tierName) {
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
-  document.getElementById('pm-title').textContent = title;
+  document.getElementById('pm-title').textContent = `${ref}. ${title}`;
   document.getElementById('pm-difficulty').textContent = tierName;
   document.getElementById('pm-meta').textContent = '';
   document.getElementById('pm-link').innerHTML = '';
@@ -46,7 +46,7 @@ async function openProblemModal(ref, title, tierName) {
     _currentProblem.title    = data.title;
     _currentProblem.sections = data.statement_sections_ko || {};
 
-    document.getElementById('pm-title').textContent = data.title;
+    document.getElementById('pm-title').textContent = `${ref}. ${data.title}`;
     document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
     const urlMatch = String(ref).match(/^(\d+)([A-Za-z]\d*)$/);
     const fallbackUrl = urlMatch
