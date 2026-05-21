@@ -5,7 +5,7 @@ function outputMatches(actual, expected) {
   if (aLines.length !== eLines.length) return false;
   return aLines.every((a, i) => {
     const e = eLines[i];
-    if (a === e) return true;
+    if (a.trimEnd() === e.trimEnd()) return true;
     const dec = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
     const at = a.trim(), et = e.trim();
     return dec.test(at) && dec.test(et) &&
