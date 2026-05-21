@@ -119,6 +119,8 @@ function renderReview(container, d) {
     msg.textContent = '';
     msg.style.color = '';
     try {
+      const cfSections = _currentProblem?.ref === d.problem_ref ? _currentProblem.sections : null;
+      const pastedStatement = document.getElementById('problem-statement')?.value?.trim() || '';
       const res = await fetch('/api/push-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,10 +133,10 @@ function renderReview(container, d) {
           code,
           language,
           url: d.problem_url,
-          ...(d.platform === 'codeforces' && _currentProblem?.ref === d.problem_ref ? {
-            description: _currentProblem.sections?.statement || '',
-            input_desc: _currentProblem.sections?.input || '',
-            output_desc: _currentProblem.sections?.output || '',
+          ...(d.platform === 'codeforces' ? {
+            description: cfSections?.statement || pastedStatement,
+            input_desc: cfSections?.input || '',
+            output_desc: cfSections?.output || '',
           } : {}),
         }),
       });
