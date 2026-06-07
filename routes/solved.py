@@ -3,7 +3,7 @@ import db
 import clients as api_client
 import analyzer
 from fastapi import APIRouter, HTTPException
-from routes.models import ReviewResponse
+from routes.review_response import save_and_build_response
 
 router = APIRouter()
 
@@ -42,40 +42,15 @@ def review_imported(platform: str, problem_ref: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"코드 분석 실패: {e}")
 
-    db.save_review(
-        problem_id=problem_info["id"],
-        title=problem["title"],
-        tier=problem_info["tier"],
-        tier_name=problem_info["tier_name"],
-        tags=problem["tags"],
-        code=problem["code"],
-        feedback=result.get("feedback", ""),
-        efficiency=result["efficiency"],
-        complexity=result.get("complexity", ""),
-        better_algorithm=result.get("better_algorithm") or "",
-        strengths=result.get("strengths", []),
-        weaknesses=result.get("weaknesses", []),
-        platform=platform,
-        problem_ref=problem_ref,
-    )
-    db.delete_solved_problem(platform, problem_ref)
+    # solved 기록의 제목/태그/식별자를 응답·저장 기준으로 사용
+    problem_info["platform"] = platform
+    problem_info["problem_ref"] = problem_ref
+    problem_info["title"] = problem["title"]
+    problem_info["tags"] = problem["tags"]
 
-    return ReviewResponse(
-        problem_id=problem_info["id"],
-        platform=platform,
-        problem_ref=problem_ref,
-        problem_url=api_client.get_problem_url(platform, problem_ref),
-        title=problem["title"],
-        tier=problem_info["tier"],
-        tier_name=problem_info["tier_name"],
-        tags=problem["tags"],
-        efficiency=result["efficiency"],
-        complexity=result.get("complexity", "N/A"),
-        better_algorithm=result.get("better_algorithm"),
-        feedback=result.get("feedback", ""),
-        strengths=result.get("strengths", []),
-        weaknesses=result.get("weaknesses", []),
-    )
+    response = save_and_build_response(problem_info, problem["code"], result)
+    db.delete_solved_problem(platform, problem_ref)
+    return response
 
 
 @router.delete("/api/solved-history/{platform}/{problem_ref}")

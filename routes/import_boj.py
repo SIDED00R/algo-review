@@ -2,7 +2,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.models import ImportRequest
-from routes.helpers import build_readme
+from routes.helpers import build_readme, push_solution
 from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
@@ -66,10 +66,8 @@ def import_history(req: ImportRequest):
                 readme = build_readme(str(problem_id), info["title"],
                                       info.get("tier_name", ""), info.get("tags", []),
                                       sub.get("language", ""), boj_url)
-                api_client.push_file_to_github(github_repo, github_token,
-                                               f"{folder}/README.md", readme, msg)
-                if api_client.push_file_to_github(github_repo, github_token,
-                                                  f"{folder}/{problem_id}{ext}", code, msg):
+                if push_solution(github_repo, github_token, folder,
+                                 str(problem_id), ext, code, readme, msg):
                     github_pushed += 1
             imported += 1
 
