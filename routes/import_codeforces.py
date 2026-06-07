@@ -4,7 +4,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.models import CodeforcesImportRequest
-from routes.helpers import build_readme
+from routes.helpers import build_readme, push_solution
 from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
@@ -66,10 +66,8 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             readme = build_readme(ref, sub["title"],
                                   sub.get("tier_name", ""), sub.get("tags", []),
                                   sub.get("language", ""), cf_url)
-            api_client.push_file_to_github(github_repo, github_token,
-                                           f"{folder}/README.md", readme, msg)
-            if api_client.push_file_to_github(github_repo, github_token,
-                                              f"{folder}/{ref}{ext}", sub["code"], msg):
+            if push_solution(github_repo, github_token, folder,
+                             ref, ext, sub["code"], readme, msg):
                 github_pushed += 1
 
     return {

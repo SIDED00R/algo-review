@@ -49,11 +49,6 @@ async function loadImportedHistory() {
         <div id="import-pager" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-top:12px"></div>
       </div>`;
 
-    const TIER_RANGES = {
-      bronze: [1, 5], silver: [6, 10], gold: [11, 15],
-      platinum: [16, 20], diamond: [21, 25], ruby: [26, 30], unrated: [0, 0],
-    };
-
     let importPage = 1;
     let importPerPage = 20;
 
@@ -68,7 +63,7 @@ async function loadImportedHistory() {
         if (platform && (p.platform || 'boj') !== platform) return false;
         if (tierKey) {
           if (tierKey === 'unrated') { if (p.tier !== 0) return false; }
-          else { const r = TIER_RANGES[tierKey]; if (p.tier < r[0] || p.tier > r[1]) return false; }
+          else { const r = TIER_GROUPS[tierKey]; if (p.tier < r[0] || p.tier > r[1]) return false; }
         }
         return true;
       });

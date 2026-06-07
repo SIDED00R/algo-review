@@ -1,4 +1,12 @@
 from datetime import datetime, timezone, timedelta
+import clients as api_client
+
+
+def push_solution(repo: str, token: str, folder: str, file_stem: str,
+                  ext: str, code: str, readme: str, msg: str) -> bool:
+    """README + 코드 파일을 저장소에 push. 코드 push 성공 여부 반환."""
+    api_client.push_file_to_github(repo, token, f"{folder}/README.md", readme, msg)
+    return api_client.push_file_to_github(repo, token, f"{folder}/{file_stem}{ext}", code, msg)
 
 
 def build_readme(problem_ref: str, title: str,

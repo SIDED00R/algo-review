@@ -48,11 +48,7 @@ async function openProblemModal(ref, title, tierName) {
 
     document.getElementById('pm-title').textContent = `${ref}. ${data.title}`;
     document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
-    const urlMatch = String(ref).match(/^(\d+)([A-Za-z]\d*)$/);
-    const fallbackUrl = urlMatch
-      ? `https://codeforces.com/problemset/problem/${urlMatch[1]}/${urlMatch[2].toUpperCase()}`
-      : '';
-    const pUrl = data.url || fallbackUrl;
+    const pUrl = data.url || cfRefToUrl(ref);
     document.getElementById('pm-link').innerHTML = pUrl
       ? `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer">문제 링크 열기</a>`
       : '';

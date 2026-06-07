@@ -1,3 +1,8 @@
+const TIER_GROUPS = {
+  bronze: [1, 5], silver: [6, 10], gold: [11, 15],
+  platinum: [16, 20], diamond: [21, 25], ruby: [26, 30], unrated: [0, 0],
+};
+
 function tierClass(tier) {
   if (tier === 0) return '';
   if (tier <= 5) return 'tier-bronze';
@@ -21,12 +26,16 @@ function problemLabel(problem) {
   return String(problem.problem_id ?? problem.problem_ref ?? '');
 }
 
+function cfRefToUrl(ref) {
+  const m = String(ref || '').replace(/[^0-9A-Za-z]/g, '').match(/^(\d+)([A-Za-z][A-Za-z0-9]*)$/);
+  return m ? `https://codeforces.com/problemset/problem/${m[1]}/${m[2].toUpperCase()}` : '';
+}
+
 function problemUrl(problem) {
   if (problem.problem_url) return problem.problem_url;
   if (problem.platform === 'codeforces') {
-    const ref = String(problem.problem_ref || '').replace(/[^0-9A-Za-z]/g, '');
-    const match = ref.match(/^(\d+)([A-Za-z][A-Za-z0-9]*)$/);
-    if (match) return `https://codeforces.com/problemset/problem/${match[1]}/${match[2].toUpperCase()}`;
+    const url = cfRefToUrl(problem.problem_ref);
+    if (url) return url;
   }
   return `https://boj.kr/${problem.problem_id ?? problem.problem_ref}`;
 }

@@ -23,6 +23,18 @@ HEADERS = {
 }
 
 
+def _extract_tag_names(data: dict) -> list[str]:
+    tags = []
+    for tag in data.get("tags", []):
+        display_names = tag.get("displayNames", [])
+        ko = next((d["name"] for d in display_names if d["language"] == "ko"), None)
+        en = next((d["name"] for d in display_names if d["language"] == "en"), None)
+        name = ko or en or tag.get("key", "")
+        if name:
+            tags.append(name)
+    return tags
+
+
 def get_problems_bulk(problem_ids: list[int]) -> dict[int, dict]:
     result = {}
     for i in range(0, len(problem_ids), 100):
@@ -44,14 +56,7 @@ def get_problems_bulk(problem_ids: list[int]) -> dict[int, dict]:
             pid = data.get("problemId")
             if not pid:
                 continue
-            tags = []
-            for tag in data.get("tags", []):
-                display_names = tag.get("displayNames", [])
-                ko = next((d["name"] for d in display_names if d["language"] == "ko"), None)
-                en = next((d["name"] for d in display_names if d["language"] == "en"), None)
-                name = ko or en or tag.get("key", "")
-                if name:
-                    tags.append(name)
+            tags = _extract_tag_names(data)
             tier = data.get("level", 0)
             result[pid] = {
                 "id": pid,
@@ -69,15 +74,7 @@ def get_problem_info(problem_id: int) -> dict:
     resp.raise_for_status()
     data = resp.json()
 
-    tags = []
-    for tag in data.get("tags", []):
-        display_names = tag.get("displayNames", [])
-        ko = next((d["name"] for d in display_names if d["language"] == "ko"), None)
-        en = next((d["name"] for d in display_names if d["language"] == "en"), None)
-        name = ko or en or tag.get("key", "")
-        if name:
-            tags.append(name)
-
+    tags = _extract_tag_names(data)
     tier = data.get("level", 0)
     return {
         "id": problem_id,

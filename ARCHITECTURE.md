@@ -89,7 +89,8 @@
 | `routes/import_boj.py` | `POST /api/import` | BOJ 제출 기록 크롤링 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
-| `routes/helpers.py` | — | GitHub용 README 빌더 |
+| `routes/helpers.py` | — | GitHub README 빌더 + 풀이 파일 push 헬퍼 |
+| `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
 
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |

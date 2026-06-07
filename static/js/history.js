@@ -67,12 +67,10 @@ function getFilteredReviews() {
   const eff = document.getElementById('h-eff')?.value || '';
   const sort = document.getElementById('h-sort')?.value || 'recent';
 
-  const TIER_GROUP = { bronze: [1, 5], silver: [6, 10], gold: [11, 15], platinum: [16, 20], diamond: [21, 25] };
-
   let list = allReviewProblems.filter(p => {
     if (q && !`${problemLabel(p)} ${p.title} ${(p.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
     if (tier) {
-      const [lo, hi] = TIER_GROUP[tier] || [0, 30];
+      const [lo, hi] = TIER_GROUPS[tier] || [0, 30];
       if (p.tier < lo || p.tier > hi) return false;
     }
     if (eff) {

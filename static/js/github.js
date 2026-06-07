@@ -6,7 +6,6 @@ async function loadGithubStatus() {
     const statusBadge = document.getElementById('github-status-badge');
     const connectInner = document.getElementById('github-connect-inner');
     const usernameBadge = document.getElementById('github-username-badge');
-    const avatar = document.getElementById('github-avatar');
     const repoSelect = document.getElementById('github-repo-select');
 
     if (data.connected) {
@@ -15,11 +14,6 @@ async function loadGithubStatus() {
       statusBadge.style.display = 'block';
       connectInner.style.display = 'none';
       usernameBadge.textContent = `@${data.username}`;
-
-      if (data.avatar_url) {
-        avatar.src = data.avatar_url;
-        avatar.style.display = 'inline-block';
-      }
 
       try {
         const repoRes = await fetch('/auth/github/repos');
