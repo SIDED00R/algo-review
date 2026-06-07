@@ -12,64 +12,35 @@ def init_db():
     conn = get_connection()
     cur = conn.cursor()
 
-    if USE_POSTGRES:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS reviews (
-                id               SERIAL PRIMARY KEY,
-                problem_id       INTEGER NOT NULL,
-                platform         TEXT NOT NULL DEFAULT 'boj',
-                problem_ref      TEXT NOT NULL DEFAULT '',
-                title            TEXT NOT NULL,
-                tier             INTEGER NOT NULL,
-                tier_name        TEXT NOT NULL DEFAULT '',
-                tags             TEXT NOT NULL,
-                code             TEXT NOT NULL,
-                feedback         TEXT NOT NULL,
-                efficiency       TEXT NOT NULL,
-                complexity       TEXT NOT NULL DEFAULT '',
-                better_algorithm TEXT NOT NULL DEFAULT '',
-                strengths        TEXT NOT NULL DEFAULT '[]',
-                weaknesses       TEXT NOT NULL DEFAULT '[]',
-                created_at       TEXT NOT NULL
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS tag_stats (
-                tag         TEXT PRIMARY KEY,
-                good_count  INTEGER NOT NULL DEFAULT 0,
-                poor_count  INTEGER NOT NULL DEFAULT 0,
-                total_count INTEGER NOT NULL DEFAULT 0
-            )
-        """)
-    else:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS reviews (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                problem_id       INTEGER NOT NULL,
-                platform         TEXT NOT NULL DEFAULT 'boj',
-                problem_ref      TEXT NOT NULL DEFAULT '',
-                title            TEXT NOT NULL,
-                tier             INTEGER NOT NULL,
-                tier_name        TEXT NOT NULL DEFAULT '',
-                tags             TEXT NOT NULL,
-                code             TEXT NOT NULL,
-                feedback         TEXT NOT NULL,
-                efficiency       TEXT NOT NULL,
-                complexity       TEXT NOT NULL DEFAULT '',
-                better_algorithm TEXT NOT NULL DEFAULT '',
-                strengths        TEXT NOT NULL DEFAULT '[]',
-                weaknesses       TEXT NOT NULL DEFAULT '[]',
-                created_at       TEXT NOT NULL
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS tag_stats (
-                tag         TEXT PRIMARY KEY,
-                good_count  INTEGER NOT NULL DEFAULT 0,
-                poor_count  INTEGER NOT NULL DEFAULT 0,
-                total_count INTEGER NOT NULL DEFAULT 0
-            )
-        """)
+    reviews_pk = "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS reviews (
+            id               {reviews_pk},
+            problem_id       INTEGER NOT NULL,
+            platform         TEXT NOT NULL DEFAULT 'boj',
+            problem_ref      TEXT NOT NULL DEFAULT '',
+            title            TEXT NOT NULL,
+            tier             INTEGER NOT NULL,
+            tier_name        TEXT NOT NULL DEFAULT '',
+            tags             TEXT NOT NULL,
+            code             TEXT NOT NULL,
+            feedback         TEXT NOT NULL,
+            efficiency       TEXT NOT NULL,
+            complexity       TEXT NOT NULL DEFAULT '',
+            better_algorithm TEXT NOT NULL DEFAULT '',
+            strengths        TEXT NOT NULL DEFAULT '[]',
+            weaknesses       TEXT NOT NULL DEFAULT '[]',
+            created_at       TEXT NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tag_stats (
+            tag         TEXT PRIMARY KEY,
+            good_count  INTEGER NOT NULL DEFAULT 0,
+            poor_count  INTEGER NOT NULL DEFAULT 0,
+            total_count INTEGER NOT NULL DEFAULT 0
+        )
+    """)
 
     new_columns = [
         ("platform",         "TEXT NOT NULL DEFAULT 'boj'"),
@@ -97,38 +68,21 @@ def init_db():
     cur.execute("UPDATE reviews SET problem_ref = CAST(problem_id AS TEXT) WHERE problem_ref IS NULL OR problem_ref = ''")
     cur.execute("UPDATE reviews SET tier_name = '' WHERE tier_name IS NULL")
 
-    if USE_POSTGRES:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS solved_history (
-                problem_id   INTEGER NOT NULL,
-                platform     TEXT NOT NULL DEFAULT 'boj',
-                problem_ref  TEXT NOT NULL DEFAULT '',
-                title        TEXT NOT NULL,
-                tier         INTEGER NOT NULL,
-                tier_name    TEXT NOT NULL DEFAULT '',
-                tags         TEXT NOT NULL DEFAULT '[]',
-                code         TEXT NOT NULL DEFAULT '',
-                language     TEXT NOT NULL DEFAULT '',
-                imported_at  TEXT NOT NULL,
-                PRIMARY KEY (platform, problem_ref)
-            )
-        """)
-    else:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS solved_history (
-                problem_id   INTEGER NOT NULL,
-                platform     TEXT NOT NULL DEFAULT 'boj',
-                problem_ref  TEXT NOT NULL DEFAULT '',
-                title        TEXT NOT NULL,
-                tier         INTEGER NOT NULL,
-                tier_name    TEXT NOT NULL DEFAULT '',
-                tags         TEXT NOT NULL DEFAULT '[]',
-                code         TEXT NOT NULL DEFAULT '',
-                language     TEXT NOT NULL DEFAULT '',
-                imported_at  TEXT NOT NULL,
-                PRIMARY KEY (platform, problem_ref)
-            )
-        """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS solved_history (
+            problem_id   INTEGER NOT NULL,
+            platform     TEXT NOT NULL DEFAULT 'boj',
+            problem_ref  TEXT NOT NULL DEFAULT '',
+            title        TEXT NOT NULL,
+            tier         INTEGER NOT NULL,
+            tier_name    TEXT NOT NULL DEFAULT '',
+            tags         TEXT NOT NULL DEFAULT '[]',
+            code         TEXT NOT NULL DEFAULT '',
+            language     TEXT NOT NULL DEFAULT '',
+            imported_at  TEXT NOT NULL,
+            PRIMARY KEY (platform, problem_ref)
+        )
+    """)
 
     solved_columns = [
         ("platform", "TEXT NOT NULL DEFAULT 'boj'"),
@@ -152,17 +106,10 @@ def init_db():
     cur.execute("UPDATE solved_history SET problem_ref = CAST(problem_id AS TEXT) WHERE problem_ref IS NULL OR problem_ref = ''")
     cur.execute("UPDATE solved_history SET tier_name = '' WHERE tier_name IS NULL")
 
-    cur.execute("""
+    github_pk = "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY"
+    cur.execute(f"""
         CREATE TABLE IF NOT EXISTS github_settings (
-            id              INTEGER PRIMARY KEY,
-            access_token    TEXT NOT NULL DEFAULT '',
-            github_username TEXT NOT NULL DEFAULT '',
-            target_repo     TEXT NOT NULL DEFAULT '',
-            updated_at      TEXT NOT NULL DEFAULT ''
-        )
-    """ if not USE_POSTGRES else """
-        CREATE TABLE IF NOT EXISTS github_settings (
-            id              SERIAL PRIMARY KEY,
+            id              {github_pk},
             access_token    TEXT NOT NULL DEFAULT '',
             github_username TEXT NOT NULL DEFAULT '',
             target_repo     TEXT NOT NULL DEFAULT '',
