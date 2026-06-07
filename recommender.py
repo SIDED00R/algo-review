@@ -100,7 +100,8 @@ def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = 
     avg_rating = db.get_average_cf_rating()
     cf_same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
     cf_same_max = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
-    cf_hard_min = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
+    # hard 구간은 same_max 다음 레이팅부터 시작 — 경계값이 양쪽에 걸려 같은 문제가 중복 추천되는 것을 방지
+    cf_hard_min = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH + 1)
     cf_hard_max = min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)
 
     exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def _normalize_platform(value: str) -> str:
@@ -15,7 +15,10 @@ class ReviewRequest(BaseModel):
     problem_statement: str | None = None
     code: str
 
-    _platform_validator = validator("platform", allow_reuse=True)(_normalize_platform)
+    @field_validator("platform")
+    @classmethod
+    def _validate_platform(cls, v):
+        return _normalize_platform(v)
 
 
 class ImportRequest(BaseModel):
@@ -23,23 +26,28 @@ class ImportRequest(BaseModel):
     session_cookie: str | None = None
     max_pages: int = 5
 
-    @validator("boj_id")
+    @field_validator("boj_id")
+    @classmethod
     def boj_id_required(cls, v):
         value = (v or "").strip()
         if not value:
             raise ValueError("BOJ 아이디를 입력해주세요.")
         return value
 
-    @validator("max_pages")
+    @field_validator("max_pages")
+    @classmethod
     def max_pages_bounds(cls, v):
-        return max(1, min(v, 20))
+        # 9999("전체") 선택 시 모든 기록을 가져온다 — 무한 루프 방지용 안전 상한만 둔다.
+        # get_user_submissions가 더 가져올 기록이 없으면 자동으로 멈추므로 이 상한은 거의 도달하지 않는다.
+        return max(1, min(v, 1000))
 
 
 class GithubImportRequest(BaseModel):
     repo: str
     token: str | None = None
 
-    @validator("repo")
+    @field_validator("repo")
+    @classmethod
     def github_repo_format(cls, v):
         repo = (v or "").strip()
         if not repo or "/" not in repo:
@@ -55,14 +63,16 @@ class CodeforcesImportRequest(BaseModel):
     github_repo: str | None = None
     github_token: str | None = None
 
-    @validator("handle")
+    @field_validator("handle")
+    @classmethod
     def handle_required(cls, v):
         value = (v or "").strip()
         if not value:
             raise ValueError("Codeforces handle을 입력해주세요.")
         return value
 
-    @validator("count")
+    @field_validator("count")
+    @classmethod
     def count_bounds(cls, v):
         return max(1, min(v, 1000))
 
@@ -70,7 +80,8 @@ class CodeforcesImportRequest(BaseModel):
 class SetRepoRequest(BaseModel):
     repo: str
 
-    @validator("repo")
+    @field_validator("repo")
+    @classmethod
     def target_repo_format(cls, v):
         repo = (v or "").strip()
         if not repo or "/" not in repo:
@@ -91,9 +102,13 @@ class PushReviewRequest(BaseModel):
     input_desc: str = ""
     output_desc: str = ""
 
-    _platform_validator = validator("platform", allow_reuse=True)(_normalize_platform)
+    @field_validator("platform")
+    @classmethod
+    def _validate_platform(cls, v):
+        return _normalize_platform(v)
 
-    @validator("problem_ref", "title", "code")
+    @field_validator("problem_ref", "title", "code")
+    @classmethod
     def required_text_fields(cls, v):
         value = (v or "").strip()
         if not value:
@@ -107,19 +122,22 @@ class ExecuteRequest(BaseModel):
     stdin: str = ""
     timeout_sec: int = 5
 
-    @validator("code")
+    @field_validator("code")
+    @classmethod
     def code_max_length(cls, v):
         if len(v) > 50_000:
             raise ValueError("코드는 50,000자를 초과할 수 없습니다.")
         return v
 
-    @validator("stdin")
+    @field_validator("stdin")
+    @classmethod
     def stdin_max_length(cls, v):
         if len(v) > 10_000:
             raise ValueError("입력은 10,000자를 초과할 수 없습니다.")
         return v
 
-    @validator("timeout_sec")
+    @field_validator("timeout_sec")
+    @classmethod
     def timeout_bounds(cls, v):
         return max(1, min(v, 10))
 

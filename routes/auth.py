@@ -161,6 +161,7 @@ def get_github_repos():
         raise HTTPException(status_code=400, detail="GitHub 연결이 필요합니다.")
     try:
         repos = api_client.get_github_user_repos(settings["access_token"])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"레포지토리 조회 실패: {e}")
+    except Exception:
+        _logger.exception("GitHub repos lookup failed")
+        raise HTTPException(status_code=500, detail="레포지토리 조회에 실패했습니다.")
     return {"repos": repos}
