@@ -52,6 +52,7 @@
 |------|----------|
 | `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
+| `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
 
 ### DB 레이어 (`db/`)
 | 파일 | 단일 책임 |
@@ -67,7 +68,7 @@
 | 파일 | 단일 책임 |
 |------|----------|
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑, TIER_NAMES 상수 |
-| `clients/codeforces.py` | Codeforces API, 문제 스크래핑, 한국어 번역 |
+| `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑 |
 | `clients/__init__.py` | 모든 public 함수 re-export (하위 호환) |
@@ -78,7 +79,7 @@
 | `routes/auth.py` | `/auth/github/*` | GitHub OAuth 인증 흐름 |
 | `routes/review.py` | `POST /api/review` | AI 코드 리뷰 생성 |
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push |
-| `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 및 한국어 번역 |
+| `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/history.py` | `GET /api/reviews/*` | 리뷰 기록 조회 |
@@ -124,7 +125,8 @@
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
 | `routes/github_push.py` | `clients.push_file_to_github` | 코드+README GitHub push |
-| `routes/problem.py` | `clients.cf_xpath_text` | CF 문제 직접 스크래핑 + OpenAI 한국어 번역 |
+| `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
+| `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
 | `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | GPT-4o 종합 리포트 생성 |

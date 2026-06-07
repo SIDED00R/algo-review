@@ -104,6 +104,65 @@ def get_cf_problem_sections(problem_ref: str) -> dict:
         return {"description": "", "input": "", "output": ""}
 
 
+def scrape_cf_problem(problem_ref: str) -> dict:
+    """CF 문제 페이지에서 제목/제한/본문/예제/노트를 raw(미번역)로 추출. 형식 오류 시 ValueError."""
+    from lxml import etree
+
+    m = re.match(r'^(\d+)([A-Za-z]\d*)$', problem_ref.strip())
+    if not m:
+        raise ValueError("잘못된 문제 번호 형식 (예: 4A, 1234B)")
+    contest_id, index = m.group(1), m.group(2).upper()
+
+    url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
+    resp = requests.get(url, timeout=10, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
+    resp.raise_for_status()
+
+    tree = etree.fromstring(resp.text.encode(), etree.HTMLParser())
+
+    def _limit_value(xpath_expr: str) -> str:
+        nodes = tree.xpath(xpath_expr)
+        if not nodes:
+            return ""
+        el = nodes[0]
+        prop_nodes = el.xpath('.//*[contains(@class,"property-title")]')
+        prop_text = " ".join(prop_nodes[0].itertext()).strip() if prop_nodes else ""
+        full_text = " ".join(el.itertext()).strip()
+        return full_text.replace(prop_text, "", 1).strip()
+
+    BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
+
+    note_nodes = tree.xpath('//*[contains(@class,"note")]')
+    note_text = " ".join(note_nodes[0].itertext()).strip() if note_nodes else ""
+
+    samples = []
+    sample_container = tree.xpath(f'{BASE}/div[5]')
+    if sample_container:
+        sc = sample_container[0]
+        inp_pres = sc.xpath('.//div[contains(@class,"input")]//pre')
+        out_pres = sc.xpath('.//div[contains(@class,"output")]//pre')
+        for inp_pre, out_pre in zip(inp_pres, out_pres):
+            samples.append({
+                "input":  "\n".join(inp_pre.itertext()).strip(),
+                "output": "\n".join(out_pre.itertext()).strip(),
+            })
+
+    return {
+        "title": cf_xpath_text(tree, '//div[@class="title"]') or f"CF {problem_ref}",
+        "time_limit": _limit_value('//div[contains(@class,"time-limit")]'),
+        "memory_limit": _limit_value('//div[contains(@class,"memory-limit")]'),
+        "statement": cf_xpath_text(tree, f'{BASE}/div[2]'),
+        "input": cf_xpath_text(tree, f'{BASE}/div[3]'),
+        "output": cf_xpath_text(tree, f'{BASE}/div[4]'),
+        "note": note_text,
+        "samples": samples,
+        "url": url,
+        "contest_id": contest_id,
+        "index": index,
+    }
+
+
 def _codeforces_api_request(method_name: str, params: dict | None = None,
                             api_key: str | None = None, api_secret: str | None = None) -> dict:
     params = {k: v for k, v in (params or {}).items() if v is not None}
