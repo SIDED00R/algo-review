@@ -40,8 +40,8 @@
 ### 2. 설치
 
 ```bash
-git clone https://github.com/SIDED00R/boj-code-review.git
-cd boj-code-review
+git clone https://github.com/SIDED00R/algo-review.git
+cd algo-review
 
 python -m venv venv
 
@@ -160,13 +160,14 @@ gcloud run deploy algo-review-demo \
 ├── main.py                 # CLI 인터페이스 (코드 리뷰, 추천, 통계)
 ├── analyzer.py             # OpenAI GPT 코드 분석
 ├── recommender.py          # 취약 태그 기반 문제 추천 알고리즘
+├── cf_translator.py        # OpenAI를 이용한 CF 문제 본문 한국어 번역
 ├── demo_mode.py            # 데모 모드 플래그 및 mock 데이터
 ├── demo_seed.py            # 데모용 SQLite 샘플 데이터 시딩
 ├── ARCHITECTURE.md         # 레이어 다이어그램 & 호출관계 문서
 │
 ├── clients/                # 외부 API 클라이언트 (각 파일이 하나의 플랫폼 담당)
 │   ├── solved_ac.py        # solved.ac API, BOJ 스크래핑, TIER_NAMES 상수
-│   ├── codeforces.py       # Codeforces API, 문제 스크래핑, 한국어 번역
+│   ├── codeforces.py       # Codeforces API, 문제 메타/본문 스크래핑
 │   ├── github.py           # GitHub OAuth, 파일 push, BaekjoonHub import
 │   └── utils.py            # get_problem_url(), 파일 확장자 매핑
 │
@@ -192,7 +193,8 @@ gcloud run deploy algo-review-demo \
 │   ├── import_boj.py       # POST /api/import — BOJ 제출 기록 import
 │   ├── import_codeforces.py# POST /api/import-codeforces — CF import
 │   ├── models.py           # Pydantic 요청/응답 스키마
-│   └── helpers.py          # GitHub용 README 빌더
+│   ├── helpers.py          # GitHub README 빌더 + 풀이 파일 push 헬퍼
+│   └── review_response.py  # 리뷰 저장 + ReviewResponse 생성 (review/solved 공용)
 │
 └── static/
     ├── index.html

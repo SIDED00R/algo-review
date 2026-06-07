@@ -22,7 +22,7 @@
 │  Service Layer  │             │  External Clients (clients/)      │
 │  analyzer.py    │             │  solved_ac · codeforces           │
 │  recommender.py │             │  github · utils                   │
-│                 │             └──────────────┬────────────────────┘
+│ cf_translator.py│             └──────────────┬────────────────────┘
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
@@ -57,7 +57,7 @@
 ### DB 레이어 (`db/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `db/connection.py` | DB 연결 팩토리 (SQLite / PostgreSQL), `_ph()`, `_rows_to_dicts()` |
+| `db/connection.py` | DB 연결 팩토리 (SQLite / PostgreSQL), `db_cursor()` 컨텍스트 매니저, `_ph()`, `_rows_to_dicts()` |
 | `db/schema.py` | 테이블 생성 및 마이그레이션 (컬럼 추가) |
 | `db/reviews.py` | reviews 테이블 CRUD + 티어/태그 집계 쿼리 |
 | `db/solved.py` | solved_history 테이블 CRUD |
@@ -124,7 +124,7 @@
 | `routes/review.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
-| `routes/github_push.py` | `clients.push_file_to_github` | 코드+README GitHub push |
+| `routes/github_push.py` | `clients.push_files_to_github` | 코드+README 단일 커밋 GitHub push |
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
 | `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
@@ -173,3 +173,4 @@
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` | — | PostgreSQL 연결 정보 |
 | `DB_HOST` / `DB_PORT` / `DB_SOCKET` | — | PostgreSQL 호스트 설정 |
 | `CORS_ORIGINS` | — | 허용할 CORS 출처 (쉼표 구분, 기본: `http://localhost:8080`) |
+| `DEMO_MODE` | — | `true` 설정 시 mock 데이터로 동작 (외부 API 키 불필요) |
