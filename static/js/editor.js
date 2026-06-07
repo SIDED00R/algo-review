@@ -35,10 +35,12 @@
       if (token.type === 'string' || token.type === 'comment') return;
       const prefix = token.string;
       if (!prefix || prefix.length < 1) return;
+      // 숫자 리터럴 입력 중에는 자동완성하지 않음 (식별자는 숫자로 시작 불가)
+      if (/^\d/.test(prefix)) return;
 
       const anyResult = CodeMirror.hint.anyword(cm) || { list: [], from: cursor, to: cursor };
-      // anyword는 문서 전체 단어를 반환하므로 prefix로 필터
-      const docWords = anyResult.list.filter(w => w.startsWith(prefix));
+      // anyword는 문서 전체 단어를 반환하므로 prefix + 식별자 형태로 필터 (숫자 리터럴 제외)
+      const docWords = anyResult.list.filter(w => w.startsWith(prefix) && !/^\d/.test(w));
       const docSet = new Set(docWords);
       const kwMatches = keywords.filter(k => k.startsWith(prefix) && !docSet.has(k));
       const list = [...kwMatches, ...docWords];
