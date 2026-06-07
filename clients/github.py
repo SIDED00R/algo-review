@@ -135,7 +135,7 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
         return False
 
 
-def get_baekjoonhub_problems(repo: str, token: str = None) -> list[dict]:
+def get_baekjoonhub_problems(repo: str, token: str | None = None) -> list[dict]:
     headers = {"Accept": "application/vnd.github.v3+json"}
     if token:
         headers["Authorization"] = f"token {token}"
@@ -181,7 +181,7 @@ def get_baekjoonhub_problems(repo: str, token: str = None) -> list[dict]:
     return list(problems.values())
 
 
-def get_raw_github_content(repo: str, path: str, token: str = None) -> str:
+def get_raw_github_content(repo: str, path: str, token: str | None = None) -> str:
     url = f"https://raw.githubusercontent.com/{repo}/HEAD/{path}"
     headers = {}
     if token:

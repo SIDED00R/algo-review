@@ -2,12 +2,16 @@ import os
 import db
 import analyzer
 from fastapi import APIRouter, HTTPException
+from demo_mode import IS_DEMO, DEMO_REPORT
 
 router = APIRouter()
 
 
 @router.get("/api/report")
 def get_report():
+    if IS_DEMO:
+        return {"report": DEMO_REPORT}
+
     if not os.environ.get("OPENAI_API_KEY"):
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 

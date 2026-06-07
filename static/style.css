@@ -445,7 +445,6 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
   padding: 20px; display: flex; flex-direction: column; gap: 10px;
   overflow-y: auto; max-height: calc(90vh - 70px);
 }
-.pm-limits { font-size: .8rem; color: var(--text-muted); margin-bottom: 12px; }
 .pm-text { font-size: .9rem; line-height: 1.7; white-space: normal; word-break: break-word; }
 .pm-section-card {
   background: var(--surface2);
