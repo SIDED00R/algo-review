@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from contextlib import contextmanager
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,6 +33,21 @@ def get_connection():
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
+
+@contextmanager
+def db_cursor(commit: bool = False):
+    """커넥션·커서 수명을 관리한다. commit=True면 정상 종료 시 커밋. (postgres만 cursor.close 필요)"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        yield cur
+        if commit:
+            conn.commit()
+    finally:
+        if USE_POSTGRES:
+            cur.close()
+        conn.close()
 
 
 def _ph():
