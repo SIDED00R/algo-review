@@ -35,7 +35,7 @@ def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
 {problem_statement[:2000]}
 
 ## 제출 코드
-```python
+```
 {code}
 ```
 
