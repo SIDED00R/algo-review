@@ -52,7 +52,7 @@
 |------|----------|
 | `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
-| `themes.py` | 테마(알고리즘 분야)별 대표 문제 정의 및 조회 |
+| `themes.py` | 테마(알고리즘 분야)별 CF 대표 문제 조회 + CF 레이팅→백준식 티어 매핑 |
 | `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
 
 ### DB 레이어 (`db/`)
@@ -137,7 +137,7 @@
 | `routes/import_boj.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
 | `routes/import_codeforces.py` | `clients.get_codeforces_user_submissions` | CF 제출 기록 조회 |
-| `themes.py` | `clients.search_problems_by_tag` | 테마 태그별 대표 문제 조회 |
+| `themes.py` | `clients.search_cf_problems_by_tag` | 테마(CF 태그)별 대표 문제 조회 |
 | `recommender.py` | `db.get_tag_weakness_data` | 태그 취약점 점수 데이터 조회 |
 | `recommender.py` | `clients.search_problems_by_tag` | solved.ac 태그 검색 |
 | `routes/auth.py` | `clients.exchange_github_code` | GitHub OAuth 토큰 교환 |
@@ -146,6 +146,7 @@
 | `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
 | `recommend.js` | `GET /api/recommend` | 문제 추천 요청 |
+| `themes.js` | `GET /api/themes` | 테마별 대표 문제 요청 |
 | `import-history.js` | `GET /api/solved-history` | 가져온 기록 목록 조회 |
 
 ---

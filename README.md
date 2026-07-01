@@ -30,7 +30,8 @@
   - 약한 태그와 현재 수준 + 도전 난이도를 혼합해 다음 문제를 추천합니다.
   - BOJ / Codeforces 각각 지원
 - **테마별 문제**
-  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제(BOJ)를 둘러봅니다.
+  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제(Codeforces)를 난이도순으로 둘러봅니다.
+  - CF 레이팅을 백준식 티어로 환산해 난이도를 표시합니다.
 
 ## 로컬 실행
 
@@ -162,7 +163,7 @@ gcloud run deploy algo-review-demo \
 ├── main.py                 # CLI 인터페이스 (코드 리뷰, 추천, 통계)
 ├── analyzer.py             # OpenAI GPT 코드 분석
 ├── recommender.py          # 취약 태그 기반 문제 추천 알고리즘
-├── themes.py               # 테마별 대표 문제 정의 및 조회
+├── themes.py               # 테마별 대표 문제(CF) 정의 + 레이팅→티어 매핑
 ├── cf_translator.py        # OpenAI를 이용한 CF 문제 본문 한국어 번역
 ├── demo_mode.py            # 데모 모드 플래그 및 mock 데이터
 ├── demo_seed.py            # 데모용 SQLite 샘플 데이터 시딩

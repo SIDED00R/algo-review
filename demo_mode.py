@@ -130,38 +130,42 @@ DEMO_RECOMMENDATIONS = {
     "platform": "codeforces",
 }
 
-def _demo_theme(label, problems):
-    return {
-        "label": label,
-        "tag_key": label,
-        "problems": [
-            {"id": pid, "title": title, "tier": tier, "tier_name": name,
-             "url": f"https://boj.kr/{pid}"}
-            for pid, title, tier, name in problems
-        ],
-    }
+def _demo_cf_theme(label, tag, problems):
+    from themes import cf_rating_to_tier
+    from clients import TIER_NAMES
+    items = []
+    for ref, title, rating in problems:
+        tier = cf_rating_to_tier(rating)
+        items.append({
+            "id": ref,
+            "title": title,
+            "tier": tier,
+            "tier_name": TIER_NAMES.get(tier, "Unrated"),
+        })
+    return {"label": label, "tag": tag, "problems": items}
 
 
+# 각 테마는 입문→중급→고급 레이팅 사다리로 구성 (CF 레이팅 → 백준식 티어 매핑)
 DEMO_THEMES = [
-    _demo_theme("다이나믹 프로그래밍", [
-        (1463, "1로 만들기", 8, "Silver III"),
-        (2579, "계단 오르기", 8, "Silver III"),
-        (9095, "1, 2, 3 더하기", 8, "Silver III"),
+    _demo_cf_theme("다이나믹 프로그래밍", "dp", [
+        ("189A", "Cut Ribbon", 1300),
+        ("455A", "Boredom", 1500),
+        ("1195C", "Basketball Exercise", 1600),
     ]),
-    _demo_theme("그리디 알고리즘", [
-        (11047, "동전 0", 7, "Silver IV"),
-        (11399, "ATM", 7, "Silver IV"),
-        (1931, "회의실 배정", 11, "Gold V"),
+    _demo_cf_theme("그리디 알고리즘", "greedy", [
+        ("1352B", "Same Parity Summands", 1100),
+        ("1256B", "Minimize the Permutation", 1400),
+        ("1443C", "The Delivery Dilemma", 1500),
     ]),
-    _demo_theme("그래프 이론", [
-        (1260, "DFS와 BFS", 9, "Silver II"),
-        (2606, "바이러스", 9, "Silver II"),
-        (11724, "연결 요소의 개수", 11, "Gold V"),
+    _demo_cf_theme("그래프 이론", "graphs", [
+        ("902B", "Coloring a Tree", 1100),
+        ("977E", "Cyclic Components", 1500),
+        ("20C", "Dijkstra?", 1900),
     ]),
-    _demo_theme("자료 구조", [
-        (10828, "스택", 7, "Silver IV"),
-        (10845, "큐", 7, "Silver IV"),
-        (1966, "프린터 큐", 8, "Silver III"),
+    _demo_cf_theme("자료 구조", "data structures", [
+        ("1279B", "Verse For Santa", 1200),
+        ("91B", "Queue", 1500),
+        ("6E", "Exposition", 1900),
     ]),
 ]
 
