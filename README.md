@@ -102,6 +102,10 @@ python -m uvicorn server:app --reload
 
 ## 배포
 
+### 자동 배포 (CI/CD)
+
+`main` 브랜치에 머지되면 GitHub Actions(`.github/workflows/deploy.yml`)가 Cloud Run 두 서비스(`algo-review`, `algo-review-demo`)에 자동 배포합니다. GCP 인증은 Workload Identity Federation(장기 키 없음)을 사용하며, 워크플로 탭에서 수동 실행(`workflow_dispatch`)도 가능합니다. 아래 명령들은 수동 배포가 필요할 때 사용합니다.
+
 ### Cloud Run (SQLite)
 
 ```bash
