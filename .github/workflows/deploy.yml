@@ -1,0 +1,49 @@
+name: Deploy to Cloud Run
+
+# main 에 머지되면 Cloud Run 두 서비스에 자동 배포한다.
+# 인증: Workload Identity Federation (장기 키 없음).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: boj-code-review-2024
+  REGION: asia-northeast3
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: boj-code-review-2024
+          workload_identity_provider: projects/707325519995/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@boj-code-review-2024.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy algo-review (production)
+        run: |
+          gcloud run deploy algo-review \
+            --source . \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --quiet
+
+      - name: Deploy algo-review-demo (DEMO_MODE)
+        run: |
+          gcloud run deploy algo-review-demo \
+            --source . \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --set-env-vars "DEMO_MODE=true" \
+            --quiet
