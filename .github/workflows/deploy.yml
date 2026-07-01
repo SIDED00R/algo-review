@@ -1,6 +1,6 @@
 name: Deploy to Cloud Run
 
-# main 에 머지되면 Cloud Run 두 서비스에 자동 배포한다.
+# main 에 머지되면 Cloud Run 두 서비스를 병렬로 배포한다.
 # 인증: Workload Identity Federation (장기 키 없음).
 on:
   push:
@@ -13,10 +13,19 @@ env:
 
 jobs:
   deploy:
+    name: Deploy ${{ matrix.service }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: algo-review          # 운영: 기존 env 유지
+            extra_args: ""
+          - service: algo-review-demo      # 데모: mock 모드
+            extra_args: "--set-env-vars DEMO_MODE=true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,19 +40,5 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy algo-review (production)
-        run: |
-          gcloud run deploy algo-review \
-            --source . \
-            --region "$REGION" \
-            --project "$PROJECT_ID" \
-            --quiet
-
-      - name: Deploy algo-review-demo (DEMO_MODE)
-        run: |
-          gcloud run deploy algo-review-demo \
-            --source . \
-            --region "$REGION" \
-            --project "$PROJECT_ID" \
-            --set-env-vars "DEMO_MODE=true" \
-            --quiet
+      - name: Deploy ${{ matrix.service }}
+        run: gcloud run deploy ${{ matrix.service }} --source . --region "$REGION" --project "$PROJECT_ID" ${{ matrix.extra_args }} --quiet
