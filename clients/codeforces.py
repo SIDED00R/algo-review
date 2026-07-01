@@ -285,6 +285,7 @@ def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
             "title": p.get("name", ref),
             "tier": 0,
             "tier_name": f"CF {rating}",
+            "rating": rating,
             "url": f"https://codeforces.com/problemset/problem/{contest_id}/{index}",
             "_solved_count": stats_map.get((contest_id, index), 0),
         })

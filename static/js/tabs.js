@@ -12,6 +12,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'history') loadHistory();
     if (btn.dataset.tab === 'import') loadImportedHistory();
     if (btn.dataset.tab === 'stats') loadTierChart();
+    if (btn.dataset.tab === 'themes') loadThemes();
 
     closeNav();
   });
