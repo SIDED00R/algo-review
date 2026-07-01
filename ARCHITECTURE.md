@@ -6,7 +6,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │  Browser (static/js/*.js)                                       │
 │  editor · utils · theme · github · tier-chart · tabs           │
-│  review · recommend · problem-modal · stats                     │
+│  review · recommend · themes · problem-modal · stats            │
 │  history · report                                               │
 │  import-history · import-github · import-boj · import-codeforces│
 └────────────────────────┬────────────────────────────────────────┘
@@ -14,7 +14,7 @@
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Routes (routes/)                                       │
 │  auth · review · github_push · problem · execute · recommend   │
-│  history · solved · stats · report                             │
+│  themes · history · solved · stats · report                    │
 │  import_github · import_boj · import_codeforces                │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
@@ -52,6 +52,7 @@
 |------|----------|
 | `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
+| `themes.py` | 테마(알고리즘 분야)별 대표 문제 정의 및 조회 |
 | `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
 
 ### DB 레이어 (`db/`)
@@ -82,6 +83,7 @@
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
+| `routes/themes.py` | `GET /api/themes` | 테마별 대표 문제 조회 + TTL 캐시 |
 | `routes/history.py` | `GET /api/reviews/*` | 리뷰 기록 조회 |
 | `routes/solved.py` | `/api/solved-history/*`, `POST /api/review-imported/*` | 가져온 기록 관리 + AI 리뷰 요청 |
 | `routes/stats.py` | `GET /api/stats`, `GET /api/tier-history` | 통계 및 티어 이력 조회 |
@@ -103,6 +105,7 @@
 | `tabs.js` | 탭 전환 네비게이션 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
+| `themes.js` | 테마별 대표 문제 표시 (지연 로드) |
 | `problem-modal.js` | CF 문제 모달 (조회, 샘플 실행, 리뷰 이동) |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프 |
@@ -134,6 +137,7 @@
 | `routes/import_boj.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
 | `routes/import_codeforces.py` | `clients.get_codeforces_user_submissions` | CF 제출 기록 조회 |
+| `themes.py` | `clients.search_problems_by_tag` | 테마 태그별 대표 문제 조회 |
 | `recommender.py` | `db.get_tag_weakness_data` | 태그 취약점 점수 데이터 조회 |
 | `recommender.py` | `clients.search_problems_by_tag` | solved.ac 태그 검색 |
 | `routes/auth.py` | `clients.exchange_github_code` | GitHub OAuth 토큰 교환 |

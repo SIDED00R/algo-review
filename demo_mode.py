@@ -130,6 +130,41 @@ DEMO_RECOMMENDATIONS = {
     "platform": "codeforces",
 }
 
+def _demo_theme(label, problems):
+    return {
+        "label": label,
+        "tag_key": label,
+        "problems": [
+            {"id": pid, "title": title, "tier": tier, "tier_name": name,
+             "url": f"https://boj.kr/{pid}"}
+            for pid, title, tier, name in problems
+        ],
+    }
+
+
+DEMO_THEMES = [
+    _demo_theme("다이나믹 프로그래밍", [
+        (1463, "1로 만들기", 8, "Silver III"),
+        (2579, "계단 오르기", 8, "Silver III"),
+        (9095, "1, 2, 3 더하기", 8, "Silver III"),
+    ]),
+    _demo_theme("그리디 알고리즘", [
+        (11047, "동전 0", 7, "Silver IV"),
+        (11399, "ATM", 7, "Silver IV"),
+        (1931, "회의실 배정", 11, "Gold V"),
+    ]),
+    _demo_theme("그래프 이론", [
+        (1260, "DFS와 BFS", 9, "Silver II"),
+        (2606, "바이러스", 9, "Silver II"),
+        (11724, "연결 요소의 개수", 11, "Gold V"),
+    ]),
+    _demo_theme("자료 구조", [
+        (10828, "스택", 7, "Silver IV"),
+        (10845, "큐", 7, "Silver IV"),
+        (1966, "프린터 큐", 8, "Silver III"),
+    ]),
+]
+
 DEMO_GITHUB_STATUS = {
     "connected": True,
     "username": "demo_user",

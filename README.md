@@ -29,6 +29,8 @@
 - **문제 추천**
   - 약한 태그와 현재 수준 + 도전 난이도를 혼합해 다음 문제를 추천합니다.
   - BOJ / Codeforces 각각 지원
+- **테마별 문제**
+  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제(BOJ)를 둘러봅니다.
 
 ## 로컬 실행
 
@@ -160,6 +162,7 @@ gcloud run deploy algo-review-demo \
 ├── main.py                 # CLI 인터페이스 (코드 리뷰, 추천, 통계)
 ├── analyzer.py             # OpenAI GPT 코드 분석
 ├── recommender.py          # 취약 태그 기반 문제 추천 알고리즘
+├── themes.py               # 테마별 대표 문제 정의 및 조회
 ├── cf_translator.py        # OpenAI를 이용한 CF 문제 본문 한국어 번역
 ├── demo_mode.py            # 데모 모드 플래그 및 mock 데이터
 ├── demo_seed.py            # 데모용 SQLite 샘플 데이터 시딩
@@ -185,6 +188,7 @@ gcloud run deploy algo-review-demo \
 │   ├── problem.py          # GET /api/problem/cf/{ref} — CF 문제 조회
 │   ├── execute.py          # POST /api/execute — Python/C++ 코드 실행
 │   ├── recommend.py        # GET /api/recommend — 문제 추천
+│   ├── themes.py           # GET /api/themes — 테마별 대표 문제
 │   ├── history.py          # GET /api/reviews/* — 리뷰 기록 조회
 │   ├── solved.py           # /api/solved-history/* — import 기록 관리
 │   ├── stats.py            # GET /api/stats, /api/tier-history — 통계
@@ -208,6 +212,7 @@ gcloud run deploy algo-review-demo \
         ├── tier-chart.js       # 티어 변화 Chart.js 그래프
         ├── review.js           # 코드 리뷰 탭
         ├── recommend.js        # 문제 추천 탭
+        ├── themes.js           # 테마별 문제 탭
         ├── problem-modal.js    # CF 문제 뷰어 모달
         ├── stats.js            # 태그 통계 시각화
         ├── history.js          # 리뷰 기록 탭

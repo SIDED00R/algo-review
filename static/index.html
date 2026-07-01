@@ -28,6 +28,7 @@
       <nav id="main-nav">
         <button class="tab-btn active" data-tab="review">코드 리뷰</button>
         <button class="tab-btn" data-tab="recommend">문제 추천</button>
+        <button class="tab-btn" data-tab="themes">테마별 문제</button>
         <button class="tab-btn" data-tab="stats">통계</button>
         <button class="tab-btn" data-tab="report">종합 리포트</button>
         <button class="tab-btn" data-tab="history">리뷰 기록</button>
@@ -134,6 +135,15 @@
         <button id="recommend-btn" class="btn-primary">추천받기</button>
       </div>
       <div id="recommend-result"></div>
+    </section>
+
+    <!-- ── 테마별 문제 탭 ── -->
+    <section id="tab-themes" class="tab-content hidden">
+      <div class="card">
+        <h2>테마별 문제</h2>
+        <p class="desc">알고리즘 분야별 대표 문제(백준)를 모아서 보여줍니다. 학습하고 싶은 테마를 골라 바로 풀어보세요.</p>
+      </div>
+      <div id="themes-result"></div>
     </section>
 
     <!-- ── 통계 탭 ── -->
@@ -397,9 +407,10 @@
   <script src="/static/js/theme.js?v=20260430"></script>
   <script src="/static/js/github.js?v=20260607"></script>
   <script src="/static/js/tier-chart.js?v=20260430"></script>
-  <script src="/static/js/tabs.js?v=20260505"></script>
+  <script src="/static/js/tabs.js?v=20260701"></script>
   <script src="/static/js/review.js?v=20260430"></script>
   <script src="/static/js/recommend.js?v=20260511"></script>
+  <script src="/static/js/themes.js?v=20260701"></script>
   <script src="/static/js/problem-modal.js?v=20260607"></script>
   <script src="/static/js/stats.js?v=20260430"></script>
   <script src="/static/js/history.js?v=20260607"></script>
