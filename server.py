@@ -1,4 +1,6 @@
+import asyncio
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -9,13 +11,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import db
+import warmup
+from demo_mode import IS_DEMO
 from routes import (
     auth, review, github_push, problem, execute, recommend,
     history, solved, import_github, import_boj, import_codeforces,
     stats, report, themes,
 )
 
-app = FastAPI(title="알고리즘 코드 리뷰 & 문제 추천")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if IS_DEMO:
+        import demo_seed
+        demo_seed.seed()
+    else:
+        db.init_db()
+    # 테마 캐시 예열은 기동을 막지 않게 백그라운드로 — 데모는 외부 API를 치지 않는다.
+    warm_task = None if IS_DEMO else asyncio.create_task(warmup.warm_theme_caches())
+    yield
+    if warm_task and not warm_task.done():
+        warm_task.cancel()
+
+
+app = FastAPI(title="알고리즘 코드 리뷰 & 문제 추천", lifespan=lifespan)
 
 allowed_origins = [
     origin.strip()
@@ -33,12 +52,6 @@ app.add_middleware(
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-if os.environ.get("DEMO_MODE", "false").lower() == "true":
-    import demo_seed
-    demo_seed.seed()
-else:
-    db.init_db()
 
 app.include_router(auth.router)
 app.include_router(review.router)
