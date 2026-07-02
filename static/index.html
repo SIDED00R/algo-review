@@ -141,7 +141,12 @@
     <section id="tab-themes" class="tab-content hidden">
       <div class="card">
         <h2>테마별 문제</h2>
-        <p class="desc">알고리즘 분야별 대표 문제(Codeforces)를 난이도순으로 모아서 보여줍니다. 난이도는 CF 레이팅을 백준식 티어로 환산해 표시합니다. 문제를 누르면 인앱 뷰어로 열립니다.</p>
+        <p class="desc">알고리즘 분야별 대표 문제를 사이트별 난이도로 보여줍니다. 이미 푼 문제는 제외됩니다. Codeforces 문제는 클릭하면 인앱 뷰어로 열립니다.</p>
+        <div class="platform-toggle" style="margin-bottom:14px">
+          <button id="themes-platform-cf" class="btn-toggle active" data-themes-platform="codeforces">Codeforces</button>
+          <button id="themes-platform-boj" class="btn-toggle" data-themes-platform="boj">백준</button>
+        </div>
+        <div id="themes-chips" class="theme-chips"></div>
       </div>
       <div id="themes-result"></div>
     </section>

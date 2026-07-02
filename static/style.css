@@ -340,6 +340,26 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
 .tier-diamond { background: rgba(100,150,255,.15); color: #818cf8; border: 1px solid rgba(100,150,255,.2); }
 .tier-ruby { background: rgba(255,80,80,.12); color: #f87171; border: 1px solid rgba(255,80,80,.18); }
 
+/* Codeforces 레이팅 배지 — 공식 색상 계열 (tier-* 패턴 미러) */
+.cf-newbie           { background: rgba(160,160,160,.15); color: #9ca3af; border: 1px solid rgba(160,160,160,.2); }
+.cf-pupil            { background: rgba(0,180,0,.12);     color: #4ade80; border: 1px solid rgba(0,180,0,.2); }
+.cf-specialist       { background: rgba(3,168,158,.12);   color: #2dd4bf; border: 1px solid rgba(3,168,158,.2); }
+.cf-expert           { background: rgba(80,120,255,.12);  color: #818cf8; border: 1px solid rgba(80,120,255,.2); }
+.cf-candidate-master { background: rgba(170,80,255,.12);  color: #c084fc; border: 1px solid rgba(170,80,255,.2); }
+.cf-master           { background: rgba(255,140,0,.12);   color: #fb923c; border: 1px solid rgba(255,140,0,.2); }
+.cf-grandmaster      { background: rgba(255,60,60,.12);   color: #f87171; border: 1px solid rgba(255,60,60,.18); }
+
+/* ── 테마별 문제 탭 — 테마 선택 칩 + 목록 헤더 ── */
+.theme-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.theme-chip {
+  padding: 7px 16px; border-radius: 20px; font-size: .85rem;
+  font-weight: 600; cursor: pointer; border: 1.5px solid var(--border);
+  background: transparent; color: var(--text-muted); transition: all .15s;
+}
+.theme-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.theme-chip:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+.themes-list-header { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 12px; }
+
 /* 효율성 배지 */
 .eff-good { color: var(--green); }
 .eff-ok   { color: var(--yellow); }
