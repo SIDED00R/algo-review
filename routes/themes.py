@@ -1,28 +1,32 @@
-import time
 import themes as theme_service
-from fastapi import APIRouter
-from demo_mode import IS_DEMO, DEMO_THEMES
+from fastapi import APIRouter, HTTPException, Response
+from demo_mode import IS_DEMO, DEMO_THEME_LIST, DEMO_THEME_PROBLEMS
 
 router = APIRouter()
 
-# 테마 대표 문제는 거의 변하지 않으므로 Codeforces API 반복 호출을 막기 위해 캐시한다.
-_CACHE_TTL = 3600           # 전 테마 정상 시 캐시 수명(초)
-_FALLBACK_TTL = 60          # 일부/전부 실패 시 재시도까지 대기(초)
-_cache: dict = {"data": None, "expires": 0.0}
-
 
 @router.get("/api/themes")
-def get_themes():
+def get_themes(response: Response):
+    # 테마 목록은 정적이라 브라우저 캐시를 허용한다.
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    themes = DEMO_THEME_LIST if IS_DEMO else theme_service.get_theme_list()
+    return {"themes": themes, "platforms": list(theme_service.PLATFORMS)}
+
+
+@router.get("/api/themes/{theme_id}/problems")
+def get_theme_problems(theme_id: str, response: Response, platform: str = "codeforces"):
+    # 푼 문제 제외 결과라 사용자 상태에 의존 — 브라우저 캐시 금지(클라이언트 캐싱은 localStorage 계층이 담당).
+    response.headers["Cache-Control"] = "no-store"
+    if platform not in theme_service.PLATFORMS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
+
     if IS_DEMO:
-        return {"themes": DEMO_THEMES}
+        data = DEMO_THEME_PROBLEMS.get((platform, theme_id))
+        if data is None:
+            raise HTTPException(status_code=404, detail="존재하지 않는 테마입니다.")
+        return data
 
-    now = time.time()
-    if _cache["data"] is not None and now < _cache["expires"]:
-        return {"themes": _cache["data"]}
-
-    data = theme_service.get_theme_problems()
-    # 일부 테마라도 비면(일시적 실패) 짧게 캐시해 복구 후 곧 다시 채워지게 한다.
-    all_ok = all(t["problems"] for t in data)
-    _cache["data"] = data
-    _cache["expires"] = now + (_CACHE_TTL if all_ok else _FALLBACK_TTL)
-    return {"themes": data}
+    theme = theme_service.find_theme(theme_id)
+    if theme is None:
+        raise HTTPException(status_code=404, detail="존재하지 않는 테마입니다.")
+    return theme_service.build_theme_response(platform, theme)

@@ -13,6 +13,17 @@ function tierClass(tier) {
   return 'tier-ruby';
 }
 
+// CF 레이팅 → 공식 색상 계열 클래스 (newbie ~ grandmaster)
+function cfRatingClass(rating) {
+  if (!rating || rating < 1200) return 'cf-newbie';
+  if (rating < 1400) return 'cf-pupil';
+  if (rating < 1600) return 'cf-specialist';
+  if (rating < 1900) return 'cf-expert';
+  if (rating < 2100) return 'cf-candidate-master';
+  if (rating < 2400) return 'cf-master';
+  return 'cf-grandmaster';
+}
+
 function effClass(e) {
   return { good: 'eff-good', ok: 'eff-ok', poor: 'eff-poor' }[e] || '';
 }
@@ -57,7 +68,7 @@ function setLoading(btn, loading) {
 }
 
 function showError(container, msg) {
-  container.innerHTML = `<div class="alert alert-error">❌ ${msg}</div>`;
+  container.innerHTML = `<div class="alert alert-error">❌ ${escapeHtml(msg)}</div>`;
   container.classList.remove('hidden');
 }
 

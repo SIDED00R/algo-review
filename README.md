@@ -30,8 +30,9 @@
   - 약한 태그와 현재 수준 + 도전 난이도를 혼합해 다음 문제를 추천합니다.
   - BOJ / Codeforces 각각 지원
 - **테마별 문제**
-  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제(Codeforces)를 난이도순으로 둘러봅니다.
-  - CF 레이팅을 백준식 티어로 환산해 난이도를 표시합니다.
+  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제를 플랫폼(Codeforces/백준) 토글 + 테마 칩으로 둘러봅니다.
+  - 난이도는 사이트 네이티브 그대로 표시합니다 (CF: 레이팅 + 공식 색상 배지, 백준: solved.ac 실제 티어 배지). 이미 푼 문제는 목록에서 제외됩니다.
+  - 백준 카드는 acmicpc 서비스 종료로 링크 없이 정보만 표시, CF 카드는 클릭 시 기존 인앱 뷰어 모달로 열립니다.
 
 ## 로컬 실행
 
@@ -167,15 +168,16 @@ gcloud run deploy algo-review-demo \
 ├── main.py                 # CLI 인터페이스 (코드 리뷰, 추천, 통계)
 ├── analyzer.py             # OpenAI GPT 코드 분석
 ├── recommender.py          # 취약 태그 기반 문제 추천 알고리즘
-├── themes.py               # 테마별 대표 문제(CF) 정의 + 레이팅→티어 매핑
+├── themes.py               # 테마별 대표 문제 풀 조회 (플랫폼별 네이티브 난이도) + DB 캐시
 ├── cf_translator.py        # OpenAI를 이용한 CF 문제 본문 한국어 번역
 ├── demo_mode.py            # 데모 모드 플래그 및 mock 데이터
 ├── demo_seed.py            # 데모용 SQLite 샘플 데이터 시딩
+├── warmup.py               # 기동 직후 테마 캐시 백그라운드 예열
 ├── ARCHITECTURE.md         # 레이어 다이어그램 & 호출관계 문서
 │
 ├── clients/                # 외부 API 클라이언트 (각 파일이 하나의 플랫폼 담당)
 │   ├── solved_ac.py        # solved.ac API, BOJ 스크래핑, TIER_NAMES 상수
-│   ├── codeforces.py       # Codeforces API, 문제 메타/본문 스크래핑
+│   ├── codeforces.py       # Codeforces API, 문제 메타/본문 스크래핑, problemset 스냅샷 캐시
 │   ├── github.py           # GitHub OAuth, 파일 push, BaekjoonHub import
 │   └── utils.py            # get_problem_url(), 파일 확장자 매핑
 │
@@ -184,7 +186,8 @@ gcloud run deploy algo-review-demo \
 │   ├── schema.py           # 테이블 생성 및 마이그레이션
 │   ├── reviews.py          # reviews 테이블 CRUD + 티어/태그 집계
 │   ├── solved.py           # solved_history 테이블 CRUD
-│   └── github_settings.py  # github_settings 테이블 CRUD
+│   ├── github_settings.py  # github_settings 테이블 CRUD
+│   └── cache.py            # api_cache 테이블 — 외부 API 파생 페이로드 TTL 캐시
 │
 ├── routes/                 # FastAPI 라우터 (각 파일이 하나의 도메인 담당)
 │   ├── auth.py             # GitHub OAuth 인증 흐름
@@ -193,7 +196,7 @@ gcloud run deploy algo-review-demo \
 │   ├── problem.py          # GET /api/problem/cf/{ref} — CF 문제 조회
 │   ├── execute.py          # POST /api/execute — Python/C++ 코드 실행
 │   ├── recommend.py        # GET /api/recommend — 문제 추천
-│   ├── themes.py           # GET /api/themes — 테마별 대표 문제
+│   ├── themes.py           # GET /api/themes, GET /api/themes/{id}/problems — 테마별 대표 문제
 │   ├── history.py          # GET /api/reviews/* — 리뷰 기록 조회
 │   ├── solved.py           # /api/solved-history/* — import 기록 관리
 │   ├── stats.py            # GET /api/stats, /api/tier-history — 통계
@@ -217,7 +220,7 @@ gcloud run deploy algo-review-demo \
         ├── tier-chart.js       # 티어 변화 Chart.js 그래프
         ├── review.js           # 코드 리뷰 탭
         ├── recommend.js        # 문제 추천 탭
-        ├── themes.js           # 테마별 문제 탭
+        ├── themes.js           # 테마별 문제 탭 (플랫폼 토글 + 테마 칩 + 3계층 캐시)
         ├── problem-modal.js    # CF 문제 뷰어 모달
         ├── stats.js            # 태그 통계 시각화
         ├── history.js          # 리뷰 기록 탭

@@ -193,10 +193,25 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
 
 
 @lru_cache(maxsize=1)
+def _get_cf_problemset_snapshot() -> tuple[list[dict], dict]:
+    """problemset.problems 전체를 프로세스당 1회만 받아온다 — (문제 목록, solvedCount 맵).
+    빈 응답은 raise 해서 실패가 lru_cache에 박제되지 않게 한다."""
+    result = _codeforces_api_request("problemset.problems")
+    problems = result.get("problems", [])
+    if not problems:
+        raise ValueError("Codeforces problemset 응답이 비어 있습니다.")
+    stats_map = {
+        (s["contestId"], s["index"]): s["solvedCount"]
+        for s in result.get("problemStatistics", [])
+    }
+    return problems, stats_map
+
+
+@lru_cache(maxsize=1)
 def _get_codeforces_problem_lookup() -> dict[tuple[int, str], dict]:
     lookup = {}
-    result = _codeforces_api_request("problemset.problems")
-    for problem in result.get("problems", []):
+    problems, _ = _get_cf_problemset_snapshot()
+    for problem in problems:
         contest_id = problem.get("contestId")
         index = str(problem.get("index", "")).upper()
         if contest_id and index:
@@ -254,22 +269,16 @@ def get_codeforces_user_submissions(handle: str, count: int = 1000,
 
 def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
                                exclude_refs: set) -> list[dict]:
+    # 태그별 API 재호출 대신 프로세스 1회 스냅샷을 로컬 필터링 — 테마/추천에서 반복 호출돼도 fetch는 1번.
     try:
-        resp = requests.get(f"{CODEFORCES_API_BASE}/problemset.problems", params={"tags": tag}, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("status") != "OK":
-            return []
-        problems = data["result"]["problems"]
-        stats_map = {
-            (s["contestId"], s["index"]): s["solvedCount"]
-            for s in data["result"].get("problemStatistics", [])
-        }
+        problems, stats_map = _get_cf_problemset_snapshot()
     except Exception:
         return []
 
     results = []
     for p in problems:
+        if tag not in p.get("tags", []):
+            continue
         rating = p.get("rating", 0)
         if not rating or not (min_rating <= rating <= max_rating):
             continue
