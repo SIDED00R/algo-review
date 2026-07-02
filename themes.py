@@ -1,90 +1,107 @@
-from clients import search_cf_problems_by_tag, TIER_NAMES
+import db
+from clients import search_cf_problems_by_tag, search_problems_by_tag
 
-# 테마별 문제 둘러보기 (Codeforces) — 사용자 데이터와 무관하게 알고리즘 분야별 대표 문제를 제공한다.
-# tag 는 Codeforces problemset 태그명(공백 포함, 대소문자 그대로).
+# 테마별 문제 둘러보기 — 알고리즘 분야별 대표 문제를 플랫폼(Codeforces/백준)별 네이티브 난이도로 제공한다.
+# cf_tag 는 Codeforces problemset 태그명(공백 포함), boj_tag 는 solved.ac 태그 키.
 THEMES = [
-    {"label": "다이나믹 프로그래밍", "tag": "dp"},
-    {"label": "그리디 알고리즘",     "tag": "greedy"},
-    {"label": "그래프 이론",         "tag": "graphs"},
-    {"label": "완전 탐색",           "tag": "brute force"},
-    {"label": "DFS / 탐색",          "tag": "dfs and similar"},
-    {"label": "이분 탐색",           "tag": "binary search"},
-    {"label": "최단 경로",           "tag": "shortest paths"},
-    {"label": "자료 구조",           "tag": "data structures"},
-    {"label": "문자열",              "tag": "strings"},
-    {"label": "수학",                "tag": "math"},
+    {"id": "dp",              "label": "다이나믹 프로그래밍", "cf_tag": "dp",              "boj_tag": "dp"},
+    {"id": "greedy",          "label": "그리디 알고리즘",     "cf_tag": "greedy",          "boj_tag": "greedy"},
+    {"id": "graphs",          "label": "그래프 이론",         "cf_tag": "graphs",          "boj_tag": "graphs"},
+    {"id": "brute-force",     "label": "완전 탐색",           "cf_tag": "brute force",     "boj_tag": "bruteforcing"},
+    {"id": "dfs",             "label": "DFS / 탐색",          "cf_tag": "dfs and similar", "boj_tag": "dfs"},
+    {"id": "binary-search",   "label": "이분 탐색",           "cf_tag": "binary search",   "boj_tag": "binary_search"},
+    {"id": "shortest-path",   "label": "최단 경로",           "cf_tag": "shortest paths",  "boj_tag": "shortest_path"},
+    {"id": "data-structures", "label": "자료 구조",           "cf_tag": "data structures", "boj_tag": "data_structures"},
+    {"id": "strings",         "label": "문자열",              "cf_tag": "strings",         "boj_tag": "string"},
+    {"id": "math",            "label": "수학",                "cf_tag": "math",            "boj_tag": "math"},
 ]
 
-PROBLEMS_PER_THEME = 3
+PLATFORMS = ("codeforces", "boj")
 
-# CF 레이팅(800~3500) → 백준식 티어(1~30) 임의 매핑.
-# 100점당 1티어, rating 800 = Bronze II(4) 기준의 선형 매핑.
-CF_RATING_MIN = 800
-CF_RATING_MAX = 3500
-_TIER_STEP = 100
-_TIER_BASE = 4  # rating 800 → tier 4 (Bronze II)
+PER_BAND = 8               # 응답에 담는 밴드당 문제 수 (테마당 최대 24개)
+POOL_PER_BAND = 20         # 캐시하는 밴드당 풀 크기 — 푼 문제 제외 후에도 PER_BAND를 채울 여유분
+CACHE_TTL_SEC = 24 * 3600  # 대표 문제 목록은 하루면 충분
 
-# 난이도 밴드(점수 기준) — 각 밴드에서 1문제씩 뽑아 쉬움→어려움 사다리를 구성한다.
-_DIFFICULTY_BANDS = [
-    (CF_RATING_MIN, 1199),   # 입문
-    (1200, 1699),            # 중급
-    (1700, CF_RATING_MAX),   # 고급
-]
+# 난이도 밴드 (쉬움/보통/어려움) — 밴드별 최다 풀이 순 상위를 뽑는다.
+BOJ_BANDS = [(3, 8), (9, 13), (14, 18)]           # B3~S3 / S2~G3 / G2~P3
+CF_BANDS = [(800, 1199), (1200, 1699), (1700, 2400)]
 
 
-def cf_rating_to_tier(rating: int | None) -> int:
-    """CF 레이팅을 백준식 티어(1~30)로 매핑한다. rating 없으면 0(Unrated)."""
-    if not rating:
-        return 0
-    tier = round((rating - CF_RATING_MIN) / _TIER_STEP) + _TIER_BASE
-    return max(1, min(30, tier))
+def get_theme_list() -> list[dict]:
+    return [{"id": t["id"], "label": t["label"]} for t in THEMES]
 
 
-def _pick_difficulty_ladder(pool: list[dict], n: int = PROBLEMS_PER_THEME) -> list[dict]:
-    """레이팅 밴드별로 가장 많이 풀린 문제를 1개씩 뽑아 난이도 사다리를 만든다.
-    pool 은 solved_count 내림차순으로 정렬되어 있다고 가정한다."""
-    seen: set = set()
-    picked: list[dict] = []
-
-    for lo, hi in _DIFFICULTY_BANDS:
-        for p in pool:
-            rating = p.get("rating") or 0
-            if p["id"] not in seen and lo <= rating <= hi:
-                picked.append(p)
-                seen.add(p["id"])
-                break
-
-    # 빈 밴드로 n개에 못 미치면 남은 인기 문제로 채운다.
-    if len(picked) < n:
-        for p in pool:
-            if p["id"] not in seen:
-                picked.append(p)
-                seen.add(p["id"])
-                if len(picked) >= n:
-                    break
-
-    picked.sort(key=lambda p: p.get("rating") or 0)
-    return picked[:n]
+def find_theme(theme_id: str) -> dict | None:
+    return next((t for t in THEMES if t["id"] == theme_id), None)
 
 
-def get_theme_problems() -> list[dict]:
-    """각 테마 태그에서 난이도 밴드별 대표 문제를 뽑고, CF 레이팅을 티어로 매핑해 반환한다."""
-    results = []
-    for theme in THEMES:
-        pool = search_cf_problems_by_tag(
-            theme["tag"], CF_RATING_MIN, CF_RATING_MAX, exclude_refs=set(),
-        )
-        problems = _pick_difficulty_ladder(pool)
-        for p in problems:
-            tier = cf_rating_to_tier(p.get("rating"))
-            p["tier"] = tier
-            p["tier_name"] = TIER_NAMES.get(tier, "Unrated")
-            # 프론트가 쓰지 않는 필드 제거 — 문제는 data-ref로 인앱 뷰어를 연다.
-            p.pop("rating", None)
-            p.pop("url", None)
-        results.append({
-            "label": theme["label"],
-            "tag": theme["tag"],
-            "problems": problems,
-        })
-    return results
+def _fetch_boj_pool(boj_tag: str) -> list[list[dict]]:
+    """밴드당 solved.ac 검색 1회(최다 풀이순) — 상위 POOL_PER_BAND개씩."""
+    bands = []
+    for lo, hi in BOJ_BANDS:
+        found = search_problems_by_tag(boj_tag, lo, hi, exclude_ids=set())
+        bands.append(found[:POOL_PER_BAND])
+    return bands
+
+
+def _fetch_cf_pool(cf_tag: str) -> list[list[dict]]:
+    """CF 스냅샷 검색 1회(최다 풀이순) 후 레이팅 밴드로 버킷팅."""
+    pool = search_cf_problems_by_tag(
+        cf_tag, CF_BANDS[0][0], CF_BANDS[-1][1], exclude_refs=set(),
+    )
+    bands = []
+    for lo, hi in CF_BANDS:
+        in_band = [
+            {"id": p["id"], "title": p["title"], "rating": p["rating"]}
+            for p in pool
+            if lo <= p["rating"] <= hi
+        ]
+        bands.append(in_band[:POOL_PER_BAND])
+    return bands
+
+
+def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | None:
+    """플랫폼·테마별 문제 풀(밴드 리스트). DB 캐시 우선, 외부 API 실패 시 만료 캐시 폴백.
+    풀은 푼 문제 제외 '전' 원본이라 사용자 상태와 무관하게 캐시가 안정적이다."""
+    key = f"themes:{platform}:{theme['id']}"
+    cached = db.cache_get(key, CACHE_TTL_SEC)
+    if cached is not None:
+        return cached
+
+    if platform == "boj":
+        bands = _fetch_boj_pool(theme["boj_tag"])
+    else:
+        bands = _fetch_cf_pool(theme["cf_tag"])
+
+    if any(bands):
+        # 성공 결과만 저장 — 일시적 실패([[], [], []])가 기존 캐시를 덮지 않게 한다.
+        db.cache_set(key, bands)
+        return bands
+
+    return db.cache_get_stale(key)
+
+
+def build_theme_response(platform: str, theme: dict) -> dict:
+    """풀에서 푼 문제를 제외하고 밴드당 PER_BAND개씩, 난이도 오름차순으로 응답을 만든다."""
+    resp = {"theme": {"id": theme["id"], "label": theme["label"]}, "platform": platform}
+
+    bands = get_theme_problem_pool(platform, theme)
+    if bands is None:
+        resp["problems"] = []
+        resp["error"] = "문제 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+        return resp
+
+    if platform == "boj":
+        solved = db.get_solved_problem_ids()
+        diff_field = "tier"
+    else:
+        solved = db.get_solved_cf_refs()
+        diff_field = "rating"
+
+    problems = []
+    for band in bands:
+        problems.extend([p for p in band if p["id"] not in solved][:PER_BAND])
+    problems.sort(key=lambda p: p[diff_field])
+
+    resp["problems"] = problems
+    return resp
