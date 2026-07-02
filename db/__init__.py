@@ -32,6 +32,11 @@ from db.github_settings import (
     update_github_target_repo,
     delete_github_settings,
 )
+from db.cache import (
+    cache_get,
+    cache_get_stale,
+    cache_set,
+)
 
 __all__ = [
     "get_connection", "USE_POSTGRES", "init_db",
@@ -45,4 +50,5 @@ __all__ = [
     "get_solved_cf_refs", "get_solved_problem_ids", "get_solved_problem_keys",
     "get_github_settings", "save_github_settings",
     "update_github_target_repo", "delete_github_settings",
+    "cache_get", "cache_get_stale", "cache_set",
 ]

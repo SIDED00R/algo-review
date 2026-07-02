@@ -117,6 +117,15 @@ def init_db():
         )
     """)
 
+    # 외부 API 파생 페이로드 캐시 (테마 문제 풀 등) — TTL은 읽기 시점에 판정 (db/cache.py)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS api_cache (
+            cache_key   TEXT PRIMARY KEY,
+            payload     TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        )
+    """)
+
     # 자주 쓰이는 필터/정렬 컬럼 인덱스 — IF NOT EXISTS로 중복 실행 안전
     for ddl in [
         "CREATE INDEX IF NOT EXISTS idx_reviews_platform        ON reviews (platform)",
