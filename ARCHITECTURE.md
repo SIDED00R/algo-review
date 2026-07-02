@@ -23,18 +23,24 @@
 │  analyzer.py    │             │  solved_ac · codeforces           │
 │  recommender.py │             │  github · utils                   │
 │ cf_translator.py│             └──────────────┬────────────────────┘
+│  themes.py      │                            │
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
 │  DB Layer (db/)              │       │  External APIs                   │
 │  connection · schema         │       │  solved.ac · Codeforces          │
 │  reviews · solved            │       │  GitHub · OpenAI                 │
-│  github_settings             │       └──────────────────────────────────┘
+│  github_settings · cache     │       └──────────────────────────────────┘
 └────────┬────────────────────┘
          │
 ┌────────▼──────────────────────┐
 │  SQLite / PostgreSQL          │
 └───────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  warmup.py — server.py lifespan 기동 시 백그라운드 태스크로 실행     │
+│  themes.py.get_theme_problem_pool() 를 플랫폼×테마 전수 호출해 예열 │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -44,15 +50,16 @@
 ### 서버 진입점
 | 파일 | 단일 책임 |
 |------|----------|
-| `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록 |
+| `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB init/데모 시드 + 테마 캐시 예열 기동 |
 | `main.py` | CLI 인터페이스 (코드 리뷰, 추천, 통계) |
+| `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 
 ### 서비스 레이어
 | 파일 | 단일 책임 |
 |------|----------|
 | `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
-| `themes.py` | 테마(알고리즘 분야)별 CF 대표 문제 조회 + CF 레이팅→백준식 티어 매핑 |
+| `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
 | `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
 
 ### DB 레이어 (`db/`)
@@ -63,6 +70,7 @@
 | `db/reviews.py` | reviews 테이블 CRUD + 티어/태그 집계 쿼리 |
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
+| `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
 | `db/__init__.py` | 모든 public 함수 re-export (하위 호환) |
 
 ### 외부 클라이언트 레이어 (`clients/`)
@@ -83,7 +91,7 @@
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
-| `routes/themes.py` | `GET /api/themes` | 테마별 대표 문제 조회 + TTL 캐시 |
+| `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
 | `routes/history.py` | `GET /api/reviews/*` | 리뷰 기록 조회 |
 | `routes/solved.py` | `/api/solved-history/*`, `POST /api/review-imported/*` | 가져온 기록 관리 + AI 리뷰 요청 |
 | `routes/stats.py` | `GET /api/stats`, `GET /api/tier-history` | 통계 및 티어 이력 조회 |
@@ -98,14 +106,14 @@
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `utils.js` | 공통 순수 함수 (tierClass, escapeHtml, detectLanguage 등) |
+| `utils.js` | 공통 순수 함수 (tierClass, cfRatingClass, escapeHtml, detectLanguage 등) |
 | `editor.js` | CodeMirror 에디터 초기화 및 관리 |
 | `theme.js` | 다크/라이트 테마 토글 |
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
-| `themes.js` | 테마별 대표 문제 표시 (지연 로드) |
+| `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
 | `problem-modal.js` | CF 문제 모달 (조회, 샘플 실행, 리뷰 이동) |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프 |
@@ -122,7 +130,9 @@
 
 | Caller | Callee | 목적 |
 |--------|--------|------|
-| `server.py` | `db.init_db` | 서버 시작 시 스키마 마이그레이션 |
+| `server.py` | `db.init_db` | lifespan 기동 시 스키마 마이그레이션 (데모는 `demo_seed.seed` 대신 실행) |
+| `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
+| `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
 | `routes/review.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
 | `routes/review.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
@@ -137,7 +147,10 @@
 | `routes/import_boj.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
 | `routes/import_codeforces.py` | `clients.get_codeforces_user_submissions` | CF 제출 기록 조회 |
-| `themes.py` | `clients.search_cf_problems_by_tag` | 테마(CF 태그)별 대표 문제 조회 |
+| `routes/themes.py` | `themes.build_theme_response` | 플랫폼별 테마 문제 풀에서 푼 문제 제외 후 응답 생성 |
+| `themes.py` | `clients.search_cf_problems_by_tag` | 테마(CF 태그)별 대표 문제 풀 조회 |
+| `themes.py` | `clients.search_problems_by_tag` | 테마(solved.ac 태그)별 대표 문제 풀 조회 |
+| `themes.py` | `db.cache_get` / `db.cache_set` / `db.cache_get_stale` | 테마 문제 풀 DB 캐시 조회/저장, 외부 API 실패 시 만료 캐시 폴백 |
 | `recommender.py` | `db.get_tag_weakness_data` | 태그 취약점 점수 데이터 조회 |
 | `recommender.py` | `clients.search_problems_by_tag` | solved.ac 태그 검색 |
 | `routes/auth.py` | `clients.exchange_github_code` | GitHub OAuth 토큰 교환 |
@@ -146,7 +159,8 @@
 | `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
 | `recommend.js` | `GET /api/recommend` | 문제 추천 요청 |
-| `themes.js` | `GET /api/themes` | 테마별 대표 문제 요청 |
+| `themes.js` | `GET /api/themes` | 테마 목록 요청 (localStorage 24h 캐시) |
+| `themes.js` | `GET /api/themes/{theme_id}/problems` | 플랫폼별 테마 문제 요청 (메모리/localStorage 30분 캐시) |
 | `import-history.js` | `GET /api/solved-history` | 가져온 기록 목록 조회 |
 
 ---
