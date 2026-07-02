@@ -130,44 +130,67 @@ DEMO_RECOMMENDATIONS = {
     "platform": "codeforces",
 }
 
-def _demo_cf_theme(label, tag, problems):
-    from themes import cf_rating_to_tier
-    from clients import TIER_NAMES
-    items = []
-    for ref, title, rating in problems:
-        tier = cf_rating_to_tier(rating)
-        items.append({
-            "id": ref,
-            "title": title,
-            "tier": tier,
-            "tier_name": TIER_NAMES.get(tier, "Unrated"),
-        })
-    return {"label": label, "tag": tag, "problems": items}
-
-
-# 각 테마는 입문→중급→고급 레이팅 사다리로 구성 (CF 레이팅 → 백준식 티어 매핑)
-DEMO_THEMES = [
-    _demo_cf_theme("다이나믹 프로그래밍", "dp", [
-        ("189A", "Cut Ribbon", 1300),
-        ("455A", "Boredom", 1500),
-        ("1195C", "Basketball Exercise", 1600),
-    ]),
-    _demo_cf_theme("그리디 알고리즘", "greedy", [
-        ("1352B", "Same Parity Summands", 1100),
-        ("1256B", "Minimize the Permutation", 1400),
-        ("1443C", "The Delivery Dilemma", 1500),
-    ]),
-    _demo_cf_theme("그래프 이론", "graphs", [
-        ("902B", "Coloring a Tree", 1100),
-        ("977E", "Cyclic Components", 1500),
-        ("20C", "Dijkstra?", 1900),
-    ]),
-    _demo_cf_theme("자료 구조", "data structures", [
-        ("1279B", "Verse For Santa", 1200),
-        ("91B", "Queue", 1500),
-        ("6E", "Exposition", 1900),
-    ]),
+# 테마 데모 데이터 — 테마당 실측 대표 문제 3개(쉬움→어려움 사다리), 플랫폼 네이티브 난이도.
+DEMO_THEME_LIST = [
+    {"id": "dp", "label": "다이나믹 프로그래밍"},
+    {"id": "greedy", "label": "그리디 알고리즘"},
+    {"id": "graphs", "label": "그래프 이론"},
+    {"id": "data-structures", "label": "자료 구조"},
 ]
+
+_DEMO_THEME_LABELS = {t["id"]: t["label"] for t in DEMO_THEME_LIST}
+
+
+def _demo_theme_response(platform: str, theme_id: str, problems: list[dict]) -> dict:
+    return {
+        "theme": {"id": theme_id, "label": _DEMO_THEME_LABELS[theme_id]},
+        "platform": platform,
+        "problems": problems,
+    }
+
+
+DEMO_THEME_PROBLEMS = {
+    ("codeforces", "dp"): _demo_theme_response("codeforces", "dp", [
+        {"id": "996A", "title": "Hit the Lottery", "rating": 800},
+        {"id": "189A", "title": "Cut Ribbon", "rating": 1300},
+        {"id": "466C", "title": "Number of Ways", "rating": 1700},
+    ]),
+    ("codeforces", "greedy"): _demo_theme_response("codeforces", "greedy", [
+        {"id": "231A", "title": "Team", "rating": 800},
+        {"id": "514A", "title": "Chewbacca and Number", "rating": 1200},
+        {"id": "1365D", "title": "Solve The Maze", "rating": 1700},
+    ]),
+    ("codeforces", "graphs"): _demo_theme_response("codeforces", "graphs", [
+        {"id": "500A", "title": "New Year Transportation", "rating": 1000},
+        {"id": "520B", "title": "Two Buttons", "rating": 1400},
+        {"id": "20C", "title": "Dijkstra?", "rating": 1900},
+    ]),
+    ("codeforces", "data-structures"): _demo_theme_response("codeforces", "data-structures", [
+        {"id": "1703B", "title": "ICPC Balloons", "rating": 800},
+        {"id": "4C", "title": "Registration System", "rating": 1300},
+        {"id": "466C", "title": "Number of Ways", "rating": 1700},
+    ]),
+    ("boj", "dp"): _demo_theme_response("boj", "dp", [
+        {"id": 2839, "title": "설탕 배달", "tier": 7, "tier_name": "Silver IV"},
+        {"id": 1149, "title": "RGB거리", "tier": 10, "tier_name": "Silver I"},
+        {"id": 2098, "title": "외판원 순회", "tier": 15, "tier_name": "Gold I"},
+    ]),
+    ("boj", "greedy"): _demo_theme_response("boj", "greedy", [
+        {"id": 2839, "title": "설탕 배달", "tier": 7, "tier_name": "Silver IV"},
+        {"id": 1931, "title": "회의실 배정", "tier": 11, "tier_name": "Gold V"},
+        {"id": 1202, "title": "보석 도둑", "tier": 14, "tier_name": "Gold II"},
+    ]),
+    ("boj", "graphs"): _demo_theme_response("boj", "graphs", [
+        {"id": 2606, "title": "바이러스", "tier": 8, "tier_name": "Silver III"},
+        {"id": 1260, "title": "DFS와 BFS", "tier": 9, "tier_name": "Silver II"},
+        {"id": 13460, "title": "구슬 탈출 2", "tier": 15, "tier_name": "Gold I"},
+    ]),
+    ("boj", "data-structures"): _demo_theme_response("boj", "data-structures", [
+        {"id": 9012, "title": "괄호", "tier": 7, "tier_name": "Silver IV"},
+        {"id": 1874, "title": "스택 수열", "tier": 9, "tier_name": "Silver II"},
+        {"id": 1655, "title": "가운데를 말해요", "tier": 14, "tier_name": "Gold II"},
+    ]),
+}
 
 DEMO_GITHUB_STATUS = {
     "connected": True,
