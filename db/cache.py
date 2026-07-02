@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from db.connection import USE_POSTGRES, _ph, db_cursor
 
 # 외부 API 파생 페이로드의 DB 캐시 — Cloud Run 콜드 스타트에도 살아남는다.
@@ -19,7 +19,8 @@ def cache_get(key: str, max_age_sec: int):
     if not row:
         return None
     payload, updated_at = row[0], row[1]
-    age = (datetime.now() - datetime.fromisoformat(updated_at)).total_seconds()
+    # 인스턴스 간 TZ 차이가 만료 판정을 흔들지 않게 UTC aware 로 통일한다.
+    age = (datetime.now(timezone.utc) - datetime.fromisoformat(updated_at)).total_seconds()
     if age > max_age_sec:
         return None
     return json.loads(payload)
@@ -35,7 +36,7 @@ def cache_set(key: str, payload) -> None:
     """JSON 직렬화 가능한 페이로드를 upsert한다."""
     p = _ph()
     data = json.dumps(payload, ensure_ascii=False)
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     with db_cursor(commit=True) as cur:
         if USE_POSTGRES:
             cur.execute(f"""

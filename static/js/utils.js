@@ -68,7 +68,7 @@ function setLoading(btn, loading) {
 }
 
 function showError(container, msg) {
-  container.innerHTML = `<div class="alert alert-error">❌ ${msg}</div>`;
+  container.innerHTML = `<div class="alert alert-error">❌ ${escapeHtml(msg)}</div>`;
   container.classList.remove('hidden');
 }
 
