@@ -12,7 +12,7 @@ def _normalize_cf_math(text: str) -> str:
 
 
 def translate_cf_text(text: str, title: str) -> str:
-    """번역 성공 시 번역문 반환. 실패 시 예외를 그대로 전파 (캐시 오염 방지)."""
+    """번역 성공 시 번역문, 응답이 비어 있으면 원문을 그대로 반환. API 예외는 전파 (캐시 오염 방지)."""
     text = _normalize_cf_math(text)
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
     resp = client.chat.completions.create(

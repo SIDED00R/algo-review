@@ -1,5 +1,5 @@
 // 커스텀 레이팅 공식:
-//   base   = avg(top 20% tiers) × 60           max 1800
+//   base   = avg(top 20% tiers) × 60           (티어 상한 30 → 사실상 최대 1800, 별도 캡 없음)
 //   volume = round(400 × (1 − 0.99^N))         max  400  (N≈460 수렴)
 //   trend  = (avg of last 10 tiers − avg_top20) × 8  ±200
 //   rating = base + volume + trend

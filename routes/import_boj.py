@@ -12,11 +12,9 @@ router = APIRouter()
 def import_history(req: ImportRequest):
     if IS_DEMO:
         demo_block("BOJ 가져오기는 데모 버전에서 지원되지 않습니다.")
-    if not req.boj_id.strip():
-        raise HTTPException(status_code=400, detail="BOJ 아이디를 입력하세요.")
 
     try:
-        submissions = api_client.get_user_submissions(req.boj_id.strip(), req.max_pages)
+        submissions = api_client.get_user_submissions(req.boj_id, req.max_pages)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"제출 기록 크롤링 실패: {e}")
 

@@ -127,7 +127,6 @@ DEMO_RECOMMENDATIONS = {
             ],
         },
     ],
-    "platform": "codeforces",
 }
 
 # 테마 데모 데이터 — 테마당 실측 대표 문제 3개(쉬움→어려움 사다리), 플랫폼 네이티브 난이도.

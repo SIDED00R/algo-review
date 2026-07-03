@@ -174,7 +174,6 @@ def get_baekjoonhub_problems(repo: str, token: str | None = None) -> list[dict]:
             problems[problem_id] = {
                 "problem_id": problem_id,
                 "path": path,
-                "sha": item["sha"],
                 "language": _ext_to_language(filename),
             }
 

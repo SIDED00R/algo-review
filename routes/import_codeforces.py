@@ -14,9 +14,7 @@ router = APIRouter()
 def import_codeforces_history(req: CodeforcesImportRequest):
     if IS_DEMO:
         demo_block("Codeforces 가져오기는 데모 버전에서 지원되지 않습니다.")
-    handle = req.handle.strip()
-    if not handle:
-        raise HTTPException(status_code=400, detail="Codeforces handle을 입력하세요.")
+    handle = req.handle
 
     api_key = (req.api_key or os.environ.get("CODEFORCES_API_KEY") or "").strip() or None
     api_secret = (req.api_secret or os.environ.get("CODEFORCES_API_SECRET") or "").strip() or None
@@ -28,7 +26,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
         time.sleep(2.1)
         submissions = api_client.get_codeforces_user_submissions(
             handle,
-            count=max(1, min(req.count, 1000)),
+            count=req.count,
             api_key=api_key,
             api_secret=api_secret,
         )

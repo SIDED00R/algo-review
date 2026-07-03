@@ -53,12 +53,6 @@ def review_imported(platform: str, problem_ref: str):
     return response
 
 
-@router.delete("/api/solved-history/{platform}/{problem_ref}")
-def delete_solved_history(platform: str, problem_ref: str):
-    db.delete_solved_problem(platform, problem_ref)
-    return {"ok": True}
-
-
 @router.delete("/api/solved-history")
 def clear_solved_history():
     db.clear_solved_history()

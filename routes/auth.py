@@ -139,11 +139,8 @@ def github_status():
 def set_github_repo(req: SetRepoRequest):
     if not db.get_github_settings():
         raise HTTPException(status_code=400, detail="GitHub 연결 먼저 해주세요.")
-    repo = req.repo.strip()
-    if not repo or "/" not in repo:
-        raise HTTPException(status_code=400, detail="저장소를 owner/repo 형식으로 입력하세요.")
-    db.update_github_target_repo(repo)
-    return {"ok": True, "target_repo": repo}
+    db.update_github_target_repo(req.repo)
+    return {"ok": True, "target_repo": req.repo}
 
 
 @router.delete("/auth/github")

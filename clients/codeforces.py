@@ -73,7 +73,8 @@ def cf_xpath_text(tree, expr: str) -> str:
     if not nodes:
         return ""
     el = nodes[0]
-    # script/noscript/style 텍스트는 MathJax 마크업이라 itertext()에 포함되면 수식 중복 발생
+    # script/noscript/style 텍스트는 MathJax 마크업이라 itertext()에 포함되면 수식 중복 발생.
+    # section-title은 "Input"/"Output" 같은 섹션 제목이 본문 텍스트에 섞여 중복되는 것을 막기 위해 제거.
     for unwanted in el.xpath(
         './/*[self::script or self::noscript or self::style'
         ' or contains(@class,"section-title")]'

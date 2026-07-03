@@ -123,20 +123,6 @@ def get_cf_tag_stats() -> list:
     return sorted(counts.values(), key=lambda x: x["total_count"], reverse=True)
 
 
-def get_weak_tags(top_n: int = 5) -> list:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"""
-            SELECT tag, poor_count * 1.0 / total_count AS poor_ratio, total_count
-            FROM tag_stats
-            WHERE total_count >= 1
-            ORDER BY poor_ratio DESC, total_count DESC
-            LIMIT {p}
-        """, (top_n,))
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    return [r["tag"] for r in rows]
-
-
 _AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
 
 
@@ -270,20 +256,6 @@ def get_review_history(limit: int = 10, platform: str | None = None) -> list:
     return rows
 
 
-def get_review_detail(review_id: int) -> dict | None:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"""
-            SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, code,
-                   feedback, efficiency, complexity, better_algorithm, strengths, weaknesses, created_at
-            FROM reviews WHERE id = {p}
-        """, (review_id,))
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    if not rows:
-        return None
-    return _normalize_review_row(rows[0])
-
-
 def get_average_cf_rating() -> float:
     p = _ph()
     with db_cursor() as cur:
@@ -336,7 +308,7 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
             cur.execute("SELECT tags, imported_at FROM solved_history")
             solved_rows = _rows_to_dicts(cur, cur.fetchall())
 
-        # tag_stats는 BOJ 전용. CF(또는 플랫폼 지정 시)는 reviews에서 직접 poor_ratio 계산.
+        # tag_stats는 BOJ 전용 — boj가 아닌 플랫폼 지정 시에만 제외하고, 미지정/boj면 그대로 사용한다.
         if platform and platform != "boj":
             stat_rows = []
         else:

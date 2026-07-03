@@ -6,7 +6,7 @@
   <title>Algo Review</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
-  <link rel="stylesheet" href="/static/style.css?v=20260702" />
+  <link rel="stylesheet" href="/static/style.css?v=20260703" />
   <!-- CodeMirror 5 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
@@ -80,7 +80,7 @@
         </div>
 
         <div class="form-row">
-          <label id="problem-id-label">문제 번호</label>
+          <label>문제 번호</label>
           <input id="problem-id" type="text" placeholder="예) 1000" />
           <p id="problem-id-help" class="desc" style="font-size:.8rem;margin-top:6px;color:var(--text-muted)">
             백준: 숫자만 입력하세요. 예) 1000
@@ -146,8 +146,8 @@
         <h2>테마별 문제</h2>
         <p class="desc">알고리즘 분야별 대표 문제를 사이트별 난이도로 보여줍니다. 이미 푼 문제는 제외됩니다. Codeforces 문제는 클릭하면 인앱 뷰어로 열립니다.</p>
         <div class="platform-toggle" style="margin-bottom:14px">
-          <button id="themes-platform-cf" class="btn-toggle active" data-themes-platform="codeforces">Codeforces</button>
-          <button id="themes-platform-boj" class="btn-toggle" data-themes-platform="boj">백준</button>
+          <button class="btn-toggle active" data-themes-platform="codeforces">Codeforces</button>
+          <button class="btn-toggle" data-themes-platform="boj">백준</button>
         </div>
         <div id="themes-chips" class="theme-chips"></div>
       </div>
@@ -158,20 +158,20 @@
     <section id="tab-stats" class="tab-content hidden">
       <div class="card">
         <h2>레이팅 변화 그래프</h2>
-        <p class="desc">상위 20% 문제 평균 난이도 기반 레이팅입니다. 풀이량이 보조 지표로 가산됩니다.</p>
+        <p class="desc">백준 리뷰 기준 — 상위 20% 문제 평균 난이도 기반 레이팅입니다. 풀이량이 보조 지표로 가산됩니다.</p>
         <div style="position:relative;height:280px">
           <canvas id="tier-chart"></canvas>
         </div>
         <div id="tier-chart-empty" class="hidden" style="text-align:center;color:var(--text-muted);padding:40px 0">
-          AI 리뷰 기록이 없습니다. 코드 리뷰를 진행하면 그래프가 표시됩니다.
+          백준 AI 리뷰 기록이 없습니다. 백준 문제 코드 리뷰를 진행하면 그래프가 표시됩니다.
         </div>
       </div>
       <div class="card">
         <h2>풀이 통계</h2>
         <p class="desc">태그별 강점 / 취약점 누적 현황입니다.</p>
         <div class="platform-toggle" style="margin-bottom:14px">
-          <button id="stats-platform-boj" class="btn-toggle active" data-platform="boj">백준</button>
-          <button id="stats-platform-cf" class="btn-toggle" data-platform="codeforces">Codeforces</button>
+          <button class="btn-toggle active" data-platform="boj">백준</button>
+          <button class="btn-toggle" data-platform="codeforces">Codeforces</button>
         </div>
         <button id="stats-btn" class="btn-primary">통계 불러오기</button>
       </div>
@@ -408,15 +408,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
 
   <!-- 에디터 초기화 (CodeMirror 의존) -->
-  <script src="/static/js/editor.js?v=20260511"></script>
+  <script src="/static/js/editor.js?v=20260703"></script>
   <!-- 공통 유틸 (다른 모듈보다 먼저 로드) -->
   <script src="/static/js/utils.js?v=20260702"></script>
   <!-- 기능별 모듈 -->
   <script src="/static/js/theme.js?v=20260430"></script>
   <script src="/static/js/github.js?v=20260607"></script>
-  <script src="/static/js/tier-chart.js?v=20260430"></script>
+  <script src="/static/js/tier-chart.js?v=20260703"></script>
   <script src="/static/js/tabs.js?v=20260701"></script>
-  <script src="/static/js/review.js?v=20260430"></script>
+  <script src="/static/js/review.js?v=20260703"></script>
   <script src="/static/js/recommend.js?v=20260511"></script>
   <script src="/static/js/themes.js?v=20260702"></script>
   <script src="/static/js/problem-modal.js?v=20260607"></script>
