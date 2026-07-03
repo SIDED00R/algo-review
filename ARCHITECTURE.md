@@ -70,7 +70,7 @@
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
-| `db/__init__.py` | 모든 public 함수 re-export (하위 호환) |
+| `db/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
 ### 외부 클라이언트 레이어 (`clients/`)
 | 파일 | 단일 책임 |
@@ -79,7 +79,7 @@
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑 |
-| `clients/__init__.py` | 모든 public 함수 re-export (하위 호환) |
+| `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
 ### API 라우터 (`routes/`)
 | 파일 | 엔드포인트 | 단일 책임 |
