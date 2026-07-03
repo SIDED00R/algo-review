@@ -1,16 +1,13 @@
 const platformSelect = document.getElementById('problem-platform');
 const problemIdInput = document.getElementById('problem-id');
-const problemIdLabel = document.getElementById('problem-id-label');
 const problemIdHelp = document.getElementById('problem-id-help');
 
 function syncProblemInputUI() {
   const platform = platformSelect?.value || 'boj';
   if (platform === 'codeforces') {
-    problemIdLabel.textContent = '문제 번호';
     problemIdInput.placeholder = '예) 4A 또는 4/A';
     problemIdHelp.textContent = 'Codeforces: contestId + index 형식으로 입력하세요. 예) 4A, 4/A';
   } else {
-    problemIdLabel.textContent = '문제 번호';
     problemIdInput.placeholder = '예) 1000';
     problemIdHelp.textContent = '백준: 숫자만 입력하세요. 예) 1000';
   }

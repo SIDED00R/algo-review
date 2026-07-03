@@ -68,7 +68,7 @@ OPENAI_API_KEY=your_openai_key
 # 선택: GitHub OAuth (리뷰 → GitHub push 기능)
 GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
-APP_URL=http://localhost:8000
+APP_URL=http://localhost:8080
 
 # 선택: Codeforces 소스 코드 import
 CODEFORCES_API_KEY=your_codeforces_key
@@ -90,10 +90,10 @@ CODEFORCES_API_SECRET=your_codeforces_secret
 ### 4. 실행
 
 ```bash
-python -m uvicorn server:app --reload
+python -m uvicorn server:app --reload --port 8080
 ```
 
-브라우저에서 `http://localhost:8000` 접속
+브라우저에서 `http://localhost:8080` 접속 (CORS 기본 허용 출처·컨테이너 포트와 동일한 8080 사용)
 
 ## Codeforces 관련 주의사항
 
@@ -165,7 +165,6 @@ gcloud run deploy algo-review-demo \
 ```
 .
 ├── server.py               # FastAPI 앱 초기화, 미들웨어·라우터 등록
-├── main.py                 # CLI 인터페이스 (코드 리뷰, 추천, 통계)
 ├── analyzer.py             # OpenAI GPT 코드 분석
 ├── recommender.py          # 취약 태그 기반 문제 추천 알고리즘
 ├── themes.py               # 테마별 대표 문제 풀 조회 (플랫폼별 네이티브 난이도) + DB 캐시
@@ -174,6 +173,10 @@ gcloud run deploy algo-review-demo \
 ├── demo_seed.py            # 데모용 SQLite 샘플 데이터 시딩
 ├── warmup.py               # 기동 직후 테마 캐시 백그라운드 예열
 ├── ARCHITECTURE.md         # 레이어 다이어그램 & 호출관계 문서
+├── requirements.txt        # Python 의존성
+├── Dockerfile              # Cloud Run 컨테이너 이미지 (uvicorn, 8080 포트)
+├── .dockerignore
+├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo)
 │
 ├── clients/                # 외부 API 클라이언트 (각 파일이 하나의 플랫폼 담당)
 │   ├── solved_ac.py        # solved.ac API, BOJ 스크래핑, TIER_NAMES 상수
@@ -237,7 +240,7 @@ gcloud run deploy algo-review-demo \
 
 - **Backend**: FastAPI + Uvicorn
 - **Frontend**: HTML / CSS / Vanilla JS
-- **AI**: OpenAI API (GPT-4o)
+- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, CF 문제 번역: GPT-4o-mini)
 - **BOJ 데이터**: solved.ac API
 - **Codeforces 데이터**: Codeforces API + 크롤링
 - **DB**: SQLite (로컬 / 데모) / PostgreSQL (배포)
@@ -247,16 +250,22 @@ gcloud run deploy algo-review-demo \
 
 | 변수 | 필수 | 설명 |
 |------|------|------|
-| `OPENAI_API_KEY` | ✅ | GPT-4o 코드 리뷰 및 번역 |
+| `OPENAI_API_KEY` | ✅ | AI 코드 리뷰·리포트 및 CF 문제 번역 |
 | `GITHUB_CLIENT_ID` | 선택 | GitHub OAuth 앱 Client ID |
 | `GITHUB_CLIENT_SECRET` | 선택 | GitHub OAuth 앱 Client Secret |
 | `APP_URL` | 선택 | 서버 공개 URL (OAuth redirect 용) |
 | `CODEFORCES_API_KEY` | 선택 | CF 소스코드 import용 |
 | `CODEFORCES_API_SECRET` | 선택 | CF 소스코드 import용 |
-| `OPENAI_MODEL` | 선택 | 사용할 OpenAI 모델 (기본값: `gpt-4o`) |
+| `OPENAI_MODEL` | 선택 | 사용할 OpenAI 모델 — 미설정 시 리뷰·리포트 `gpt-4o`, 번역 `gpt-4o-mini`. 설정하면 리뷰·번역 모두 이 값으로 대체 |
+| `OPENAI_MAX_TOKENS` | 선택 | 리뷰·번역 응답 최대 토큰 (기본값: 리뷰 `2048`, 번역 `2000`) |
+| `OPENAI_REPORT_MAX_TOKENS` | 선택 | 종합 리포트 응답 최대 토큰 (기본값: `1024`) |
+| `OPENAI_TEMPERATURE` | 선택 | CF 번역 temperature (기본값: `0.3`) |
+| `OPENAI_TIMEOUT` | 선택 | CF 번역 API 타임아웃(초) (기본값: `15`) |
+| `COMPILE_TIMEOUT` | 선택 | `/api/execute` C++ 컴파일 타임아웃(초) (기본값: `30`) |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |
 | `DB_TYPE` | 선택 | `postgres` 설정 시 PostgreSQL 사용 (기본: SQLite) |
+| `DB_PATH` | 선택 | SQLite 파일 경로 (기본값: 프로젝트 루트 `coding_recommend.db`) |
 | `DB_NAME` | 선택 | PostgreSQL DB 이름 |
 | `DB_USER` | 선택 | PostgreSQL 사용자 |
 | `DB_PASSWORD` | 선택 | PostgreSQL 비밀번호 |

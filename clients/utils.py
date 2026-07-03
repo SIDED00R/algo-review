@@ -21,13 +21,13 @@ def _get_file_extension(language: str) -> str:
         return ".kt"
     if "rust" in lang:
         return ".rs"
-    if "go" in lang or lang == "go":
+    if "go" in lang:
         return ".go"
     if "ruby" in lang:
         return ".rb"
     if "c#" in lang or "csharp" in lang:
         return ".cs"
-    if lang.startswith("c ") or lang == "c" or "gnu c" in lang and "c++" not in lang:
+    if lang.startswith("c ") or lang == "c" or "gnu c" in lang:
         return ".c"
     if "php" in lang:
         return ".php"

@@ -51,7 +51,6 @@
 | 파일 | 단일 책임 |
 |------|----------|
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB init/데모 시드 + 테마 캐시 예열 기동 |
-| `main.py` | CLI 인터페이스 (코드 리뷰, 추천, 통계) |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 
 ### 서비스 레이어
@@ -92,7 +91,7 @@
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
-| `routes/history.py` | `GET /api/reviews/*` | 리뷰 기록 조회 |
+| `routes/history.py` | `GET /api/reviews/grouped`, `GET /api/reviews/problem/{platform}/{ref}` | 리뷰 기록 조회 |
 | `routes/solved.py` | `/api/solved-history/*`, `POST /api/review-imported/*` | 가져온 기록 관리 + AI 리뷰 요청 |
 | `routes/stats.py` | `GET /api/stats`, `GET /api/tier-history` | 통계 및 티어 이력 조회 |
 | `routes/report.py` | `GET /api/report` | 종합 분석 리포트 생성 |
@@ -181,14 +180,20 @@
 
 | 변수 | 필수 | 설명 |
 |------|------|------|
-| `OPENAI_API_KEY` | ✅ | GPT-4o 코드 리뷰 및 번역 |
+| `OPENAI_API_KEY` | ✅ | AI 코드 리뷰·리포트 및 CF 문제 번역 |
 | `GITHUB_CLIENT_ID` | — | GitHub OAuth 앱 Client ID |
 | `GITHUB_CLIENT_SECRET` | — | GitHub OAuth 앱 Client Secret |
 | `APP_URL` | — | 서버 공개 URL (OAuth redirect 용, 예: `https://myapp.run.app`) |
 | `CODEFORCES_API_KEY` | — | CF API 서명 (소스코드 가져오기용) |
 | `CODEFORCES_API_SECRET` | — | CF API 서명 |
-| `OPENAI_MODEL` | — | 사용할 OpenAI 모델 (기본값: `gpt-4o`) |
+| `OPENAI_MODEL` | — | 사용할 OpenAI 모델 — 미설정 시 리뷰·리포트 `gpt-4o`, 번역 `gpt-4o-mini`. 설정하면 둘 다 이 값으로 대체 |
+| `OPENAI_MAX_TOKENS` | — | 리뷰·번역 응답 최대 토큰 (기본값: 리뷰 `2048`, 번역 `2000`) |
+| `OPENAI_REPORT_MAX_TOKENS` | — | 종합 리포트 응답 최대 토큰 (기본값: `1024`) |
+| `OPENAI_TEMPERATURE` | — | CF 번역 temperature (기본값: `0.3`) |
+| `OPENAI_TIMEOUT` | — | CF 번역 API 타임아웃(초) (기본값: `15`) |
+| `COMPILE_TIMEOUT` | — | `/api/execute` C++ 컴파일 타임아웃(초) (기본값: `30`) |
 | `DB_TYPE` | — | `postgres` 설정 시 PostgreSQL 사용 (기본: SQLite) |
+| `DB_PATH` | — | SQLite 파일 경로 (기본값: 프로젝트 루트 `coding_recommend.db`) |
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` | — | PostgreSQL 연결 정보 |
 | `DB_HOST` / `DB_PORT` / `DB_SOCKET` | — | PostgreSQL 호스트 설정 |
 | `CORS_ORIGINS` | — | 허용할 CORS 출처 (쉼표 구분, 기본: `http://localhost:8080`) |

@@ -111,11 +111,8 @@ def get_solved_cf_refs() -> set:
     with db_cursor() as cur:
         cur.execute(f"SELECT DISTINCT problem_ref FROM reviews WHERE platform = {p}", ("codeforces",))
         refs = {r[0] for r in cur.fetchall()}
-        try:
-            cur.execute(f"SELECT problem_ref FROM solved_history WHERE platform = {p}", ("codeforces",))
-            refs |= {r[0] for r in cur.fetchall()}
-        except Exception:
-            pass
+        cur.execute(f"SELECT problem_ref FROM solved_history WHERE platform = {p}", ("codeforces",))
+        refs |= {r[0] for r in cur.fetchall()}
     return refs
 
 
@@ -123,11 +120,8 @@ def get_solved_problem_ids() -> set:
     with db_cursor() as cur:
         cur.execute("SELECT DISTINCT problem_id FROM reviews")
         ids = {r[0] for r in cur.fetchall()}
-        try:
-            cur.execute("SELECT problem_id FROM solved_history")
-            ids |= {r[0] for r in cur.fetchall()}
-        except Exception:
-            pass
+        cur.execute("SELECT problem_id FROM solved_history")
+        ids |= {r[0] for r in cur.fetchall()}
     return ids
 
 
@@ -135,9 +129,6 @@ def get_solved_problem_keys() -> set[tuple[str, str]]:
     with db_cursor() as cur:
         cur.execute("SELECT DISTINCT platform, problem_ref FROM reviews")
         keys = {(r[0], str(r[1])) for r in cur.fetchall()}
-        try:
-            cur.execute("SELECT platform, problem_ref FROM solved_history")
-            keys |= {(r[0], str(r[1])) for r in cur.fetchall()}
-        except Exception:
-            pass
+        cur.execute("SELECT platform, problem_ref FROM solved_history")
+        keys |= {(r[0], str(r[1])) for r in cur.fetchall()}
     return keys

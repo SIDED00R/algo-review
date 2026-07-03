@@ -12,10 +12,6 @@ router = APIRouter()
 
 def _resolve_problem(platform: str, problem_id: int | None, problem_ref: str | None,
                      custom_statement: str | None = None) -> tuple[dict, str]:
-    platform = (platform or "boj").strip().lower()
-    if platform not in {"boj", "codeforces"}:
-        raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다. 'boj' 또는 'codeforces'만 가능합니다.")
-
     if platform == "codeforces":
         if not (problem_ref or "").strip():
             raise HTTPException(status_code=400, detail="Codeforces 문제 번호를 입력하세요. 예: 4A 또는 4/A")

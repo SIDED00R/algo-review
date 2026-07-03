@@ -101,6 +101,7 @@ def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = 
     cf_same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
     cf_same_max = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
     # hard 구간은 same_max 다음 레이팅부터 시작 — 경계값이 양쪽에 걸려 같은 문제가 중복 추천되는 것을 방지
+    # (단 avg_rating이 상한 근처면 same_max·hard_min 둘 다 3500으로 클램프되어 경계가 겹칠 수 있음)
     cf_hard_min = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH + 1)
     cf_hard_max = min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)
 
