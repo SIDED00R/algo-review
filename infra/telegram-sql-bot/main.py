@@ -32,7 +32,8 @@ _HELP = (
 
 
 def _sql():
-    return build("sqladmin", "v1", cache_discovery=False)
+    # v1beta4: v1 의 state 필드는 정책상 정지(STOPPED)를 반영하지 못하고 RUNNABLE 로만 보고함.
+    return build("sqladmin", "v1beta4", cache_discovery=False)
 
 
 def _set_activation(policy: str) -> None:
@@ -48,7 +49,13 @@ def _status() -> str:
     inst = _sql().instances().get(project=PROJECT, instance=INSTANCE).execute()
     state = inst.get("state", "UNKNOWN")
     policy = inst.get("settings", {}).get("activationPolicy", "UNKNOWN")
-    return f"{state} (activationPolicy={policy})"
+    if policy == "NEVER":
+        hint = "정지됨 — /start_sql 로 시작하세요"
+    elif state == "RUNNABLE":
+        hint = "사용 가능"
+    else:
+        hint = "시작 중 — 잠시 후 사용 가능"
+    return f"{state} / {policy} → {hint}"
 
 
 def _reply(chat_id, text: str) -> None:
