@@ -23,16 +23,28 @@ WEBHOOK_SECRET = os.environ["TELEGRAM_WEBHOOK_SECRET"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 
 _API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+_BUSY_MSG = "⏳ 작업이 진행 중입니다. 완료 후 /status 로 확인하세요."
 _HELP = (
     "🗄️ Cloud SQL 제어 봇\n"
-    "/start_sql — DB 시작 (리뷰 전, 1~2분 소요)\n"
-    "/stop_sql — DB 정지 (리뷰 후, 비용 절감)\n"
+    "/start_sql — DB 시작 (완전히 켜지는 데 최대 10분)\n"
+    "/stop_sql — DB 정지 (비용 절감)\n"
     "/status — 현재 상태 확인"
 )
 
 
 def _sql():
     return build("sqladmin", "v1", cache_discovery=False)
+
+
+def _busy() -> bool:
+    """진행 중(PENDING/RUNNING) 작업이 있는지. Cloud SQL 은 동시에 한 작업만 허용한다."""
+    ops = _sql().operations().list(project=PROJECT, instance=INSTANCE, maxResults=5).execute()
+    return any(o.get("status") in ("PENDING", "RUNNING") for o in ops.get("items", []))
+
+
+def _activation() -> str:
+    inst = _sql().instances().get(project=PROJECT, instance=INSTANCE).execute()
+    return inst.get("settings", {}).get("activationPolicy", "")
 
 
 def _set_activation(policy: str) -> None:
@@ -45,15 +57,13 @@ def _set_activation(policy: str) -> None:
 
 
 def _status() -> str:
-    # activationPolicy 가 유일하게 신뢰할 수 있는 켜짐/꺼짐 기준.
-    # API 의 state 필드는 정지 상태에서도 RUNNABLE 로 남으므로 판단에 쓰지 않는다.
-    inst = _sql().instances().get(project=PROJECT, instance=INSTANCE).execute()
-    policy = inst.get("settings", {}).get("activationPolicy")
-    if policy != "ALWAYS":
-        return "정지됨 — /start_sql 로 시작하세요"
-    if inst.get("state") == "RUNNABLE":
-        return "사용 가능"
-    return "시작 중 — 잠시 후 사용 가능"
+    # 켜짐/꺼짐은 activationPolicy, 전환 중 여부는 진행 중 작업으로 판단한다.
+    # API 의 state 필드는 정지 상태에서도 RUNNABLE 로 남아 신뢰할 수 없다.
+    policy = _activation()
+    busy = _busy()
+    if policy == "ALWAYS":
+        return "시작 중 — 최대 10분 소요, 잠시 후 사용 가능" if busy else "켜짐 ✅ 사용 가능"
+    return "정지 중…" if busy else "정지됨 — /start_sql 로 시작하세요"
 
 
 def _reply(chat_id, text: str) -> None:
@@ -70,18 +80,28 @@ def _reply(chat_id, text: str) -> None:
 def _dispatch(command: str, chat_id) -> None:
     try:
         if command == "/start_sql":
-            _set_activation("ALWAYS")
-            _reply(chat_id, "✅ DB 시작 요청 완료. 1~2분 후 사용 가능합니다.")
+            if _busy():
+                _reply(chat_id, _BUSY_MSG)
+            elif _activation() == "ALWAYS":
+                _reply(chat_id, "이미 켜져 있습니다. /status 로 확인하세요.")
+            else:
+                _set_activation("ALWAYS")
+                _reply(chat_id, "✅ DB 시작 요청 완료. 완전히 켜지는 데 최대 10분 걸립니다. /status 로 확인하세요.")
         elif command == "/stop_sql":
-            _set_activation("NEVER")
-            _reply(chat_id, "🛑 DB 정지 요청 완료. 비용이 절감됩니다.")
+            if _busy():
+                _reply(chat_id, _BUSY_MSG)
+            elif _activation() == "NEVER":
+                _reply(chat_id, "이미 정지돼 있습니다.")
+            else:
+                _set_activation("NEVER")
+                _reply(chat_id, "🛑 DB 정지 요청 완료. 비용이 절감됩니다.")
         elif command == "/status":
             _reply(chat_id, f"📊 상태: {_status()}")
         else:
             _reply(chat_id, _HELP)
     except Exception as e:  # noqa: BLE001 — 모든 API 오류를 사용자에게 회신
-        if isinstance(e, HttpError) and e.resp.status == 409:  # 이전 작업이 아직 진행 중
-            _reply(chat_id, "⏳ 이전 작업이 진행 중입니다. 1~2분 후 다시 시도하세요.")
+        if isinstance(e, HttpError) and e.resp.status == 409:  # 다른 작업이 진행 중
+            _reply(chat_id, _BUSY_MSG)
             return
         logging.exception("command %s failed", command)
         _reply(chat_id, f"⚠️ 오류: {type(e).__name__}: {e}")
