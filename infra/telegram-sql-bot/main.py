@@ -74,13 +74,10 @@ def _dispatch(command: str, chat_id) -> None:
             _reply(chat_id, f"📊 상태: {_status()}")
         else:
             _reply(chat_id, _HELP)
-    except HttpError as e:
-        if e.resp.status == 409:  # 이전 시작/정지 작업이 아직 진행 중
-            _reply(chat_id, "⏳ 이전 작업이 진행 중입니다. 1~2분 후 다시 시도하세요.")
-        else:
-            logging.exception("command %s failed", command)
-            _reply(chat_id, f"⚠️ 오류: {type(e).__name__}: {e}")
     except Exception as e:  # noqa: BLE001 — 모든 API 오류를 사용자에게 회신
+        if isinstance(e, HttpError) and e.resp.status == 409:  # 이전 작업이 아직 진행 중
+            _reply(chat_id, "⏳ 이전 작업이 진행 중입니다. 1~2분 후 다시 시도하세요.")
+            return
         logging.exception("command %s failed", command)
         _reply(chat_id, f"⚠️ 오류: {type(e).__name__}: {e}")
 
