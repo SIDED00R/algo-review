@@ -129,7 +129,7 @@
 
 | Caller | Callee | 목적 |
 |--------|--------|------|
-| `server.py` | `db.init_db` | lifespan 기동 시 스키마 마이그레이션 (데모는 `demo_seed.seed` 대신 실행) |
+| `server.py` | `db.init_db` | lifespan 기동 시 스키마 마이그레이션 (데모는 `demo_seed.seed` 대신 실행, DB 연결 실패 시 경고만 남기고 기동 계속 — 온디맨드 정지 대응) |
 | `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
 | `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
 | `routes/review.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
