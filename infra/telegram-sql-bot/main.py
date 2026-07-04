@@ -8,11 +8,13 @@ SQL Admin API로 settings.activationPolicy 를 ALWAYS/NEVER 로 전환한다.
 검증 실패 시 아무 동작 없이 200 을 반환해 텔레그램 재시도를 막는다.
 """
 
+import logging
 import os
 
 import functions_framework
 import requests
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 PROJECT = os.environ["GCP_PROJECT"]
 INSTANCE = os.environ["SQL_INSTANCE"]
@@ -72,7 +74,14 @@ def _dispatch(command: str, chat_id) -> None:
             _reply(chat_id, f"📊 상태: {_status()}")
         else:
             _reply(chat_id, _HELP)
+    except HttpError as e:
+        if e.resp.status == 409:  # 이전 시작/정지 작업이 아직 진행 중
+            _reply(chat_id, "⏳ 이전 작업이 진행 중입니다. 1~2분 후 다시 시도하세요.")
+        else:
+            logging.exception("command %s failed", command)
+            _reply(chat_id, f"⚠️ 오류: {type(e).__name__}: {e}")
     except Exception as e:  # noqa: BLE001 — 모든 API 오류를 사용자에게 회신
+        logging.exception("command %s failed", command)
         _reply(chat_id, f"⚠️ 오류: {type(e).__name__}: {e}")
 
 
