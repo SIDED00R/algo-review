@@ -177,6 +177,8 @@ gcloud run deploy algo-review-demo \
 ├── Dockerfile              # Cloud Run 컨테이너 이미지 (uvicorn, 8080 포트)
 ├── .dockerignore
 ├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo)
+├── LICENSE                 # MIT
+├── assets/                 # README 데모 GIF
 │
 ├── clients/                # 외부 API 클라이언트 (각 파일이 하나의 플랫폼 담당)
 │   ├── solved_ac.py        # solved.ac API, BOJ 스크래핑, TIER_NAMES 상수
@@ -214,6 +216,7 @@ gcloud run deploy algo-review-demo \
 └── static/
     ├── index.html
     ├── style.css
+    ├── img/                # UI 아이콘 (github.svg)
     └── js/                 # 각 파일이 하나의 UI 기능 담당
         ├── utils.js            # 공통 순수 함수
         ├── editor.js           # CodeMirror 에디터

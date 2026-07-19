@@ -37,8 +37,6 @@ def get_codeforces_problem_info(problem_ref: str) -> dict:
         "id": 0,
         "platform": "codeforces",
         "problem_ref": f"{contest_id}{index}",
-        "contest_id": contest_id,
-        "index": index,
         "title": problem.get("name", f"Problem {contest_id}{index}"),
         "tier": 0,
         "tier_name": rating_label,
@@ -252,17 +250,12 @@ def get_codeforces_user_submissions(handle: str, count: int = 1000,
             continue
         seen.add(problem_ref)
         submissions.append({
-            "problem_id": 0,
             "problem_ref": problem_ref,
-            "contest_id": contest_id,
-            "index": index,
             "title": problem.get("name", problem_ref),
-            "tier": 0,
             "tier_name": f"Codeforces {problem['rating']}" if problem.get("rating") else "Codeforces Unrated",
             "tags": problem.get("tags", []),
             "language": sub.get("programmingLanguage", ""),
             "code": sub.get("source", "") or "",
-            "submission_id": sub.get("id"),
             "problem_url": get_problem_url("codeforces", problem_ref),
         })
     return submissions

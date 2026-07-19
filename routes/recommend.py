@@ -38,7 +38,6 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         tier_range = f"CF {max(800, int(avg_rating) - CF_RANGE_LOW)} ~ CF {min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)}"
     else:
         avg_tier = db.get_average_tier()
-        avg_rating = avg_tier
         tier_name = api_client.TIER_NAMES.get(int(avg_tier), "N/A")
         tier_range = recommender.tier_range_description(avg_tier)
 
