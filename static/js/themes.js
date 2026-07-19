@@ -27,9 +27,7 @@ async function ensureThemeList() {
   if (_themeList) return _themeList;
   const cached = _lsGet(_LS_LIST_KEY, _LS_LIST_TTL_MS);
   if (cached) { _themeList = cached; return _themeList; }
-  const res = await fetch('/api/themes');
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || '테마 목록 로딩 실패');
+  const data = await fetchJsonOk('/api/themes', undefined, '테마 목록 로딩 실패');
   _themeList = data.themes || [];
   _lsSet(_LS_LIST_KEY, _themeList);
   return _themeList;
@@ -69,10 +67,7 @@ function selectTheme(themeId) {
 }
 
 async function _fetchThemeProblems(platform, themeId) {
-  const res = await fetch(`/api/themes/${encodeURIComponent(themeId)}/problems?platform=${platform}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || '문제 로딩 실패');
-  return data;
+  return fetchJsonOk(`/api/themes/${encodeURIComponent(themeId)}/problems?platform=${platform}`, undefined, '문제 로딩 실패');
 }
 
 function _cacheThemeProblems(key, data) {
@@ -141,7 +136,7 @@ function renderThemeProblems(container, data) {
         html += `
         <div class="rec-problem-card">
           <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
-          <span class="tier-badge ${tierClass(p.tier)}">${escapeHtml(p.tier_name)}</span>
+          ${tierBadgeHtml(tierClass(p.tier), escapeHtml(p.tier_name))}
         </div>`;
       }
     }
@@ -152,11 +147,7 @@ function renderThemeProblems(container, data) {
 
   document.getElementById('themes-refresh-btn')
     .addEventListener('click', () => loadThemeProblems({ force: true }));
-  container.querySelectorAll('.cf-clickable').forEach(el => {
-    el.addEventListener('click', () => {
-      openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
-    });
-  });
+  bindCfProblemClicks(container);
 }
 
 // 플랫폼 토글 — stats.js가 문서 전역 [data-platform]을 바인딩하므로 별도 속성(data-themes-platform)을 쓴다.

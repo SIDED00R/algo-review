@@ -38,13 +38,11 @@ reviewBtn.addEventListener('click', async () => {
     if (platform === 'codeforces') payload.problem_ref = problemId;
     else payload.problem_id = Number(problemId);
 
-    const res = await fetch('/api/review', {
+    const data = await fetchJsonOk('/api/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '분석 실패');
+    }, '분석 실패');
     renderReview(result, data);
   } catch (e) {
     showError(result, e.message);
@@ -74,7 +72,7 @@ function renderReview(container, d) {
             ${label}. ${title}
           </a>
         </span>
-        <span class="tier-badge ${tc}">${tierName}</span>
+        ${tierBadgeHtml(tc, tierName)}
       </div>
       <div class="tag-list">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>
       <div class="summary-grid">
@@ -118,7 +116,7 @@ function renderReview(container, d) {
     try {
       const cfSections = _currentProblem?.ref === d.problem_ref ? _currentProblem.sections : null;
       const pastedStatement = document.getElementById('problem-statement')?.value?.trim() || '';
-      const res = await fetch('/api/push-review', {
+      const data = await fetchJsonOk('/api/push-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,9 +134,7 @@ function renderReview(container, d) {
             output_desc: cfSections?.output || '',
           } : {}),
         }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'push 실패');
+      }, 'push 실패');
       btn.textContent = '✓ 완료';
       msg.innerHTML = `<span style="color:var(--green)">🐙 <b>${escapeHtml(data.repo || '')}</b>에 push 완료</span>`;
     } catch (e) {

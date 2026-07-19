@@ -60,6 +60,10 @@
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
 | `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
+
+### 데모 인프라
+| 파일 | 단일 책임 |
+|------|----------|
 | `demo_mode.py` | 데모 모드 플래그(`IS_DEMO`)와 라우터가 반환하는 mock 응답 데이터 |
 | `demo_seed.py` | 데모 서버 기동 시 SQLite 샘플 데이터 시딩 |
 
@@ -68,6 +72,7 @@
 |------|----------|
 | `db/connection.py` | DB 연결 팩토리 (SQLite / PostgreSQL), `db_cursor()` 컨텍스트 매니저, `_ph()`, `_rows_to_dicts()` |
 | `db/schema.py` | 테이블 생성 및 마이그레이션 (컬럼 추가) |
+| `db/normalize.py` | reviews/solved 행 정규화 공용 헬퍼 (platform·problem_ref·tags·tier_name 폴백) |
 | `db/reviews.py` | reviews 테이블 CRUD + 티어/태그 집계 쿼리 |
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
@@ -101,13 +106,13 @@
 | `routes/import_boj.py` | `POST /api/import` | BOJ 제출 기록 크롤링 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
-| `routes/helpers.py` | — | GitHub README 빌더 + 풀이 파일 push 헬퍼 |
+| `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더, 저장 폴더·커밋 메시지 조립, 설정+override 병합, 파일 push) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
 
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `utils.js` | 공통 순수 함수 (tierClass, cfRatingClass, escapeHtml, detectLanguage 등) |
+| `utils.js` | 공통 유틸 — 순수 함수(tierClass, cfRatingClass, tierBadgeHtml, escapeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk) |
 | `editor.js` | CodeMirror 에디터 초기화 및 관리 |
 | `theme.js` | 다크/라이트 테마 토글 |
 | `github.js` | GitHub OAuth 연결 UI |

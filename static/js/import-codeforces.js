@@ -17,7 +17,7 @@ if (cfImportBtn) {
     const ghToken = (document.getElementById('cf-gh-token')?.value || '').trim();
 
     try {
-      const res = await fetch('/api/import-codeforces', {
+      const data = await fetchJsonOk('/api/import-codeforces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -27,9 +27,7 @@ if (cfImportBtn) {
           github_repo: ghRepo || null,
           github_token: ghToken || null,
         }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '가져오기 실패');
+      }, '가져오기 실패');
 
       const sourceMsg = data.has_source
         ? '<br><span style="color:var(--text-muted);font-size:.82rem">소스 코드 포함 항목이 있어 AI 리뷰까지 바로 이어갈 수 있습니다.</span>'

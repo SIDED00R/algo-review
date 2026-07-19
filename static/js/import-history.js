@@ -61,16 +61,13 @@ async function loadImportedHistory() {
       let result = allProblems.filter(p => {
         if (q && !problemLabel(p).toLowerCase().includes(q) && !p.title.toLowerCase().includes(q)) return false;
         if (platform && (p.platform || 'boj') !== platform) return false;
-        if (tierKey) {
-          if (tierKey === 'unrated') { if (p.tier !== 0) return false; }
-          else { const r = TIER_GROUPS[tierKey]; if (p.tier < r[0] || p.tier > r[1]) return false; }
-        }
+        if (tierKey && !tierInGroup(p.tier, tierKey)) return false;
         return true;
       });
 
       result.sort((a, b) => {
-        if (sort === 'id-asc') return problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true });
-        if (sort === 'id-desc') return problemLabel(b).localeCompare(problemLabel(a), undefined, { numeric: true });
+        if (sort === 'id-asc') return compareProblemLabel(a, b);
+        if (sort === 'id-desc') return compareProblemLabel(b, a);
         if (sort === 'tier-desc') return b.tier - a.tier;
         if (sort === 'tier-asc') return a.tier - b.tier;
         return 0;
@@ -137,7 +134,7 @@ async function loadImportedHistory() {
               <div class="history-card-meta">${escapeHtml(platformBadge)}${p.language ? ` · ${escapeHtml(p.language)}` : ''}</div>
             </div>
             <div class="history-card-right">
-              <span class="tier-badge ${tc}" style="font-size:.75rem">${escapeHtml(p.tier_name || '')}</span>
+              ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''), 'font-size:.75rem')}
               ${actionBtns}
               <span style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(String(p.imported_at || '').slice(0, 10))}</span>
             </div>
@@ -211,9 +208,7 @@ async function requestImportedReview(btn) {
   btn.innerHTML = '<span class="spinner"></span>';
 
   try {
-    const res = await fetch(`/api/review-imported/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '실패');
+    const data = await fetchJsonOk(`/api/review-imported/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, { method: 'POST' }, '실패');
     card.nextElementSibling?.remove();
     card.remove();
     btn.textContent = '✓ 완료';

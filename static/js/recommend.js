@@ -12,9 +12,7 @@ async function fetchRecommend(excludeIds = new Set()) {
   try {
     const platform = document.getElementById('recommend-platform')?.value || 'codeforces';
     const excludeParam = excludeIds.size > 0 ? `&exclude=${[...excludeIds].join(',')}` : '';
-    const res = await fetch(`/api/recommend?platform=${encodeURIComponent(platform)}${excludeParam}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '추천 실패');
+    const data = await fetchJsonOk(`/api/recommend?platform=${encodeURIComponent(platform)}${excludeParam}`, undefined, '추천 실패');
     renderRecommend(result, data);
   } catch (e) {
     showError(result, e.message);
@@ -40,7 +38,7 @@ function renderRecommend(container, data) {
       <div class="summary-grid">
         <div class="summary-item">
           <div class="summary-label">현재 평균 레벨 <span style="font-size:.75rem;color:var(--text-muted)">(최근 30개)</span></div>
-          <div class="summary-value"><span class="tier-badge ${tc}">${data.tier_name}</span></div>
+          <div class="summary-value">${tierBadgeHtml(tc, data.tier_name)}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">추천 난이도 범위</div>
@@ -65,13 +63,13 @@ function renderRecommend(container, data) {
                data-title="${escapeHtml(p.title)}"
                data-tier="${escapeHtml(p.tier_name)}">
             <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
-            <span class="tier-badge ${ptc}">${escapeHtml(p.tier_name)}</span>
+            ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       } else {
         html += `
           <div class="rec-problem-card">
             <a href="${escapeHtml(p.url || 'https://boj.kr/' + p.id)}" target="_blank">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
-            <span class="tier-badge ${ptc}">${escapeHtml(p.tier_name)}</span>
+            ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       }
     }
@@ -89,11 +87,7 @@ function renderRecommend(container, data) {
     }
   }
 
-  container.querySelectorAll('.cf-clickable').forEach(el => {
-    el.addEventListener('click', () => {
-      openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
-    });
-  });
+  bindCfProblemClicks(container);
 
   document.getElementById('recommend-reset-btn').addEventListener('click', () => fetchRecommend(new Set(_shownIds)));
 }

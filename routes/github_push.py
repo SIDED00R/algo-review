@@ -2,7 +2,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.models import PushReviewRequest
-from routes.helpers import build_readme
+from routes.helpers import build_readme, build_solution_target
 from demo_mode import IS_DEMO
 
 router = APIRouter()
@@ -25,9 +25,7 @@ def push_review_to_github(req: PushReviewRequest):
     url = req.url or api_client.get_problem_url(req.platform, req.problem_ref)
 
     if req.platform == "boj":
-        tier_cat = req.tier_name.split()[0] if req.tier_name else "Unrated"
-        folder = f"백준/{tier_cat}/{req.problem_ref}번. {req.title}"
-        msg = f"[BOJ] {req.problem_ref}번. {req.title}"
+        folder, msg = build_solution_target("boj", req.problem_ref, req.title, req.tier_name)
         if not req.description:
             sections = api_client.get_boj_problem_sections(int(req.problem_ref))
             description = sections.get("description", "")
@@ -36,8 +34,7 @@ def push_review_to_github(req: PushReviewRequest):
         else:
             description, input_desc, output_desc = req.description, req.input_desc, req.output_desc
     else:
-        folder = f"Codeforces/{req.problem_ref}. {req.title}"
-        msg = f"[Codeforces] {req.problem_ref}. {req.title}"
+        folder, msg = build_solution_target(req.platform, req.problem_ref, req.title)
         if not req.description:
             sections = api_client.get_cf_problem_sections(req.problem_ref)
             description = sections.get("description", "")

@@ -14,13 +14,11 @@ importBtn.addEventListener('click', async () => {
   result.innerHTML = `<div class="alert alert-info"><span class="spinner"></span> 제출 기록을 가져오는 중입니다... (${pageDesc}, 기록이 많으면 수 분 소요)</div>`;
 
   try {
-    const res = await fetch('/api/import', {
+    const data = await fetchJsonOk('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ boj_id: bojId, session_cookie: cookie || null, max_pages: pages }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '가져오기 실패');
+    }, '가져오기 실패');
 
     const failMsg = data.failed && data.failed.length > 0
       ? `<br><span style="color:var(--text-muted);font-size:.82rem">정보 조회 실패: ${data.failed.join(', ')}</span>`
