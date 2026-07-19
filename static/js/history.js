@@ -69,10 +69,7 @@ function getFilteredReviews() {
 
   let list = allReviewProblems.filter(p => {
     if (q && !`${problemLabel(p)} ${p.title} ${(p.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
-    if (tier) {
-      const [lo, hi] = TIER_GROUPS[tier] || [0, 30];
-      if (p.tier < lo || p.tier > hi) return false;
-    }
+    if (tier && !tierInGroup(p.tier, tier)) return false;
     if (eff) {
       const lastEff = (p.efficiencies || '').split(',')[0] || 'ok';
       if (lastEff !== eff) return false;
@@ -83,7 +80,7 @@ function getFilteredReviews() {
   if (sort === 'recent') list.sort((a, b) => b.last_submitted.localeCompare(a.last_submitted));
   else if (sort === 'tier_desc') list.sort((a, b) => b.tier - a.tier);
   else if (sort === 'tier_asc') list.sort((a, b) => a.tier - b.tier);
-  else if (sort === 'pid_asc') list.sort((a, b) => problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true }));
+  else if (sort === 'pid_asc') list.sort(compareProblemLabel);
   return list;
 }
 
@@ -120,7 +117,7 @@ function renderProblemList(container, problems) {
         <div class="history-card-meta">${escapeHtml((p.tags || []).slice(0, 3).join(' · '))}</div>
       </div>
       <div class="history-card-right">
-        <span class="tier-badge ${tc}" style="font-size:.75rem">${escapeHtml(p.tier_name || '')}</span>
+        ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''), 'font-size:.75rem')}
         <span class="${effClass(lastEff)}" style="font-size:.82rem">${escapeHtml(effLabel(lastEff))}</span>
         <span style="font-size:.78rem;color:var(--text-muted)">
           제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(String(p.last_submitted || '').slice(0, 10))}
@@ -139,9 +136,7 @@ async function openReviewModal(platform, problemRef) {
   content.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
 
   try {
-    const res = await fetch(`/api/reviews/problem/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '실패');
+    const data = await fetchJsonOk(`/api/reviews/problem/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, undefined, '실패');
     const reviews = data.reviews;
     if (!reviews.length) throw new Error('기록이 없습니다.');
 
@@ -163,7 +158,7 @@ async function openReviewModal(platform, problemRef) {
             ${escapeHtml(problemLabel(first))}. ${escapeHtml(first.title)}
           </a>
         </span>
-        <span class="tier-badge ${tc}">${escapeHtml(first.tier_name || '')}</span>
+        ${tierBadgeHtml(tc, escapeHtml(first.tier_name || ''))}
         <span style="font-size:.82rem;color:var(--text-muted);margin-left:auto">총 ${reviews.length}회 제출</span>
       </div>
       <div class="tag-list" style="margin-bottom:16px">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>

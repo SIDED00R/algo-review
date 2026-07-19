@@ -4,7 +4,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.models import CodeforcesImportRequest
-from routes.helpers import build_readme, push_solution
+from routes.helpers import build_readme, push_solution, build_solution_target, merged_github_target
 from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
@@ -37,9 +37,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
     new_subs = [s for s in submissions if ("codeforces", s["problem_ref"]) not in existing_keys]
     skipped = len(submissions) - len(new_subs)
 
-    gh_settings = db.get_github_settings()
-    github_repo = (req.github_repo or "").strip() or (gh_settings.get("target_repo") if gh_settings else None)
-    github_token = (req.github_token or "").strip() or (gh_settings.get("access_token") if gh_settings else None)
+    github_repo, github_token = merged_github_target(req.github_repo or "", req.github_token or "")
     github_push_enabled = bool(github_repo and github_token)
     github_pushed = 0
 
@@ -58,8 +56,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
         if github_push_enabled and sub.get("code"):
             ext = api_client._get_file_extension(sub.get("language", ""))
             ref = sub["problem_ref"]
-            folder = f"Codeforces/{ref}. {sub['title']}"
-            msg = f"[Codeforces] {ref}. {sub['title']}"
+            folder, msg = build_solution_target("codeforces", ref, sub["title"])
             cf_url = sub.get("problem_url", api_client.get_problem_url("codeforces", ref))
             readme = build_readme(ref, sub["title"],
                                   sub.get("tier_name", ""), sub.get("tags", []),

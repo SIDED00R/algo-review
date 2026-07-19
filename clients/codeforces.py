@@ -24,6 +24,11 @@ def normalize_codeforces_problem_ref(problem_ref: str) -> tuple[int, str]:
     return contest_id, index
 
 
+def cf_rating_label(rating) -> str:
+    """저장·파싱되는 CF 난이도 표준 라벨: 있으면 'Codeforces {rating}', 없으면 'Codeforces Unrated'."""
+    return f"Codeforces {rating}" if rating else "Codeforces Unrated"
+
+
 def get_codeforces_problem_info(problem_ref: str) -> dict:
     from clients.utils import get_problem_url
     contest_id, index = normalize_codeforces_problem_ref(problem_ref)
@@ -32,7 +37,7 @@ def get_codeforces_problem_info(problem_ref: str) -> dict:
         raise ValueError(f"Codeforces 문제를 찾을 수 없습니다: {contest_id}{index}")
 
     rating = problem.get("rating")
-    rating_label = f"Codeforces {rating}" if rating else "Codeforces Unrated"
+    rating_label = cf_rating_label(rating)
     return {
         "id": 0,
         "platform": "codeforces",
@@ -83,6 +88,15 @@ def cf_xpath_text(tree, expr: str) -> str:
     return " ".join(el.itertext()).strip()
 
 
+def _extract_cf_sections(tree) -> dict:
+    BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
+    return {
+        "description": cf_xpath_text(tree, f'{BASE}/div[2]'),
+        "input":       cf_xpath_text(tree, f'{BASE}/div[3]'),
+        "output":      cf_xpath_text(tree, f'{BASE}/div[4]'),
+    }
+
+
 def get_cf_problem_sections(problem_ref: str) -> dict:
     try:
         from lxml import etree
@@ -93,12 +107,7 @@ def get_cf_problem_sections(problem_ref: str) -> dict:
         resp.raise_for_status()
 
         tree = etree.fromstring(resp.text.encode(), etree.HTMLParser())
-        BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
-        return {
-            "description": cf_xpath_text(tree, f'{BASE}/div[2]'),
-            "input":       cf_xpath_text(tree, f'{BASE}/div[3]'),
-            "output":      cf_xpath_text(tree, f'{BASE}/div[4]'),
-        }
+        return _extract_cf_sections(tree)
     except Exception:
         return {"description": "", "input": "", "output": ""}
 
@@ -107,10 +116,7 @@ def scrape_cf_problem(problem_ref: str) -> dict:
     """CF 문제 페이지에서 제목/제한/본문/예제/노트를 raw(미번역)로 추출. 형식 오류 시 ValueError."""
     from lxml import etree
 
-    m = re.match(r'^(\d+)([A-Za-z]\d*)$', problem_ref.strip())
-    if not m:
-        raise ValueError("잘못된 문제 번호 형식 (예: 4A, 1234B)")
-    contest_id, index = m.group(1), m.group(2).upper()
+    contest_id, index = normalize_codeforces_problem_ref(problem_ref)
 
     url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
     resp = requests.get(url, timeout=10, headers={
@@ -147,17 +153,19 @@ def scrape_cf_problem(problem_ref: str) -> dict:
                 "output": "\n".join(out_pre.itertext()).strip(),
             })
 
+    sections = _extract_cf_sections(tree)
+
     return {
         "title": cf_xpath_text(tree, '//div[@class="title"]') or f"CF {problem_ref}",
         "time_limit": _limit_value('//div[contains(@class,"time-limit")]'),
         "memory_limit": _limit_value('//div[contains(@class,"memory-limit")]'),
-        "statement": cf_xpath_text(tree, f'{BASE}/div[2]'),
-        "input": cf_xpath_text(tree, f'{BASE}/div[3]'),
-        "output": cf_xpath_text(tree, f'{BASE}/div[4]'),
+        "statement": sections["description"],
+        "input": sections["input"],
+        "output": sections["output"],
         "note": note_text,
         "samples": samples,
         "url": url,
-        "contest_id": contest_id,
+        "contest_id": str(contest_id),
         "index": index,
     }
 
@@ -252,7 +260,7 @@ def get_codeforces_user_submissions(handle: str, count: int = 1000,
         submissions.append({
             "problem_ref": problem_ref,
             "title": problem.get("name", problem_ref),
-            "tier_name": f"Codeforces {problem['rating']}" if problem.get("rating") else "Codeforces Unrated",
+            "tier_name": cf_rating_label(problem.get("rating")),
             "tags": problem.get("tags", []),
             "language": sub.get("programmingLanguage", ""),
             "code": sub.get("source", "") or "",

@@ -17,9 +17,7 @@ statsBtn.addEventListener('click', async () => {
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
 
   try {
-    const res = await fetch(`/api/stats?platform=${selectedStatsPlatform}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '실패');
+    const data = await fetchJsonOk(`/api/stats?platform=${selectedStatsPlatform}`, undefined, '실패');
     renderStats(result, data);
   } catch (e) {
     showError(result, e.message);
@@ -51,7 +49,7 @@ function renderStats(container, data) {
 
   let historyHtml = data.history.map(r => {
     const tc = isCf ? '' : tierClass(r.tier);
-    const tierLabel = `<span class="tier-badge ${tc}" style="font-size:.75rem">${r.tier_name}</span>`;
+    const tierLabel = tierBadgeHtml(tc, r.tier_name, 'font-size:.75rem');
     return `<tr>
       <td><a href="${problemUrl(r)}" target="_blank">${problemLabel(r)}. ${r.title}</a></td>
       <td>${tierLabel}</td>
@@ -63,7 +61,7 @@ function renderStats(container, data) {
   const levelLabel = isCf ? '평균 레이팅' : '평균 레벨';
   const levelValue = isCf
     ? `<span style="font-weight:700">${data.avg_tier_name}</span>`
-    : `<span class="tier-badge ${tierClass(Math.floor(data.avg_tier))}">${data.avg_tier_name}</span>`;
+    : tierBadgeHtml(tierClass(Math.floor(data.avg_tier)), data.avg_tier_name);
 
   container.innerHTML = `
     <div class="result-card">

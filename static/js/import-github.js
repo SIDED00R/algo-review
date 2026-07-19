@@ -12,13 +12,11 @@ ghImportBtn.addEventListener('click', async () => {
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> GitHub에서 파일 목록을 가져오는 중...</div>';
 
   try {
-    const res = await fetch('/api/import-github', {
+    const data = await fetchJsonOk('/api/import-github', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo, token: token || null }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '실패');
+    }, '실패');
 
     const failMsg = data.failed && data.failed.length > 0
       ? `<br><span style="color:var(--text-muted);font-size:.82rem">정보 조회 실패: ${data.failed.length}개</span>`
