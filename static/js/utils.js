@@ -3,6 +3,11 @@ const TIER_GROUPS = {
   platinum: [16, 20], diamond: [21, 25], ruby: [26, 30], unrated: [0, 0],
 };
 
+function tierInGroup(tier, key) {
+  const r = TIER_GROUPS[key] || [0, 30];
+  return tier >= r[0] && tier <= r[1];
+}
+
 function tierClass(tier) {
   if (tier === 0) return '';
   if (tier <= 5) return 'tier-bronze';
@@ -24,6 +29,10 @@ function cfRatingClass(rating) {
   return 'cf-grandmaster';
 }
 
+function tierBadgeHtml(cls, name, style) {
+  return `<span class="tier-badge ${cls}"${style ? ` style="${style}"` : ''}>${name}</span>`;
+}
+
 function effClass(e) {
   return { good: 'eff-good', ok: 'eff-ok', poor: 'eff-poor' }[e] || '';
 }
@@ -35,6 +44,10 @@ function effLabel(e) {
 function problemLabel(problem) {
   if (problem.platform === 'codeforces') return problem.problem_ref;
   return String(problem.problem_id ?? problem.problem_ref ?? '');
+}
+
+function compareProblemLabel(a, b) {
+  return problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true });
 }
 
 function cfRefToUrl(ref) {
@@ -70,6 +83,13 @@ function setLoading(btn, loading) {
 function showError(container, msg) {
   container.innerHTML = `<div class="alert alert-error">❌ ${escapeHtml(msg)}</div>`;
   container.classList.remove('hidden');
+}
+
+async function fetchJsonOk(url, options, fallbackMsg) {
+  const res = await fetch(url, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || fallbackMsg);
+  return data;
 }
 
 function detectLanguage(code) {

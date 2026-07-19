@@ -189,6 +189,7 @@ gcloud run deploy algo-review-demo \
 ├── db/                     # DB 레이어 (각 파일이 하나의 테이블 담당)
 │   ├── connection.py       # DB 연결 팩토리 (SQLite / PostgreSQL)
 │   ├── schema.py           # 테이블 생성 및 마이그레이션
+│   ├── normalize.py        # reviews/solved 행 정규화 공용 헬퍼
 │   ├── reviews.py          # reviews 테이블 CRUD + 티어/태그 집계
 │   ├── solved.py           # solved_history 테이블 CRUD
 │   ├── github_settings.py  # github_settings 테이블 CRUD
@@ -210,7 +211,7 @@ gcloud run deploy algo-review-demo \
 │   ├── import_boj.py       # POST /api/import — BOJ 제출 기록 import
 │   ├── import_codeforces.py# POST /api/import-codeforces — CF import
 │   ├── models.py           # Pydantic 요청/응답 스키마
-│   ├── helpers.py          # GitHub README 빌더 + 풀이 파일 push 헬퍼
+│   ├── helpers.py          # GitHub push 공용 헬퍼 (README·대상 조립·설정 병합·push)
 │   └── review_response.py  # 리뷰 저장 + ReviewResponse 생성 (review/solved 공용)
 │
 └── static/

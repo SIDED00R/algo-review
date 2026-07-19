@@ -1,15 +1,12 @@
 import json
 from datetime import datetime
 from db.connection import USE_POSTGRES, _ph, _rows_to_dicts, db_cursor
+from db.normalize import normalize_common_row
 
 
 def _normalize_review_row(row: dict) -> dict:
-    from clients.solved_ac import TIER_NAMES
+    normalize_common_row(row)
 
-    row["platform"] = (row.get("platform") or "boj").lower()
-    row["problem_ref"] = row.get("problem_ref") or str(row.get("problem_id", ""))
-    if isinstance(row.get("tags"), str):
-        row["tags"] = json.loads(row["tags"])
     if isinstance(row.get("strengths"), str):
         row["strengths"] = json.loads(row.get("strengths") or "[]")
     else:
@@ -18,7 +15,6 @@ def _normalize_review_row(row: dict) -> dict:
         row["weaknesses"] = json.loads(row.get("weaknesses") or "[]")
     else:
         row["weaknesses"] = row.get("weaknesses", [])
-    row["tier_name"] = row.get("tier_name") or TIER_NAMES.get(row.get("tier", 0), "Unrated")
     return row
 
 
@@ -101,12 +97,8 @@ def get_total_review_count(platform: str | None = None) -> int:
         return cur.fetchone()[0]
 
 
-def get_cf_tag_stats() -> list:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"SELECT tags, efficiency FROM reviews WHERE platform = {p}", ("codeforces",))
-        rows = _rows_to_dicts(cur, cur.fetchall())
-
+def _tally_tag_efficiency(rows: list) -> dict:
+    """행 목록을 태그별로 순회해 good/poor/total 카운트를 누적한 dict를 반환."""
     counts: dict[str, dict] = {}
     for row in rows:
         tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
@@ -119,7 +111,16 @@ def get_cf_tag_stats() -> list:
                 counts[tag]["good_count"] += 1
             else:
                 counts[tag]["poor_count"] += 1
+    return counts
 
+
+def get_cf_tag_stats() -> list:
+    p = _ph()
+    with db_cursor() as cur:
+        cur.execute(f"SELECT tags, efficiency FROM reviews WHERE platform = {p}", ("codeforces",))
+        rows = _rows_to_dicts(cur, cur.fetchall())
+
+    counts = _tally_tag_efficiency(rows)
     return sorted(counts.values(), key=lambda x: x["total_count"], reverse=True)
 
 
@@ -342,19 +343,10 @@ def get_tag_weakness_data(platform: str | None = None) -> list:
             if s["total_count"] > 0:
                 poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
     else:
-        tag_eff: dict[str, dict] = {}
-        for row in review_rows:
-            tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
-            eff = row.get("efficiency", "poor")
-            for tag in tags:
-                if tag not in tag_eff:
-                    tag_eff[tag] = {"good": 0, "total": 0}
-                tag_eff[tag]["total"] += 1
-                if eff == "good":
-                    tag_eff[tag]["good"] += 1
+        tag_eff = _tally_tag_efficiency(review_rows)
         for tag, counts in tag_eff.items():
-            if counts["total"] > 0:
-                poor_map[tag] = 1 - counts["good"] / counts["total"]
+            if counts["total_count"] > 0:
+                poor_map[tag] = 1 - counts["good_count"] / counts["total_count"]
 
     return [
         {

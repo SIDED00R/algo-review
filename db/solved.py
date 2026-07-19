@@ -1,17 +1,11 @@
 import json
 from datetime import datetime
 from db.connection import USE_POSTGRES, _ph, _rows_to_dicts, db_cursor
+from db.normalize import normalize_common_row, resolve_tier_name
 
 
 def _normalize_solved_row(row: dict) -> dict:
-    from clients.solved_ac import TIER_NAMES
-
-    row["platform"] = (row.get("platform") or "boj").lower()
-    row["problem_ref"] = row.get("problem_ref") or str(row.get("problem_id", ""))
-    if isinstance(row.get("tags"), str):
-        row["tags"] = json.loads(row["tags"])
-    row["tier_name"] = row.get("tier_name") or TIER_NAMES.get(row.get("tier", 0), "Unrated")
-    return row
+    return normalize_common_row(row)
 
 
 def save_solved_problem(problem_id: int, title: str, tier: int, tags: list,
@@ -49,7 +43,6 @@ def clear_solved_history():
 
 
 def get_cached_problem_info(problem_id: int) -> dict | None:
-    from clients.solved_ac import TIER_NAMES
     p = _ph()
     with db_cursor() as cur:
         cur.execute(f"""
@@ -77,7 +70,7 @@ def get_cached_problem_info(problem_id: int) -> dict | None:
         "id": problem_id,
         "title": title,
         "tier": tier,
-        "tier_name": tier_name or TIER_NAMES.get(tier, "Unrated"),
+        "tier_name": resolve_tier_name(tier, tier_name),
         "tags": tags,
     }
 

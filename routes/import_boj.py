@@ -2,7 +2,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.models import ImportRequest
-from routes.helpers import build_readme, push_solution
+from routes.helpers import build_readme, push_solution, build_solution_target, merged_github_target
 from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
@@ -23,9 +23,7 @@ def import_history(req: ImportRequest):
     skipped = len(submissions) - len(new_subs)
     imported, failed = 0, []
 
-    gh_settings = db.get_github_settings()
-    github_repo = gh_settings.get("target_repo") if gh_settings else None
-    github_token = gh_settings.get("access_token") if gh_settings else None
+    github_repo, github_token = merged_github_target()
     github_push_enabled = bool(github_repo and github_token)
     github_pushed = 0
 
@@ -57,9 +55,7 @@ def import_history(req: ImportRequest):
             )
             if github_push_enabled and code:
                 ext = api_client._get_file_extension(sub.get("language", ""))
-                tier_cat = info["tier_name"].split()[0] if info.get("tier_name") else "Unrated"
-                folder = f"백준/{tier_cat}/{problem_id}번. {info['title']}"
-                msg = f"[BOJ] {problem_id}번. {info['title']}"
+                folder, msg = build_solution_target("boj", problem_id, info["title"], info.get("tier_name", ""))
                 boj_url = f"https://www.acmicpc.net/problem/{problem_id}"
                 readme = build_readme(str(problem_id), info["title"],
                                       info.get("tier_name", ""), info.get("tags", []),

@@ -85,24 +85,35 @@ def get_problem_info(problem_id: int) -> dict:
     }
 
 
-def get_problem_statement(problem_id: int) -> str:
+def _fetch_boj_sections(problem_id: int) -> dict:
+    """BOJ 문제 페이지에서 설명/입력/출력 섹션을 가져온다. 요소가 없으면 None, 실패 시 예외 전파."""
     url = f"https://www.acmicpc.net/problem/{problem_id}"
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
+    resp = requests.get(url, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-        problem_text = soup.select_one("#problem_description")
-        input_text = soup.select_one("#problem_input")
-        output_text = soup.select_one("#problem_output")
+    def _text(sel):
+        el = soup.select_one(sel)
+        return el.get_text(separator="\n", strip=True) if el else None
+
+    return {
+        "description": _text("#problem_description"),
+        "input": _text("#problem_input"),
+        "output": _text("#problem_output"),
+    }
+
+
+def get_problem_statement(problem_id: int) -> str:
+    try:
+        sections = _fetch_boj_sections(problem_id)
 
         parts = []
-        if problem_text:
-            parts.append("【문제】\n" + problem_text.get_text(separator="\n", strip=True))
-        if input_text:
-            parts.append("【입력】\n" + input_text.get_text(separator="\n", strip=True))
-        if output_text:
-            parts.append("【출력】\n" + output_text.get_text(separator="\n", strip=True))
+        if sections["description"] is not None:
+            parts.append("【문제】\n" + sections["description"])
+        if sections["input"] is not None:
+            parts.append("【입력】\n" + sections["input"])
+        if sections["output"] is not None:
+            parts.append("【출력】\n" + sections["output"])
 
         return "\n\n".join(parts) if parts else "문제 설명을 가져올 수 없습니다."
     except Exception as e:
@@ -110,20 +121,12 @@ def get_problem_statement(problem_id: int) -> str:
 
 
 def get_boj_problem_sections(problem_id: int) -> dict:
-    url = f"https://www.acmicpc.net/problem/{problem_id}"
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        def _text(sel):
-            el = soup.select_one(sel)
-            return el.get_text(separator="\n", strip=True) if el else ""
-
+        sections = _fetch_boj_sections(problem_id)
         return {
-            "description": _text("#problem_description"),
-            "input": _text("#problem_input"),
-            "output": _text("#problem_output"),
+            "description": sections["description"] or "",
+            "input": sections["input"] or "",
+            "output": sections["output"] or "",
         }
     except Exception:
         return {"description": "", "input": "", "output": ""}

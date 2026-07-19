@@ -13,6 +13,14 @@ function outputMatches(actual, expected) {
   });
 }
 
+function bindCfProblemClicks(rootEl) {
+  rootEl.querySelectorAll('.cf-clickable').forEach(el => {
+    el.addEventListener('click', () => {
+      openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
+    });
+  });
+}
+
 let _currentProblem = null;
 
 async function openProblemModal(ref, title, tierName) {
@@ -38,9 +46,7 @@ async function openProblemModal(ref, title, tierName) {
   window.setEditorValue('pm-code', '');
 
   try {
-    const res = await fetch(`/api/problem/cf/${ref}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '문제 로딩 실패');
+    const data = await fetchJsonOk(`/api/problem/cf/${ref}`, undefined, '문제 로딩 실패');
 
     _currentProblem.samples  = data.samples;
     _currentProblem.sections = data.statement_sections_ko || {};

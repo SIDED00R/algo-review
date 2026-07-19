@@ -7,9 +7,7 @@ reportBtn.addEventListener('click', async () => {
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 종합 분석 중입니다... (10~20초 소요)</div>';
 
   try {
-    const res = await fetch('/api/report');
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '실패');
+    const data = await fetchJsonOk('/api/report', undefined, '실패');
     result.innerHTML = `
       <div class="result-card">
         <div class="feedback-box">
