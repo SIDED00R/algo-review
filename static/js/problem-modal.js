@@ -16,7 +16,7 @@ function outputMatches(actual, expected) {
 let _currentProblem = null;
 
 async function openProblemModal(ref, title, tierName) {
-  _currentProblem = { ref, title, tierName, samples: [] };
+  _currentProblem = { ref, samples: [] };
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
@@ -43,7 +43,6 @@ async function openProblemModal(ref, title, tierName) {
     if (!res.ok) throw new Error(data.detail || '문제 로딩 실패');
 
     _currentProblem.samples  = data.samples;
-    _currentProblem.title    = data.title;
     _currentProblem.sections = data.statement_sections_ko || {};
 
     document.getElementById('pm-title').textContent = `${ref}. ${data.title}`;

@@ -1,4 +1,3 @@
-from datetime import datetime
 from db.connection import USE_POSTGRES, _ph, _rows_to_dicts, db_cursor
 
 
@@ -16,28 +15,25 @@ def get_github_settings() -> dict | None:
 
 def save_github_settings(access_token: str, github_username: str, target_repo: str = ""):
     p = _ph()
-    now = datetime.now().isoformat()
     with db_cursor(commit=True) as cur:
         if USE_POSTGRES:
             cur.execute(f"""
-                INSERT INTO github_settings (id, access_token, github_username, target_repo, updated_at)
-                VALUES (1, {p}, {p}, {p}, {p})
+                INSERT INTO github_settings (id, access_token, github_username, target_repo)
+                VALUES (1, {p}, {p}, {p})
                 ON CONFLICT (id) DO UPDATE
                 SET access_token = EXCLUDED.access_token,
                     github_username = EXCLUDED.github_username,
-                    target_repo = CASE WHEN {p} != '' THEN EXCLUDED.target_repo ELSE github_settings.target_repo END,
-                    updated_at = EXCLUDED.updated_at
-            """, (access_token, github_username, target_repo, now, target_repo))
+                    target_repo = CASE WHEN {p} != '' THEN EXCLUDED.target_repo ELSE github_settings.target_repo END
+            """, (access_token, github_username, target_repo, target_repo))
         else:
             cur.execute(f"""
-                INSERT INTO github_settings (id, access_token, github_username, target_repo, updated_at)
-                VALUES (1, {p}, {p}, {p}, {p})
+                INSERT INTO github_settings (id, access_token, github_username, target_repo)
+                VALUES (1, {p}, {p}, {p})
                 ON CONFLICT(id) DO UPDATE
                 SET access_token = excluded.access_token,
                     github_username = excluded.github_username,
-                    target_repo = CASE WHEN {p} != '' THEN excluded.target_repo ELSE github_settings.target_repo END,
-                    updated_at = excluded.updated_at
-            """, (access_token, github_username, target_repo, now, target_repo))
+                    target_repo = CASE WHEN {p} != '' THEN excluded.target_repo ELSE github_settings.target_repo END
+            """, (access_token, github_username, target_repo, target_repo))
 
 
 def update_github_target_repo(target_repo: str):

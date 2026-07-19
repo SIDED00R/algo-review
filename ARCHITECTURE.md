@@ -60,6 +60,8 @@
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
 | `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
+| `demo_mode.py` | 데모 모드 플래그(`IS_DEMO`)와 라우터가 반환하는 mock 응답 데이터 |
+| `demo_seed.py` | 데모 서버 기동 시 SQLite 샘플 데이터 시딩 |
 
 ### DB 레이어 (`db/`)
 | 파일 | 단일 책임 |

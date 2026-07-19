@@ -112,8 +112,7 @@ def init_db():
             id              {github_pk},
             access_token    TEXT NOT NULL DEFAULT '',
             github_username TEXT NOT NULL DEFAULT '',
-            target_repo     TEXT NOT NULL DEFAULT '',
-            updated_at      TEXT NOT NULL DEFAULT ''
+            target_repo     TEXT NOT NULL DEFAULT ''
         )
     """)
 
