@@ -14,6 +14,9 @@ CODEFORCES_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+# CF 문제 페이지 본문 컨테이너 xpath — 섹션(div[2~4])과 예제(div[5]) 추출이 공용
+_CF_PROBLEM_BASE_XPATH = '//*[@id="pageContent"]/div[3]/div[2]/div'
+
 
 def normalize_codeforces_problem_ref(problem_ref: str) -> tuple[int, str]:
     match = re.match(r"^\s*(\d+)\s*[-/_ ]?\s*([A-Za-z][A-Za-z0-9]*)\s*$", problem_ref or "")
@@ -89,11 +92,10 @@ def cf_xpath_text(tree, expr: str) -> str:
 
 
 def _extract_cf_sections(tree) -> dict:
-    BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
     return {
-        "description": cf_xpath_text(tree, f'{BASE}/div[2]'),
-        "input":       cf_xpath_text(tree, f'{BASE}/div[3]'),
-        "output":      cf_xpath_text(tree, f'{BASE}/div[4]'),
+        "description": cf_xpath_text(tree, f'{_CF_PROBLEM_BASE_XPATH}/div[2]'),
+        "input":       cf_xpath_text(tree, f'{_CF_PROBLEM_BASE_XPATH}/div[3]'),
+        "output":      cf_xpath_text(tree, f'{_CF_PROBLEM_BASE_XPATH}/div[4]'),
     }
 
 
@@ -136,13 +138,11 @@ def scrape_cf_problem(problem_ref: str) -> dict:
         full_text = " ".join(el.itertext()).strip()
         return full_text.replace(prop_text, "", 1).strip()
 
-    BASE = '//*[@id="pageContent"]/div[3]/div[2]/div'
-
     note_nodes = tree.xpath('//*[contains(@class,"note")]')
     note_text = " ".join(note_nodes[0].itertext()).strip() if note_nodes else ""
 
     samples = []
-    sample_container = tree.xpath(f'{BASE}/div[5]')
+    sample_container = tree.xpath(f'{_CF_PROBLEM_BASE_XPATH}/div[5]')
     if sample_container:
         sc = sample_container[0]
         inp_pres = sc.xpath('.//div[contains(@class,"input")]//pre')
