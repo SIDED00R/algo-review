@@ -7,3 +7,6 @@ __pycache__/
 .github/
 .claude/
 assets/
+tests/
+pyproject.toml
+requirements-dev.txt
