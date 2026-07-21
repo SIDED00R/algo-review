@@ -1,6 +1,10 @@
 import json
 from datetime import datetime
-from db.connection import USE_POSTGRES, _ph, _rows_to_dicts, db_cursor
+
+from sqlalchemy import distinct, func, select
+
+from db.connection import session_scope
+from db.models import Review, SolvedHistory, TagStat
 from db.normalize import normalize_common_row
 
 
@@ -24,77 +28,58 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
                 strengths: list = None, weaknesses: list = None,
                 platform: str = "boj", problem_ref: str | None = None,
                 tier_name: str = ""):
-    p = _ph()
-
     strengths = strengths or []
     weaknesses = weaknesses or []
     platform = (platform or "boj").strip().lower()
     problem_ref = (problem_ref or str(problem_id)).strip()
 
-    with db_cursor(commit=True) as cur:
-        cur.execute(
-            f"SELECT COUNT(*) FROM reviews WHERE platform = {p} AND problem_ref = {p}",
-            (platform, problem_ref),
-        )
-        row = cur.fetchone()
-        is_first_submission = (row[0] == 0)
+    with session_scope(commit=True) as session:
+        prior = session.scalar(
+            select(func.count()).select_from(Review)
+            .where(Review.platform == platform, Review.problem_ref == problem_ref))
+        is_first_submission = (prior == 0)
 
-        cur.execute(f"""
-            INSERT INTO reviews (problem_id, platform, problem_ref, title, tier, tier_name, tags,
-                                 code, feedback, efficiency, complexity, better_algorithm,
-                                 strengths, weaknesses, created_at)
-            VALUES ({p},{p},{p},{p},{p},{p},{p},{p},{p},{p},{p},{p},{p},{p},{p})
-        """, (problem_id, platform, problem_ref, title, tier, tier_name,
-              json.dumps(tags, ensure_ascii=False), code, feedback, efficiency,
-              complexity, better_algorithm or "", json.dumps(strengths, ensure_ascii=False),
-              json.dumps(weaknesses, ensure_ascii=False), datetime.now().isoformat()))
+        session.add(Review(
+            problem_id=problem_id, platform=platform, problem_ref=problem_ref,
+            title=title, tier=tier, tier_name=tier_name,
+            tags=json.dumps(tags, ensure_ascii=False), code=code, feedback=feedback,
+            efficiency=efficiency, complexity=complexity, better_algorithm=better_algorithm or "",
+            strengths=json.dumps(strengths, ensure_ascii=False),
+            weaknesses=json.dumps(weaknesses, ensure_ascii=False),
+            created_at=datetime.now().isoformat(),
+        ))
 
+        # tag_stats 는 BOJ 첫 제출에서만 집계한다.
         if is_first_submission and platform == "boj":
             for tag in tags:
-                if USE_POSTGRES:
-                    cur.execute(f"""
-                        INSERT INTO tag_stats (tag, good_count, poor_count, total_count)
-                        VALUES ({p}, 0, 0, 0)
-                        ON CONFLICT (tag) DO NOTHING
-                    """, (tag,))
-                else:
-                    cur.execute(f"""
-                        INSERT OR IGNORE INTO tag_stats (tag, good_count, poor_count, total_count)
-                        VALUES ({p}, 0, 0, 0)
-                    """, (tag,))
-
+                stat = session.get(TagStat, tag)
+                if stat is None:
+                    stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
+                    session.add(stat)
+                    session.flush()
+                stat.total_count += 1
                 if efficiency == "good":
-                    cur.execute(f"""
-                        UPDATE tag_stats
-                        SET good_count = good_count + 1, total_count = total_count + 1
-                        WHERE tag = {p}
-                    """, (tag,))
+                    stat.good_count += 1
                 else:
-                    cur.execute(f"""
-                        UPDATE tag_stats
-                        SET poor_count = poor_count + 1, total_count = total_count + 1
-                        WHERE tag = {p}
-                    """, (tag,))
+                    stat.poor_count += 1
 
 
 def get_tag_stats() -> list:
-    with db_cursor() as cur:
-        cur.execute("SELECT * FROM tag_stats ORDER BY total_count DESC")
-        return _rows_to_dicts(cur, cur.fetchall())
+    with session_scope() as session:
+        rows = session.scalars(select(TagStat).order_by(TagStat.total_count.desc())).all()
+        return [
+            {"tag": r.tag, "good_count": r.good_count,
+             "poor_count": r.poor_count, "total_count": r.total_count}
+            for r in rows
+        ]
 
 
 def get_total_review_count(platform: str | None = None) -> int:
-    p = _ph()
-    with db_cursor() as cur:
+    with session_scope() as session:
+        stmt = select(func.count(distinct(Review.problem_ref)))
         if platform:
-            platform = platform.strip().lower()
-            cur.execute(
-                f"SELECT COUNT(DISTINCT problem_ref) FROM reviews WHERE platform = {p}",
-                (platform,),
-            )
-        else:
-            cur.execute("SELECT COUNT(DISTINCT problem_ref) FROM reviews")
-        return cur.fetchone()[0]
+            stmt = stmt.where(Review.platform == platform.strip().lower())
+        return session.scalar(stmt)
 
 
 def _tally_tag_efficiency(rows: list) -> dict:
@@ -115,10 +100,10 @@ def _tally_tag_efficiency(rows: list) -> dict:
 
 
 def get_cf_tag_stats() -> list:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"SELECT tags, efficiency FROM reviews WHERE platform = {p}", ("codeforces",))
-        rows = _rows_to_dicts(cur, cur.fetchall())
+    with session_scope() as session:
+        rows = [dict(r) for r in session.execute(
+            select(Review.tags, Review.efficiency).where(Review.platform == "codeforces")
+        ).mappings().all()]
 
     counts = _tally_tag_efficiency(rows)
     return sorted(counts.values(), key=lambda x: x["total_count"], reverse=True)
@@ -129,164 +114,107 @@ _AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
 
 def get_average_tier() -> float:
     """최근 30개 고유 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다."""
-    with db_cursor() as cur:
-        if USE_POSTGRES:
-            cur.execute("""
-                SELECT tier FROM (
-                    SELECT DISTINCT ON (platform, problem_ref) tier, created_at
-                    FROM reviews WHERE tier > 0
-                    ORDER BY platform, problem_ref, created_at DESC
-                ) t ORDER BY created_at DESC LIMIT %s
-            """, (_AVG_TIER_WINDOW,))
-        else:
-            # MAX(created_at) 기준 행의 tier를 정확히 선택 — non-aggregated tier는 GROUP BY에서 보장 안 됨
-            cur.execute("""
-                SELECT r.tier FROM reviews r
-                INNER JOIN (
-                    SELECT platform, problem_ref, MAX(created_at) AS last_at
-                    FROM reviews WHERE tier > 0
-                    GROUP BY platform, problem_ref
-                ) latest ON r.platform = latest.platform
-                        AND r.problem_ref = latest.problem_ref
-                        AND r.created_at = latest.last_at
-                WHERE r.tier > 0
-                ORDER BY latest.last_at DESC LIMIT ?
-            """, (_AVG_TIER_WINDOW,))
-        rows = cur.fetchall()
+    rn = func.row_number().over(
+        partition_by=(Review.platform, Review.problem_ref),
+        order_by=Review.created_at.desc(),
+    ).label("rn")
+    with session_scope() as session:
+        sub = select(Review.tier, Review.created_at, rn).where(Review.tier > 0).subquery()
+        tiers = session.scalars(
+            select(sub.c.tier).where(sub.c.rn == 1)
+            .order_by(sub.c.created_at.desc()).limit(_AVG_TIER_WINDOW)
+        ).all()
 
-    if not rows:
+    if not tiers:
         return 10.0
-
-    return sum(row[0] for row in rows) / len(rows)
+    return sum(tiers) / len(tiers)
 
 
 def get_problems_grouped() -> list:
-    with db_cursor() as cur:
-        cur.execute("""
-            SELECT
-                problem_id,
-                platform,
-                problem_ref,
-                title,
-                tier,
-                tier_name,
-                tags,
-                COUNT(*) AS submission_count,
-                MAX(created_at) AS last_submitted,
-                STRING_AGG(efficiency, ',' ORDER BY created_at DESC) AS efficiencies
-            FROM reviews
-            GROUP BY problem_id, platform, problem_ref, title, tier, tier_name, tags
-            ORDER BY last_submitted DESC
-        """ if USE_POSTGRES else """
-            SELECT
-                problem_id,
-                platform,
-                problem_ref,
-                title,
-                tier,
-                tier_name,
-                tags,
-                COUNT(*) AS submission_count,
-                MAX(created_at) AS last_submitted,
-                (
-                    SELECT GROUP_CONCAT(efficiency)
-                    FROM (
-                        SELECT efficiency
-                        FROM reviews r2
-                        WHERE r2.platform = reviews.platform
-                          AND r2.problem_ref = reviews.problem_ref
-                        ORDER BY r2.created_at DESC
-                    )
-                ) AS efficiencies
-            FROM reviews
-            GROUP BY problem_id, platform, problem_ref, title, tier, tier_name, tags
-            ORDER BY last_submitted DESC
-        """)
-        rows = _rows_to_dicts(cur, cur.fetchall())
+    with session_scope() as session:
+        rows = session.execute(
+            select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+                   Review.tier, Review.tier_name, Review.tags, Review.efficiency, Review.created_at)
+            .order_by(Review.created_at.desc())
+        ).mappings().all()
+
+    # (platform, problem_ref) 로 묶는다 — 재제출 사이 제목/태그가 바뀌어도 한 문제로 합쳐진다.
+    grouped: dict[tuple, dict] = {}
+    order: list[tuple] = []
     for r in rows:
-        _normalize_review_row(r)
-    return rows
+        key = (r["platform"], r["problem_ref"])
+        if key not in grouped:
+            grouped[key] = {
+                "problem_id": r["problem_id"], "platform": r["platform"],
+                "problem_ref": r["problem_ref"], "title": r["title"],
+                "tier": r["tier"], "tier_name": r["tier_name"], "tags": r["tags"],
+                "submission_count": 0, "last_submitted": r["created_at"], "_effs": [],
+            }
+            order.append(key)
+        g = grouped[key]
+        g["submission_count"] += 1
+        g["_effs"].append(r["efficiency"])  # rows 가 created_at DESC 라 최신순으로 쌓인다
+
+    result = []
+    for key in order:
+        g = grouped[key]
+        g["efficiencies"] = ",".join(g.pop("_effs"))
+        _normalize_review_row(g)
+        result.append(g)
+    return result
 
 
 def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"""
-            SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, code, efficiency, complexity,
-                   better_algorithm, strengths, weaknesses, feedback, created_at
-            FROM reviews WHERE platform = {p} AND problem_ref = {p}
-            ORDER BY created_at DESC
-        """, (platform, problem_ref))
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    for r in rows:
+    with session_scope() as session:
+        rows = session.execute(
+            select(Review.id, Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+                   Review.tier, Review.tier_name, Review.tags, Review.code, Review.efficiency,
+                   Review.complexity, Review.better_algorithm, Review.strengths, Review.weaknesses,
+                   Review.feedback, Review.created_at)
+            .where(Review.platform == platform, Review.problem_ref == problem_ref)
+            .order_by(Review.created_at.desc())
+        ).mappings().all()
+    result = [dict(r) for r in rows]
+    for r in result:
         _normalize_review_row(r)
-    return rows
+    return result
 
 
 def get_tier_history() -> list:
-    with db_cursor() as cur:
-        cur.execute("""
-            SELECT problem_id, platform, problem_ref, title, tier, tier_name, created_at
-            FROM reviews
-            WHERE platform = 'boj' AND tier > 0
-            ORDER BY created_at ASC
-        """)
-        return _rows_to_dicts(cur, cur.fetchall())
+    with session_scope() as session:
+        rows = session.execute(
+            select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+                   Review.tier, Review.tier_name, Review.created_at)
+            .where(Review.platform == "boj", Review.tier > 0)
+            .order_by(Review.created_at.asc())
+        ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 def get_review_history(limit: int = 10, platform: str | None = None) -> list:
-    p = _ph()
-    with db_cursor() as cur:
+    with session_scope() as session:
+        stmt = select(Review.id, Review.problem_id, Review.platform, Review.problem_ref,
+                      Review.title, Review.tier, Review.tier_name, Review.tags,
+                      Review.efficiency, Review.created_at)
         if platform:
-            platform = platform.strip().lower()
-            cur.execute(f"""
-                SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, efficiency, created_at
-                FROM reviews
-                WHERE platform = {p}
-                ORDER BY created_at DESC
-                LIMIT {p}
-            """, (platform, limit))
-        else:
-            cur.execute(f"""
-                SELECT id, problem_id, platform, problem_ref, title, tier, tier_name, tags, efficiency, created_at
-                FROM reviews ORDER BY created_at DESC LIMIT {p}
-            """, (limit,))
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    for r in rows:
+            stmt = stmt.where(Review.platform == platform.strip().lower())
+        stmt = stmt.order_by(Review.created_at.desc()).limit(limit)
+        rows = session.execute(stmt).mappings().all()
+    result = [dict(r) for r in rows]
+    for r in result:
         _normalize_review_row(r)
-    return rows
+    return result
 
 
 def get_average_cf_rating() -> float:
-    p = _ph()
-    with db_cursor() as cur:
-        if USE_POSTGRES:
-            cur.execute(f"""
-                SELECT tier_name FROM (
-                    SELECT DISTINCT ON (problem_ref) tier_name
-                    FROM reviews WHERE platform = {p}
-                    ORDER BY problem_ref, created_at DESC
-                ) t
-            """, ("codeforces",))
-        else:
-            cur.execute(f"""
-                SELECT r.tier_name
-                FROM reviews r
-                JOIN (
-                    SELECT problem_ref, MAX(created_at) AS max_created_at
-                    FROM reviews
-                    WHERE platform = {p}
-                    GROUP BY problem_ref
-                ) latest
-                  ON latest.problem_ref = r.problem_ref
-                 AND latest.max_created_at = r.created_at
-                WHERE r.platform = {p}
-            """, ("codeforces", "codeforces"))
-        rows = cur.fetchall()
+    rn = func.row_number().over(
+        partition_by=Review.problem_ref, order_by=Review.created_at.desc()).label("rn")
+    with session_scope() as session:
+        sub = select(Review.tier_name, rn).where(Review.platform == "codeforces").subquery()
+        names = session.scalars(select(sub.c.tier_name).where(sub.c.rn == 1)).all()
 
     ratings = []
-    for row in rows:
-        tn = row[0]
+    for tn in names:
         if tn and tn.startswith("Codeforces "):
             try:
                 ratings.append(int(tn.split()[-1]))
@@ -296,25 +224,21 @@ def get_average_cf_rating() -> float:
 
 
 def get_tag_weakness_data(platform: str | None = None) -> list:
-    with db_cursor() as cur:
+    with session_scope() as session:
+        rstmt = select(Review.tags, Review.efficiency, Review.created_at)
+        sstmt = select(SolvedHistory.tags, SolvedHistory.imported_at)
         if platform:
-            p = _ph()
-            cur.execute(f"SELECT tags, efficiency, created_at FROM reviews WHERE platform = {p}", (platform,))
-            review_rows = _rows_to_dicts(cur, cur.fetchall())
-            cur.execute(f"SELECT tags, imported_at FROM solved_history WHERE platform = {p}", (platform,))
-            solved_rows = _rows_to_dicts(cur, cur.fetchall())
-        else:
-            cur.execute("SELECT tags, efficiency, created_at FROM reviews")
-            review_rows = _rows_to_dicts(cur, cur.fetchall())
-            cur.execute("SELECT tags, imported_at FROM solved_history")
-            solved_rows = _rows_to_dicts(cur, cur.fetchall())
+            rstmt = rstmt.where(Review.platform == platform)
+            sstmt = sstmt.where(SolvedHistory.platform == platform)
+        review_rows = [dict(r) for r in session.execute(rstmt).mappings().all()]
+        solved_rows = [dict(r) for r in session.execute(sstmt).mappings().all()]
 
         # tag_stats는 BOJ 전용 — boj가 아닌 플랫폼 지정 시에만 제외하고, 미지정/boj면 그대로 사용한다.
         if platform and platform != "boj":
             stat_rows = []
         else:
-            cur.execute("SELECT tag, poor_count, total_count FROM tag_stats")
-            stat_rows = _rows_to_dicts(cur, cur.fetchall())
+            stat_rows = [dict(r) for r in session.execute(
+                select(TagStat.tag, TagStat.poor_count, TagStat.total_count)).mappings().all()]
 
     tag_data = {}
     for row in review_rows:

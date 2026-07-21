@@ -1,47 +1,46 @@
-from db.connection import USE_POSTGRES, _ph, _rows_to_dicts, db_cursor
+from db.connection import session_scope
+from db.models import GithubSetting
 
 
 def get_github_settings() -> dict | None:
-    with db_cursor() as cur:
-        cur.execute("SELECT access_token, github_username, target_repo FROM github_settings WHERE id = 1")
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    if not rows:
-        return None
-    row = rows[0]
-    if not row.get("access_token"):
-        return None
-    return row
+    with session_scope() as session:
+        obj = session.get(GithubSetting, 1)
+        if obj is None or not obj.access_token:
+            return None
+        return {
+            "access_token": obj.access_token,
+            "github_username": obj.github_username,
+            "target_repo": obj.target_repo,
+        }
 
 
 def save_github_settings(access_token: str, github_username: str, target_repo: str = ""):
-    p = _ph()
-    with db_cursor(commit=True) as cur:
-        if USE_POSTGRES:
-            cur.execute(f"""
-                INSERT INTO github_settings (id, access_token, github_username, target_repo)
-                VALUES (1, {p}, {p}, {p})
-                ON CONFLICT (id) DO UPDATE
-                SET access_token = EXCLUDED.access_token,
-                    github_username = EXCLUDED.github_username,
-                    target_repo = CASE WHEN {p} != '' THEN EXCLUDED.target_repo ELSE github_settings.target_repo END
-            """, (access_token, github_username, target_repo, target_repo))
-        else:
-            cur.execute(f"""
-                INSERT INTO github_settings (id, access_token, github_username, target_repo)
-                VALUES (1, {p}, {p}, {p})
-                ON CONFLICT(id) DO UPDATE
-                SET access_token = excluded.access_token,
-                    github_username = excluded.github_username,
-                    target_repo = CASE WHEN {p} != '' THEN excluded.target_repo ELSE github_settings.target_repo END
-            """, (access_token, github_username, target_repo, target_repo))
+    with session_scope(commit=True) as session:
+        obj = session.get(GithubSetting, 1)
+        if obj is None:
+            session.add(GithubSetting(
+                id=1,
+                access_token=access_token,
+                github_username=github_username,
+                target_repo=target_repo,
+            ))
+            return
+        obj.access_token = access_token
+        obj.github_username = github_username
+        # target_repo 가 빈 문자열이면 기존 값을 보존한다.
+        if target_repo != "":
+            obj.target_repo = target_repo
 
 
 def update_github_target_repo(target_repo: str):
-    p = _ph()
-    with db_cursor(commit=True) as cur:
-        cur.execute(f"UPDATE github_settings SET target_repo = {p} WHERE id = 1", (target_repo,))
+    with session_scope(commit=True) as session:
+        obj = session.get(GithubSetting, 1)
+        if obj is not None:
+            obj.target_repo = target_repo
 
 
 def delete_github_settings():
-    with db_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM github_settings WHERE id = 1")
+    with session_scope(commit=True) as session:
+        obj = session.get(GithubSetting, 1)
+        if obj is not None:
+            session.delete(obj)

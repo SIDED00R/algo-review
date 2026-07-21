@@ -1,6 +1,11 @@
 import json
 from datetime import datetime
-from db.connection import USE_POSTGRES, _ph, _rows_to_dicts, db_cursor
+
+from sqlalchemy import case, delete, select
+from sqlalchemy.exc import IntegrityError
+
+from db.connection import session_scope
+from db.models import Review, SolvedHistory
 from db.normalize import normalize_common_row, resolve_tier_name
 
 
@@ -8,63 +13,58 @@ def _normalize_solved_row(row: dict) -> dict:
     return normalize_common_row(row)
 
 
+def _row_to_dict(obj) -> dict:
+    return {col.name: getattr(obj, col.name) for col in obj.__table__.columns}
+
+
 def save_solved_problem(problem_id: int, title: str, tier: int, tags: list,
                         code: str = "", language: str = "", platform: str = "boj",
                         problem_ref: str | None = None, tier_name: str = ""):
-    p = _ph()
     platform = (platform or "boj").strip().lower()
     problem_ref = (problem_ref or str(problem_id)).strip()
-    with db_cursor(commit=True) as cur:
-        if USE_POSTGRES:
-            cur.execute(f"""
-                INSERT INTO solved_history (problem_id, platform, problem_ref, title, tier, tier_name, tags, code, language, imported_at)
-                VALUES ({p},{p},{p},{p},{p},{p},{p},{p},{p},{p})
-                ON CONFLICT (platform, problem_ref) DO NOTHING
-            """, (problem_id, platform, problem_ref, title, tier, tier_name,
-                  json.dumps(tags, ensure_ascii=False), code, language, datetime.now().isoformat()))
-        else:
-            cur.execute(f"""
-                INSERT OR IGNORE INTO solved_history
-                    (problem_id, platform, problem_ref, title, tier, tier_name, tags, code, language, imported_at)
-                VALUES ({p},{p},{p},{p},{p},{p},{p},{p},{p},{p})
-            """, (problem_id, platform, problem_ref, title, tier, tier_name,
-                  json.dumps(tags, ensure_ascii=False), code, language, datetime.now().isoformat()))
+    with session_scope() as session:
+        if session.get(SolvedHistory, {"platform": platform, "problem_ref": problem_ref}) is not None:
+            return  # (platform, problem_ref) 중복 — 최초 값 유지
+        session.add(SolvedHistory(
+            problem_id=problem_id, platform=platform, problem_ref=problem_ref,
+            title=title, tier=tier, tier_name=tier_name,
+            tags=json.dumps(tags, ensure_ascii=False), code=code, language=language,
+            imported_at=datetime.now().isoformat(),
+        ))
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()  # 동시 삽입 경합 — 이미 존재하면 무시
 
 
 def delete_solved_problem(platform: str, problem_ref: str):
-    p = _ph()
-    with db_cursor(commit=True) as cur:
-        cur.execute(f"DELETE FROM solved_history WHERE platform = {p} AND problem_ref = {p}", (platform, problem_ref))
+    with session_scope(commit=True) as session:
+        session.execute(delete(SolvedHistory).where(
+            SolvedHistory.platform == platform, SolvedHistory.problem_ref == problem_ref))
 
 
 def clear_solved_history():
-    with db_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM solved_history")
+    with session_scope(commit=True) as session:
+        session.execute(delete(SolvedHistory))
 
 
 def get_cached_problem_info(problem_id: int) -> dict | None:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"""
-            SELECT title, tier, tier_name, tags
-            FROM reviews
-            WHERE platform = 'boj' AND problem_id = {p}
-            ORDER BY created_at DESC LIMIT 1
-        """, (problem_id,))
-        row = cur.fetchone()
-        if not row:
-            cur.execute(f"""
-                SELECT title, tier, tier_name, tags
-                FROM solved_history
-                WHERE platform = 'boj' AND problem_id = {p}
-                LIMIT 1
-            """, (problem_id,))
-            row = cur.fetchone()
+    with session_scope() as session:
+        row = session.execute(
+            select(Review.title, Review.tier, Review.tier_name, Review.tags)
+            .where(Review.platform == "boj", Review.problem_id == problem_id)
+            .order_by(Review.created_at.desc()).limit(1)
+        ).first()
+        if row is None:
+            row = session.execute(
+                select(SolvedHistory.title, SolvedHistory.tier, SolvedHistory.tier_name, SolvedHistory.tags)
+                .where(SolvedHistory.platform == "boj", SolvedHistory.problem_id == problem_id).limit(1)
+            ).first()
 
-    if not row:
+    if row is None:
         return None
 
-    title, tier, tier_name, tags_json = row[0], row[1], row[2], row[3]
+    title, tier, tier_name, tags_json = row
     tags = json.loads(tags_json) if tags_json else []
     return {
         "id": problem_id,
@@ -76,52 +76,50 @@ def get_cached_problem_info(problem_id: int) -> dict | None:
 
 
 def get_solved_problem(platform: str, problem_ref: str) -> dict | None:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"SELECT * FROM solved_history WHERE platform = {p} AND problem_ref = {p}", (platform, problem_ref))
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    if not rows:
-        return None
-    return _normalize_solved_row(rows[0])
+    with session_scope() as session:
+        obj = session.get(SolvedHistory, {"platform": platform, "problem_ref": problem_ref})
+        if obj is None:
+            return None
+        row = _row_to_dict(obj)
+    return _normalize_solved_row(row)
 
 
 def get_solved_history() -> list:
-    with db_cursor() as cur:
-        cur.execute("""
-            SELECT problem_id, platform, problem_ref, title, tier, tier_name, language, imported_at,
-                   CASE WHEN code != '' THEN 1 ELSE 0 END AS has_code
-            FROM solved_history ORDER BY imported_at DESC
-        """)
-        rows = _rows_to_dicts(cur, cur.fetchall())
-    for r in rows:
+    has_code = case((SolvedHistory.code != "", 1), else_=0).label("has_code")
+    with session_scope() as session:
+        rows = session.execute(
+            select(SolvedHistory.problem_id, SolvedHistory.platform, SolvedHistory.problem_ref,
+                   SolvedHistory.title, SolvedHistory.tier, SolvedHistory.tier_name,
+                   SolvedHistory.language, SolvedHistory.imported_at, has_code)
+            .order_by(SolvedHistory.imported_at.desc())
+        ).mappings().all()
+    result = [dict(r) for r in rows]
+    for r in result:
         _normalize_solved_row(r)
         r["has_code"] = bool(r["has_code"])
-    return rows
+    return result
 
 
 def get_solved_cf_refs() -> set:
-    p = _ph()
-    with db_cursor() as cur:
-        cur.execute(f"SELECT DISTINCT problem_ref FROM reviews WHERE platform = {p}", ("codeforces",))
-        refs = {r[0] for r in cur.fetchall()}
-        cur.execute(f"SELECT problem_ref FROM solved_history WHERE platform = {p}", ("codeforces",))
-        refs |= {r[0] for r in cur.fetchall()}
+    with session_scope() as session:
+        refs = set(session.scalars(
+            select(Review.problem_ref).where(Review.platform == "codeforces").distinct()).all())
+        refs |= set(session.scalars(
+            select(SolvedHistory.problem_ref).where(SolvedHistory.platform == "codeforces")).all())
     return refs
 
 
 def get_solved_problem_ids() -> set:
-    with db_cursor() as cur:
-        cur.execute("SELECT DISTINCT problem_id FROM reviews")
-        ids = {r[0] for r in cur.fetchall()}
-        cur.execute("SELECT problem_id FROM solved_history")
-        ids |= {r[0] for r in cur.fetchall()}
+    with session_scope() as session:
+        ids = set(session.scalars(select(Review.problem_id).distinct()).all())
+        ids |= set(session.scalars(select(SolvedHistory.problem_id)).all())
     return ids
 
 
 def get_solved_problem_keys() -> set[tuple[str, str]]:
-    with db_cursor() as cur:
-        cur.execute("SELECT DISTINCT platform, problem_ref FROM reviews")
-        keys = {(r[0], str(r[1])) for r in cur.fetchall()}
-        cur.execute("SELECT platform, problem_ref FROM solved_history")
-        keys |= {(r[0], str(r[1])) for r in cur.fetchall()}
+    with session_scope() as session:
+        keys = {(p, str(r)) for p, r in session.execute(
+            select(Review.platform, Review.problem_ref).distinct()).all()}
+        keys |= {(p, str(r)) for p, r in session.execute(
+            select(SolvedHistory.platform, SolvedHistory.problem_ref)).all()}
     return keys

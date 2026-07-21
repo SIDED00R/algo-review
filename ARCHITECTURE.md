@@ -27,14 +27,14 @@
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
-│  DB Layer (db/)              │       │  External APIs                   │
-│  connection · schema         │       │  solved.ac · Codeforces          │
-│  reviews · solved            │       │  GitHub · OpenAI                 │
-│  github_settings · cache     │       └──────────────────────────────────┘
+│  DB Layer (db/) — SQLAlchemy │       │  External APIs                   │
+│  models · connection         │       │  solved.ac · Codeforces          │
+│  reviews · solved · cache    │       │  GitHub · OpenAI                 │
+│  github_settings · migrate   │       └──────────────────────────────────┘
 └────────┬────────────────────┘
          │
 ┌────────▼──────────────────────┐
-│  SQLite / PostgreSQL          │
+│  SQLite / PostgreSQL          │   (스키마: Alembic 마이그레이션)
 └───────────────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────┐
@@ -68,16 +68,22 @@
 | `demo_seed.py` | 데모 서버 기동 시 SQLite 샘플 데이터 시딩 |
 
 ### DB 레이어 (`db/`)
+SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 접속 URL 만 다르고
+쿼리 코드는 단일 경로다(수동 방언 분기 없음). 스키마는 Alembic 으로 버전 관리한다.
+
 | 파일 | 단일 책임 |
 |------|----------|
-| `db/connection.py` | DB 연결 팩토리 (SQLite / PostgreSQL), `db_cursor()` 컨텍스트 매니저, `_ph()`, `_rows_to_dicts()` |
-| `db/schema.py` | 테이블 생성 및 마이그레이션 (컬럼 추가) |
+| `config.py` | 환경변수 → SQLAlchemy 접속 URL 조립 (pydantic-settings) |
+| `db/models.py` | ORM 모델 5개(Review·TagStat·SolvedHistory·GithubSetting·ApiCache) + 인덱스 |
+| `db/connection.py` | 지연 엔진 싱글턴(`get_engine`)·세션 컨텍스트(`session_scope`)·`dispose_engine` |
+| `db/migrate.py` | 프로그래매틱 Alembic `upgrade head` 실행(`run_migrations`) |
 | `db/normalize.py` | reviews/solved 행 정규화 공용 헬퍼 (platform·problem_ref·tags·tier_name 폴백) |
 | `db/reviews.py` | reviews 테이블 CRUD + 티어/태그 집계 쿼리 |
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
 | `db/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
+| `migrations/` | Alembic 환경(`env.py`) + 리비전(`versions/`) |
 
 ### 외부 클라이언트 레이어 (`clients/`)
 | 파일 | 단일 책임 |
@@ -136,7 +142,7 @@
 
 | Caller | Callee | 목적 |
 |--------|--------|------|
-| `server.py` | `db.init_db` | lifespan 기동 시 스키마 마이그레이션 (데모는 `demo_seed.seed` 대신 실행, DB 연결 실패 시 경고만 남기고 기동 계속 — 온디맨드 정지 대응) |
+| `server.py` | `db.run_migrations` | lifespan 기동 시 Alembic `upgrade head` (데모는 `demo_seed.seed` 대신 실행, DB 연결 실패 시 경고만 남기고 기동 계속 — 온디맨드 정지 대응) |
 | `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
 | `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
 | `routes/review.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
@@ -176,7 +182,7 @@
 | # | 위치 | 조치 내용 |
 |---|------|----------|
 | 1 | `routes/execute.py` | subprocess 실행 시 `_SAFE_ENV_KEYS`만 허용 → API 키 환경변수 노출 차단 |
-| 2 | `db/schema.py` | ALTER TABLE f-string에 `_ALLOWED_*_COLS` 화이트리스트 검증 추가 |
+| 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 (구 `db/schema.py` ALTER 화이트리스트 대체) |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
 | 5 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
@@ -199,9 +205,10 @@
 | `OPENAI_TEMPERATURE` | — | CF 번역 temperature (기본값: `0.3`) |
 | `OPENAI_TIMEOUT` | — | CF 번역 API 타임아웃(초) (기본값: `15`) |
 | `COMPILE_TIMEOUT` | — | `/api/execute` C++ 컴파일 타임아웃(초) (기본값: `30`) |
+| `DATABASE_URL` | — | SQLAlchemy 접속 URL 직접 지정 (설정 시 아래 `DB_*` 를 모두 무시) |
 | `DB_TYPE` | — | `postgres` 설정 시 PostgreSQL 사용 (기본: SQLite) |
 | `DB_PATH` | — | SQLite 파일 경로 (기본값: 프로젝트 루트 `coding_recommend.db`) |
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` | — | PostgreSQL 연결 정보 |
-| `DB_HOST` / `DB_PORT` / `DB_SOCKET` | — | PostgreSQL 호스트 설정 |
+| `DB_HOST` / `DB_PORT` / `DB_SOCKET` | — | PostgreSQL 호스트 설정 (`DB_SOCKET`=Cloud SQL unix 소켓) |
 | `CORS_ORIGINS` | — | 허용할 CORS 출처 (쉼표 구분, 기본: `http://localhost:8080`) |
 | `DEMO_MODE` | — | `true` 설정 시 mock 데이터로 동작 (외부 API 키 불필요) |
