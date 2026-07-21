@@ -1,4 +1,4 @@
-from db.schema import init_db
+from db.migrate import run_migrations
 from db.reviews import (
     save_review,
     get_tag_stats,
@@ -36,7 +36,7 @@ from db.cache import (
 )
 
 __all__ = [
-    "init_db",
+    "run_migrations",
     "save_review", "get_tag_stats", "get_total_review_count",
     "get_cf_tag_stats", "get_average_tier",
     "get_problems_grouped", "get_reviews_by_problem", "get_tier_history",

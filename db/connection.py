@@ -1,61 +1,43 @@
-import os
-from pathlib import Path
+"""SQLAlchemy 엔진·세션 관리.
+
+- 엔진은 지연(lazy) 싱글턴이다 — import 시점에 연결하지 않으므로 온디맨드 DB 가 정지 상태여도
+  앱 기동을 막지 않는다(#67).
+- pool_pre_ping 으로 Cloud SQL 온디맨드 재시작 후의 stale 커넥션을 자동 복구한다.
+"""
 from contextlib import contextmanager
-from dotenv import load_dotenv
 
-load_dotenv()
+from sqlalchemy import create_engine, make_url
+from sqlalchemy.orm import Session
 
-USE_POSTGRES = os.environ.get("DB_TYPE", "sqlite").lower() == "postgres"
+from config import Settings
+
+_engine = None
 
 
-def get_connection():
-    if USE_POSTGRES:
-        import psycopg2
-        unix_socket = os.environ.get("DB_SOCKET")
-        if unix_socket:
-            return psycopg2.connect(
-                dbname=os.environ.get("DB_NAME", "boj_review"),
-                user=os.environ.get("DB_USER", "boj_user"),
-                password=os.environ.get("DB_PASSWORD", ""),
-                host=unix_socket,
-            )
-        return psycopg2.connect(
-            dbname=os.environ.get("DB_NAME", "boj_review"),
-            user=os.environ.get("DB_USER", "boj_user"),
-            password=os.environ.get("DB_PASSWORD", ""),
-            host=os.environ.get("DB_HOST", "localhost"),
-            port=os.environ.get("DB_PORT", "5432"),
-        )
-    else:
-        import sqlite3
-        _db_env = os.environ.get("DB_PATH")
-        db_path = Path(_db_env) if _db_env else Path(__file__).parent.parent / "coding_recommend.db"
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+def get_engine():
+    global _engine
+    if _engine is None:
+        url = Settings().sqlalchemy_url  # 매 생성마다 환경변수를 새로 읽는다(테스트에서 URL 교체 가능).
+        kwargs = {"pool_pre_ping": True}
+        if make_url(url).get_backend_name() == "sqlite":
+            # FastAPI 동기 라우트는 스레드풀에서 돌고 커넥션이 스레드를 넘나든다.
+            kwargs["connect_args"] = {"check_same_thread": False}
+        _engine = create_engine(url, **kwargs)
+    return _engine
+
+
+def dispose_engine():
+    """엔진 싱글턴을 폐기한다 — 테스트에서 DB URL 을 바꿀 때 사용."""
+    global _engine
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
 
 
 @contextmanager
-def db_cursor(commit: bool = False):
-    """커넥션·커서 수명을 관리한다. commit=True면 정상 종료 시 커밋. (postgres만 cursor.close 필요)"""
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        yield cur
+def session_scope(commit: bool = False):
+    """세션 수명을 관리한다. commit=True 면 정상 종료 시 커밋한다."""
+    with Session(get_engine(), expire_on_commit=False) as session:
+        yield session
         if commit:
-            conn.commit()
-    finally:
-        if USE_POSTGRES:
-            cur.close()
-        conn.close()
-
-
-def _ph():
-    return "%s" if USE_POSTGRES else "?"
-
-
-def _rows_to_dicts(cur, rows):
-    if USE_POSTGRES:
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in rows]
-    return [dict(r) for r in rows]
+            session.commit()

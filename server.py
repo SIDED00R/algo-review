@@ -30,10 +30,10 @@ async def lifespan(app: FastAPI):
         demo_seed.seed()
     else:
         try:
-            db.init_db()
+            db.run_migrations()
         except Exception as e:
             # 온디맨드 DB가 정지 상태여도 기동은 계속한다 — 배포·콜드스타트가 DB 상태에 묶이면 안 된다.
-            logger.warning("스키마 초기화 실패로 건너뜀 (온디맨드 DB 정지 등 연결 문제일 수 있음): %s", e)
+            logger.warning("마이그레이션 실패로 건너뜀 (온디맨드 DB 정지 등 연결 문제일 수 있음): %s", e)
     # 테마 캐시 예열은 기동을 막지 않게 백그라운드로 — 데모는 외부 API를 치지 않는다.
     warm_task = None if IS_DEMO else asyncio.create_task(warmup.warm_theme_caches())
     yield

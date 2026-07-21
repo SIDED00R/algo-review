@@ -96,7 +96,7 @@ _SOLVED = [
 
 
 def seed():
-    db.init_db()
+    db.run_migrations()
 
     for r in _REVIEWS:
         db.save_review(

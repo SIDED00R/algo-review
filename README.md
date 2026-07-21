@@ -186,14 +186,18 @@ gcloud run deploy algo-review-demo \
 │   ├── github.py           # GitHub OAuth, 파일 push, BaekjoonHub import
 │   └── utils.py            # get_problem_url(), 파일 확장자 매핑
 │
-├── db/                     # DB 레이어 (각 파일이 하나의 테이블 담당)
-│   ├── connection.py       # DB 연결 팩토리 (SQLite / PostgreSQL)
-│   ├── schema.py           # 테이블 생성 및 마이그레이션
+├── config.py               # 환경변수 → SQLAlchemy 접속 URL (pydantic-settings)
+├── db/                     # DB 레이어 — SQLAlchemy 2.0 ORM (SQLite/PostgreSQL 단일 코드 경로)
+│   ├── models.py           # ORM 모델 5개 + 인덱스
+│   ├── connection.py       # 엔진 싱글턴 + session_scope
+│   ├── migrate.py          # Alembic upgrade head 실행 (run_migrations)
 │   ├── normalize.py        # reviews/solved 행 정규화 공용 헬퍼
 │   ├── reviews.py          # reviews 테이블 CRUD + 티어/태그 집계
 │   ├── solved.py           # solved_history 테이블 CRUD
 │   ├── github_settings.py  # github_settings 테이블 CRUD
 │   └── cache.py            # api_cache 테이블 — 외부 API 파생 페이로드 TTL 캐시
+│
+├── migrations/             # Alembic (env.py + versions/)
 │
 ├── routes/                 # FastAPI 라우터 (각 파일이 하나의 도메인 담당)
 │   ├── auth.py             # GitHub OAuth 인증 흐름
@@ -247,7 +251,7 @@ gcloud run deploy algo-review-demo \
 - **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, CF 문제 번역: GPT-4o-mini)
 - **BOJ 데이터**: solved.ac API
 - **Codeforces 데이터**: Codeforces API + 크롤링
-- **DB**: SQLite (로컬 / 데모) / PostgreSQL (배포)
+- **DB**: SQLAlchemy 2.0 ORM + Alembic 마이그레이션 — SQLite (로컬 / 데모) / PostgreSQL (배포)
 - **배포**: GCP Cloud Run
 
 ## 환경변수 전체 목록
@@ -268,6 +272,7 @@ gcloud run deploy algo-review-demo \
 | `COMPILE_TIMEOUT` | 선택 | `/api/execute` C++ 컴파일 타임아웃(초) (기본값: `30`) |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |
+| `DATABASE_URL` | 선택 | SQLAlchemy 접속 URL 직접 지정 (설정 시 아래 `DB_*` 무시) |
 | `DB_TYPE` | 선택 | `postgres` 설정 시 PostgreSQL 사용 (기본: SQLite) |
 | `DB_PATH` | 선택 | SQLite 파일 경로 (기본값: 프로젝트 루트 `coding_recommend.db`) |
 | `DB_NAME` | 선택 | PostgreSQL DB 이름 |
