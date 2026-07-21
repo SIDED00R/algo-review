@@ -1,18 +1,19 @@
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
-load_dotenv()
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 import db
 import warmup
+from config import settings
+from db.connection import session_scope
 from demo_mode import IS_DEMO
 from routes import (
     auth, review, github_push, problem, execute, recommend,
@@ -43,9 +44,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="알고리즘 코드 리뷰 & 문제 추천", lifespan=lifespan)
 
+
+@app.exception_handler(OperationalError)
+async def _db_unavailable_handler(request: Request, exc: OperationalError):
+    # 온디맨드 DB 정지 등으로 연결이 안 되면 500 대신 503 + 안내를 준다.
+    logger.warning("DB 연결 실패: %s", exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "데이터베이스에 연결할 수 없습니다 (온디맨드 정지 상태일 수 있습니다). 잠시 후 다시 시도해주세요."},
+    )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_handler(request: Request, exc: Exception):
+    logger.exception("처리되지 않은 예외")
+    return JSONResponse(status_code=500, content={"detail": "서버 내부 오류가 발생했습니다."})
+
+
 allowed_origins = [
     origin.strip()
-    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:8080").split(",")
+    for origin in settings.cors_origins.split(",")
     if origin.strip()
 ]
 app.add_middleware(
@@ -74,6 +92,20 @@ app.include_router(import_codeforces.router)
 app.include_router(stats.router)
 app.include_router(report.router)
 app.include_router(themes.router)
+
+
+@app.get("/healthz")
+def healthz():
+    # 상태코드는 항상 200 — Cloud Run 프로브가 온디맨드 DB 정지에 묶이면 안 된다(#67).
+    # db 필드는 best-effort 진단용.
+    db_status = "unavailable"
+    try:
+        with session_scope() as session:
+            session.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception:
+        pass
+    return {"status": "ok", "db": db_status}
 
 
 @app.get("/")

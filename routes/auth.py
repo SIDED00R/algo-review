@@ -1,4 +1,3 @@
-import os
 import hmac
 import hashlib
 import secrets
@@ -8,6 +7,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from config import settings
 from routes.models import SetRepoRequest
 from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS
 
@@ -16,7 +16,7 @@ _logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _STATE_TTL = 300  # seconds
-_HMAC_KEY = os.environ.get("GITHUB_CLIENT_SECRET", "").encode() or b"dev-fallback-key"
+_HMAC_KEY = settings.github_client_secret.encode() or b"dev-fallback-key"
 # 사용된 nonce → 만료 시각. TTL 만료된 것만 정리해 1000개 일괄 삭제로 인한 replay 창 재개를 방지.
 _USED_NONCES: dict[str, float] = {}
 
@@ -55,17 +55,13 @@ def _consume_nonce(nonce: str) -> None:
 
 
 def _github_oauth_settings():
-    client_id = os.environ.get("GITHUB_CLIENT_ID", "")
-    client_secret = os.environ.get("GITHUB_CLIENT_SECRET", "")
-    app_url = os.environ.get("APP_URL", "http://localhost:8080")
-    return client_id, client_secret, app_url
+    return settings.github_client_id, settings.github_client_secret, settings.app_url
 
 
 @router.get("/auth/github")
 def github_oauth_start():
     if IS_DEMO:
-        app_url = os.environ.get("APP_URL", "http://localhost:8080")
-        return RedirectResponse(f"{app_url}/?github=connected&user=demo_user")
+        return RedirectResponse(f"{settings.app_url}/?github=connected&user=demo_user")
     client_id, _, app_url = _github_oauth_settings()
     if not client_id:
         raise HTTPException(status_code=500, detail="GITHUB_CLIENT_ID가 설정되지 않았습니다.")

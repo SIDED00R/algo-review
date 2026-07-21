@@ -1,7 +1,8 @@
-import os
 from fastapi import HTTPException
 
-IS_DEMO = os.environ.get("DEMO_MODE", "false").lower() == "true"
+from config import settings
+
+IS_DEMO = settings.demo_mode
 
 
 def demo_block(message: str = "데모 버전에서는 지원되지 않는 기능입니다."):

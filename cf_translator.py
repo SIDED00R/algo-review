@@ -1,10 +1,11 @@
-import os
 import re
 from openai import OpenAI
 
-_MAX_TOKENS = int(os.environ.get("OPENAI_MAX_TOKENS", "2000"))
-_TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
-_API_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "15"))
+from config import settings
+
+_MAX_TOKENS = settings.openai_max_tokens or 2000
+_TEMPERATURE = settings.openai_temperature
+_API_TIMEOUT = settings.openai_timeout
 
 
 def _normalize_cf_math(text: str) -> str:
@@ -14,9 +15,9 @@ def _normalize_cf_math(text: str) -> str:
 def translate_cf_text(text: str, title: str) -> str:
     """번역 성공 시 번역문, 응답이 비어 있으면 원문을 그대로 반환. API 예외는 전파 (캐시 오염 방지)."""
     text = _normalize_cf_math(text)
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+    client = OpenAI(api_key=settings.openai_api_key)
     resp = client.chat.completions.create(
-        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        model=settings.openai_model or "gpt-4o-mini",
         messages=[
             {"role": "system", "content": (
                 "You are a competitive programming translator. "

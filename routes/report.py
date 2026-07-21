@@ -1,7 +1,7 @@
-import os
 import db
 import analyzer
 from fastapi import APIRouter, HTTPException
+from config import settings
 from demo_mode import IS_DEMO, DEMO_REPORT
 
 router = APIRouter()
@@ -12,7 +12,7 @@ def get_report():
     if IS_DEMO:
         return {"report": DEMO_REPORT}
 
-    if not os.environ.get("OPENAI_API_KEY"):
+    if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 
     tag_stats = db.get_tag_stats()

@@ -6,6 +6,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
+from config import settings
 from routes.models import ExecuteRequest
 
 router = APIRouter()
@@ -13,7 +14,7 @@ router = APIRouter()
 # 코드 실행 subprocess에는 최소한의 환경변수만 전달해 민감한 서버 설정이 새지 않도록 한다.
 _SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
 _BASE_ENV = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
-_COMPILE_TIMEOUT = int(os.environ.get("COMPILE_TIMEOUT", "30"))
+_COMPILE_TIMEOUT = settings.compile_timeout
 # preexec_fn은 멀티스레드 서버(FastAPI threadpool)에서 fork 후 exec 전 deadlock 위험이 있어 사용하지 않는다.
 # 메모리·프로세스 제한은 Cloud Run 서비스 설정(컨테이너 메모리 상한)과 timeout에 위임한다.
 

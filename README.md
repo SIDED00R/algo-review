@@ -60,7 +60,13 @@ pip install -r requirements.txt
 
 ### 3. 환경변수 설정
 
-프로젝트 루트에 `.env` 파일을 만듭니다.
+`.env.example` 을 `.env` 로 복사해 값을 채웁니다 (전체 변수 목록·기본값은 `.env.example` 참고).
+
+```bash
+cp .env.example .env
+```
+
+주요 항목:
 
 ```env
 OPENAI_API_KEY=your_openai_key
@@ -94,6 +100,18 @@ python -m uvicorn server:app --reload --port 8080
 ```
 
 브라우저에서 `http://localhost:8080` 접속 (CORS 기본 허용 출처·컨테이너 포트와 동일한 8080 사용)
+
+헬스체크: `GET /healthz` → `{"status": "ok", "db": "ok"|"unavailable"}` (상태코드는 항상 200 — 온디맨드 DB 정지와 무관).
+
+### 5. 테스트 / 린트 (개발)
+
+```bash
+pip install -r requirements-dev.txt
+pytest          # DB 계층·라우트·마이그레이션 테스트 (기본 SQLite)
+ruff check .    # 린트
+```
+
+CI(`.github/workflows/deploy.yml`)는 PR·push 마다 lint + test(SQLite/PostgreSQL 두 방언)를 돌리고, 통과해야 배포한다.
 
 ## Codeforces 관련 주의사항
 
