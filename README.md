@@ -101,7 +101,7 @@ python -m uvicorn server:app --reload --port 8080
 
 브라우저에서 `http://localhost:8080` 접속 (CORS 기본 허용 출처·컨테이너 포트와 동일한 8080 사용)
 
-헬스체크: `GET /healthz` → `{"status": "ok", "db": "ok"|"unavailable"}` (상태코드는 항상 200 — 온디맨드 DB 정지와 무관).
+헬스체크: `GET /health` → `{"status": "ok", "db": "ok"|"unavailable"}` (상태코드는 항상 200 — 온디맨드 DB 정지와 무관).
 
 ### 5. 테스트 / 린트 (개발)
 

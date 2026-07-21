@@ -19,8 +19,8 @@ def client(monkeypatch):
         yield c
 
 
-def test_healthz_returns_200_with_db_ok(client):
-    r = client.get("/healthz")
+def test_health_returns_200_with_db_ok(client):
+    r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ok"
