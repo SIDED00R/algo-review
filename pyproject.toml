@@ -11,3 +11,5 @@ select = ["F", "E9"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# 콘솔 스크립트 `pytest` 실행 시에도 리포 루트를 import 경로에 올린다(db·routes 등).
+pythonpath = ["."]
