@@ -1,10 +1,11 @@
-name: Deploy to Cloud Run
+name: CI & Deploy
 
-# main 에 머지되면 Cloud Run 두 서비스를 병렬로 배포한다.
-# 인증: Workload Identity Federation (장기 키 없음).
+# PR·push 에서 lint+test 를 돌리고, main 에 머지될 때만 두 서비스를 배포한다.
+# 배포는 lint·test 통과에 의존한다(needs). 인증: Workload Identity Federation(장기 키 없음).
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -12,8 +13,60 @@ env:
   REGION: asia-northeast3
 
 jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff==0.15.22
+      - run: ruff check .
+
+  test:
+    name: Test (${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dialect: [sqlite, postgres]
+    services:
+      # 두 매트릭스 다리에서 항상 뜨지만 sqlite 다리에선 놀고 있을 뿐(무해).
+      # 이미지 major 는 운영 Cloud SQL(POSTGRES_15)과 일치시킨다.
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Run tests
+        env:
+          DB_TYPE: ${{ matrix.dialect }}
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: pytest -q
+
   deploy:
     name: Deploy ${{ matrix.service }}
+    needs: [lint, test]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
