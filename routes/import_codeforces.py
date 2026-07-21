@@ -1,8 +1,8 @@
-import os
 import time
 import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
+from config import settings
 from routes.models import CodeforcesImportRequest
 from routes.helpers import build_readme, push_solution, build_solution_target, merged_github_target
 from demo_mode import IS_DEMO, demo_block
@@ -16,8 +16,8 @@ def import_codeforces_history(req: CodeforcesImportRequest):
         demo_block("Codeforces 가져오기는 데모 버전에서 지원되지 않습니다.")
     handle = req.handle
 
-    api_key = (req.api_key or os.environ.get("CODEFORCES_API_KEY") or "").strip() or None
-    api_secret = (req.api_secret or os.environ.get("CODEFORCES_API_SECRET") or "").strip() or None
+    api_key = (req.api_key or settings.codeforces_api_key or "").strip() or None
+    api_secret = (req.api_secret or settings.codeforces_api_secret or "").strip() or None
     if bool(api_key) != bool(api_secret):
         raise HTTPException(status_code=400, detail="Codeforces API Key와 Secret은 둘 다 입력하거나 둘 다 비워두세요.")
 

@@ -1,8 +1,8 @@
-import os
 import db
 import clients as api_client
 import analyzer
 from fastapi import APIRouter, HTTPException
+from config import settings
 from routes.review_response import save_and_build_response
 
 router = APIRouter()
@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.post("/api/review-imported/{platform}/{problem_ref}")
 def review_imported(platform: str, problem_ref: str):
-    if not os.environ.get("OPENAI_API_KEY"):
+    if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 
     problem = db.get_solved_problem(platform, problem_ref)

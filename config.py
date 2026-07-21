@@ -12,6 +12,7 @@ from sqlalchemy import URL
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # --- 데이터베이스 ---
     # DATABASE_URL 을 직접 주면 최우선으로 사용한다(그 외 DB_* 는 무시).
     database_url: str | None = None
 
@@ -23,6 +24,30 @@ class Settings(BaseSettings):
     db_host: str = "localhost"
     db_port: int = 5432
     db_path: str | None = None       # SQLite 파일 경로(미지정 시 리포 루트 coding_recommend.db)
+
+    # --- OpenAI ---
+    openai_api_key: str = ""
+    # model / max_tokens 는 리뷰(analyzer)와 번역(cf_translator)의 기본값이 다르므로
+    # None 으로 두고 각 호출부에서 폴백한다(env 설정 시 양쪽 모두 그 값을 쓴다).
+    openai_model: str | None = None
+    openai_max_tokens: int | None = None
+    openai_report_max_tokens: int = 1024
+    openai_temperature: float = 0.3
+    openai_timeout: int = 15
+
+    # --- GitHub OAuth ---
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    app_url: str = "http://localhost:8080"
+
+    # --- Codeforces ---
+    codeforces_api_key: str | None = None
+    codeforces_api_secret: str | None = None
+
+    # --- 기타 ---
+    compile_timeout: int = 30
+    cors_origins: str = "http://localhost:8080"
+    demo_mode: bool = False
 
     @property
     def sqlalchemy_url(self) -> URL | str:

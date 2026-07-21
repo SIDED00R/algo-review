@@ -1,17 +1,15 @@
-import os
 import json
 from openai import OpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
+from config import settings
 
-GPT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
-_MAX_TOKENS_REVIEW = int(os.environ.get("OPENAI_MAX_TOKENS", "2048"))
-_MAX_TOKENS_REPORT = int(os.environ.get("OPENAI_REPORT_MAX_TOKENS", "1024"))
+GPT_MODEL = settings.openai_model or "gpt-4o"
+_MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
+_MAX_TOKENS_REPORT = settings.openai_report_max_tokens
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI(api_key=settings.openai_api_key)
 
     tags_str = ", ".join(problem_info["tags"]) if problem_info["tags"] else "태그 없음"
     platform = (problem_info.get("platform") or "boj").lower()
@@ -83,7 +81,7 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
     if not tag_stats:
         return "아직 분석 데이터가 없습니다. 더 많은 문제를 풀어보세요."
 
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI(api_key=settings.openai_api_key)
 
     stats_text = "\n".join(
         f"- {s['tag']}: 총 {s['total_count']}회 (잘함 {s['good_count']}회, 부족 {s['poor_count']}회)"
