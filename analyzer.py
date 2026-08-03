@@ -9,7 +9,7 @@ _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
 
     tags_str = ", ".join(problem_info["tags"]) if problem_info["tags"] else "태그 없음"
     platform = (problem_info.get("platform") or "boj").lower()
@@ -81,7 +81,7 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
     if not tag_stats:
         return "아직 분석 데이터가 없습니다. 더 많은 문제를 풀어보세요."
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
 
     stats_text = "\n".join(
         f"- {s['tag']}: 총 {s['total_count']}회 (잘함 {s['good_count']}회, 부족 {s['poor_count']}회)"
