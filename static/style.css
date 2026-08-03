@@ -465,6 +465,8 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
   overflow-y: auto; max-height: calc(90vh - 70px);
 }
 .pm-text { font-size: .9rem; line-height: 1.7; white-space: normal; word-break: break-word; }
+/* 구형 CF 문제의 수식 이미지 — 본문 글자 크기에 맞춰 인라인으로 앉힌다 */
+.pm-formula-img { max-width: 100%; max-height: 1.6em; vertical-align: middle; }
 .pm-section-card {
   background: var(--surface2);
   border: 1px solid var(--border);

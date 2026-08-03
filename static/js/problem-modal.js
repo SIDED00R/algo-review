@@ -13,6 +13,16 @@ function outputMatches(actual, expected) {
   });
 }
 
+// 백엔드가 남긴 수식 이미지 마커(⟦img:URL⟧)를 <img> 로 되살린다 — 구형 CF 문제의 수식은
+// alt 없는 PNG 라 텍스트로 추출되지 않는다. escapeHtml 이후에 호출해야 URL 이 속성값으로
+// 안전하게 이스케이프된 상태가 되고, http(s) 만 매치해 javascript: 스킴을 배제한다.
+function restoreFormulaImages(html) {
+  return html.replace(
+    /⟦img:(https?:\/\/[^⟧\s]+)⟧/g,
+    '<img src="$1" class="pm-formula-img" alt="수식">'
+  );
+}
+
 function bindCfProblemClicks(rootEl) {
   rootEl.querySelectorAll('.cf-clickable').forEach(el => {
     el.addEventListener('click', () => {
@@ -83,7 +93,7 @@ async function openProblemModal(ref, title, tierName) {
           let text = part;
           if (i > 0) text = text.replace(/^\n+/, '');
           if (i < parts.length - 1) text = text.replace(/\n+$/, '');
-          return escapeHtml(text).replace(/\n/g, '<br>');
+          return restoreFormulaImages(escapeHtml(text).replace(/\n/g, '<br>'));
         }).join('');
         return `
         <div class="pm-section-card">

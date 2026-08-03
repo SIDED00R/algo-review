@@ -74,6 +74,36 @@ def get_codeforces_problem_statement(problem_ref: str) -> str:
     return "문제 설명 자동 수집에 실패했습니다. 제목, 난이도, 태그 기준으로 제한적으로 분석합니다."
 
 
+def normalize_cf_math(text: str) -> str:
+    """CF 의 수식 구분자($$$…$$$ / $$$$$$…$$$$$$)를 프론트(KaTeX)가 쓰는 $…$ / $$…$$ 로 바꾼다.
+
+    번역 실패 시 원문이 그대로 프론트로 나가므로 번역 단계가 아니라 스크래핑 단계에서 통일한다.
+    디스플레이(6달러)를 먼저 처리해야 인라인 규칙이 앞의 3달러만 먹고 짝을 어긋내지 않는다.
+    """
+    text = re.sub(r'\$\$\$\$\$\$(.+?)\$\$\$\$\$\$', r'$$\1$$', text, flags=re.DOTALL)
+    return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
+
+
+def _inline_tex_images(el) -> None:
+    """수식 이미지 <img class="tex-formula"> 를 ⟦img:URL⟧ 마커 텍스트로 치환한다.
+
+    구형 문제의 수식은 alt 없는 PNG 라 itertext() 평탄화에서 통째로 사라진다.
+    프론트가 이 마커를 <img> 로 되살린다.
+    """
+    for img in el.xpath('.//img[contains(@class,"tex-formula")]'):
+        parent = img.getparent()
+        src = img.get("src", "")
+        if parent is None or not src:
+            continue
+        marker = f"⟦img:{src}⟧{img.tail or ''}"
+        prev = img.getprevious()
+        if prev is not None:
+            prev.tail = (prev.tail or "") + marker
+        else:
+            parent.text = (parent.text or "") + marker
+        parent.remove(img)
+
+
 def cf_xpath_text(tree, expr: str) -> str:
     nodes = tree.xpath(expr)
     if not nodes:
@@ -88,7 +118,8 @@ def cf_xpath_text(tree, expr: str) -> str:
         p = unwanted.getparent()
         if p is not None:
             p.remove(unwanted)
-    return " ".join(el.itertext()).strip()
+    _inline_tex_images(el)
+    return normalize_cf_math(" ".join(el.itertext()).strip())
 
 
 def _extract_cf_sections(tree) -> dict:
@@ -138,8 +169,7 @@ def scrape_cf_problem(problem_ref: str) -> dict:
         full_text = " ".join(el.itertext()).strip()
         return full_text.replace(prop_text, "", 1).strip()
 
-    note_nodes = tree.xpath('//*[contains(@class,"note")]')
-    note_text = " ".join(note_nodes[0].itertext()).strip() if note_nodes else ""
+    note_text = cf_xpath_text(tree, '//*[contains(@class,"note")]')
 
     samples = []
     sample_container = tree.xpath(f'{_CF_PROBLEM_BASE_XPATH}/div[5]')
