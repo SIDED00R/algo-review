@@ -42,7 +42,7 @@ def translate_cf_text(text: str, title: str) -> str:
     입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
     """
     text, image_urls = _mask_image_markers(text)
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
     resp = client.chat.completions.create(
         model=settings.openai_model or "gpt-4o-mini",
         messages=[
