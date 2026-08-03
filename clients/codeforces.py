@@ -74,7 +74,64 @@ def get_codeforces_problem_statement(problem_ref: str) -> str:
     return "문제 설명 자동 수집에 실패했습니다. 제목, 난이도, 태그 기준으로 제한적으로 분석합니다."
 
 
+def normalize_cf_math(text: str) -> str:
+    """CF 의 수식 구분자($$$…$$$ / $$$$$$…$$$$$$)를 프론트(KaTeX)가 쓰는 $…$ / $$…$$ 로 바꾼다.
+
+    번역 실패 시 원문이 그대로 프론트로 나가므로 번역 단계가 아니라 스크래핑 단계에서 통일한다.
+    디스플레이(6달러)를 먼저 처리해야 인라인 규칙이 앞의 3달러만 먹고 짝을 어긋내지 않는다.
+    """
+    text = re.sub(r'\$\$\$\$\$\$(.+?)\$\$\$\$\$\$', r'$$\1$$', text, flags=re.DOTALL)
+    return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
+
+
+# 수식 이미지 마커의 유일한 정의. 소비처가 셋이라 포맷이 어긋나면 조용히 깨진다 —
+# 번역 마스킹(cf_translator), README 변환(tex_markers_to_markdown),
+# 모달 렌더링(static/js/problem-modal.js 의 restoreFormulaImages).
+TEX_IMG_MARKER_RE = re.compile(r'⟦img:(https?://[^⟧\s]+)⟧')
+
+
+def tex_markers_to_markdown(text: str) -> str:
+    """수식 이미지 마커를 마크다운 이미지로 바꾼다 — GitHub README push 경로용."""
+    return TEX_IMG_MARKER_RE.sub(r'![수식](\1)', text)
+
+
+def _drop_element_keeping_tail(el, replacement: str = "") -> None:
+    """el 을 트리에서 빼되 뒤따르는 텍스트(tail)는 살린다.
+
+    lxml 의 remove() 는 el.tail 까지 함께 버리기 때문에, 그냥 지우면
+    "<script>…</script>본문" 의 "본문" 같은 뒤 텍스트가 조용히 사라진다.
+    """
+    parent = el.getparent()
+    if parent is None:
+        return
+    text = replacement + (el.tail or "")
+    prev = el.getprevious()
+    if prev is not None:
+        prev.tail = (prev.tail or "") + text
+    else:
+        parent.text = (parent.text or "") + text
+    parent.remove(el)
+
+
+def _replace_tex_images_with_markers(el) -> None:
+    """수식 이미지 <img class="tex-formula"> 를 ⟦img:URL⟧ 마커 텍스트로 치환한다.
+
+    구형 문제의 수식은 alt 없는 PNG 라 itertext() 평탄화에서 통째로 사라진다.
+    프론트가 이 마커를 <img> 로 되살린다.
+    """
+    for img in el.xpath('.//img[contains(@class,"tex-formula")]'):
+        src = img.get("src", "")
+        if src:
+            _drop_element_keeping_tail(img, f"⟦img:{src}⟧")
+
+
 def cf_xpath_text(tree, expr: str) -> str:
+    """선택한 요소의 텍스트를 뽑는다.
+
+    주의: 조회 전용이 아니라 tree 를 in-place 로 변경한다 — 선택된 서브트리에서
+    script/style/section-title 과 수식 <img> 를 실제로 제거한다. 같은 tree 를 다른
+    xpath 로 다시 읽는 코드를 추가할 때는 이미 제거된 상태를 본다는 점에 유의할 것.
+    """
     nodes = tree.xpath(expr)
     if not nodes:
         return ""
@@ -85,10 +142,9 @@ def cf_xpath_text(tree, expr: str) -> str:
         './/*[self::script or self::noscript or self::style'
         ' or contains(@class,"section-title")]'
     ):
-        p = unwanted.getparent()
-        if p is not None:
-            p.remove(unwanted)
-    return " ".join(el.itertext()).strip()
+        _drop_element_keeping_tail(unwanted)
+    _replace_tex_images_with_markers(el)
+    return normalize_cf_math(" ".join(el.itertext()).strip())
 
 
 def _extract_cf_sections(tree) -> dict:
@@ -138,8 +194,7 @@ def scrape_cf_problem(problem_ref: str) -> dict:
         full_text = " ".join(el.itertext()).strip()
         return full_text.replace(prop_text, "", 1).strip()
 
-    note_nodes = tree.xpath('//*[contains(@class,"note")]')
-    note_text = " ".join(note_nodes[0].itertext()).strip() if note_nodes else ""
+    note_text = cf_xpath_text(tree, '//*[contains(@class,"note")]')
 
     samples = []
     sample_container = tree.xpath(f'{_CF_PROBLEM_BASE_XPATH}/div[5]')

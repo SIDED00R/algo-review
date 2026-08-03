@@ -465,6 +465,12 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
   overflow-y: auto; max-height: calc(90vh - 70px);
 }
 .pm-text { font-size: .9rem; line-height: 1.7; white-space: normal; word-break: break-word; }
+/* 구형 CF 문제의 수식 이미지 — 배경이 투명하고 글리프가 순수 검정이라
+   다크 테마에서는 반전시켜야 보인다(.github-icon-btn 과 같은 방식).
+   분수·시그마 수식은 40~60px 이므로 높이를 넉넉히 잡아 판독 가능하게 둔다. */
+.pm-formula-img { max-width: 100%; max-height: 2.8em; vertical-align: middle; filter: var(--formula-img-filter); }
+:root { --formula-img-filter: invert(1); }
+body.light { --formula-img-filter: none; }
 .pm-section-card {
   background: var(--surface2);
   border: 1px solid var(--border);
