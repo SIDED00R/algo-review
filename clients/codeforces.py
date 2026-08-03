@@ -113,6 +113,43 @@ def _drop_element_keeping_tail(el, replacement: str = "") -> None:
     parent.remove(el)
 
 
+# KaTeX 0.16 이 유니코드 그대로 인식하지 못하는 기호만 LaTeX 명령으로 바꾼다.
+# ≤ ≥ ≈ ∑ √ ⌊ 등은 그대로 렌더되므로 건드리지 않는다(katex.min.js 심볼 테이블 실측).
+_KATEX_UNSUPPORTED = {
+    "×": r"\times", "÷": r"\div", "±": r"\pm",
+    "°": r"^\circ", "″": r"\prime\prime", "¬": r"\lnot",
+}
+
+
+def _to_katex_math(text: str) -> str:
+    for char, command in _KATEX_UNSUPPORTED.items():
+        text = text.replace(char, command)
+    return text
+
+
+def _replace_tex_spans_with_latex(el) -> None:
+    """구형 문제의 <span class="tex-span"> 수식을 $…$ LaTeX 로 바꾼다.
+
+    구형 문제는 $$$ 대신 이 마크업을 쓰는데, itertext() 로 평탄화하면
+    "10<sup> - 6</sup>" 이 "10  - 6" 즉 "10 빼기 6" 으로 읽혀 의미가 뒤바뀐다.
+    첨자를 ^{}/_{} 로 옮기고 전체를 $…$ 로 감싸 KaTeX 가 렌더하게 한다.
+    """
+    for span in el.xpath('.//span[contains(@class,"tex-span")]'):
+        # 첨자를 먼저 텍스트로 접어 넣어야 아래 itertext() 에 반영된다.
+        for node in span.xpath('.//sup | .//sub'):
+            inner = " ".join("".join(node.itertext()).split())
+            operator = "^" if node.tag == "sup" else "_"
+            _drop_element_keeping_tail(node, f"{operator}{{{inner}}}" if inner else "")
+        # split() 은 CF 가 즐겨 쓰는 얇은 공백(U+2009)까지 일반 공백으로 정규화한다.
+        body = " ".join("".join(span.itertext()).split())
+        if not body:
+            _drop_element_keeping_tail(span)
+        elif "$" in body:
+            _drop_element_keeping_tail(span, body)   # 짝이 어긋나므로 감싸지 않는다
+        else:
+            _drop_element_keeping_tail(span, f"${_to_katex_math(body)}$")
+
+
 def _replace_tex_images_with_markers(el) -> None:
     """수식 이미지 <img class="tex-formula"> 를 ⟦img:URL⟧ 마커 텍스트로 치환한다.
 
@@ -143,6 +180,7 @@ def cf_xpath_text(tree, expr: str) -> str:
         ' or contains(@class,"section-title")]'
     ):
         _drop_element_keeping_tail(unwanted)
+    _replace_tex_spans_with_latex(el)
     _replace_tex_images_with_markers(el)
     return normalize_cf_math(" ".join(el.itertext()).strip())
 

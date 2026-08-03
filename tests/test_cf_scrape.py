@@ -99,6 +99,48 @@ def test_xpath_text_drops_section_title_and_script():
     assert out == "본문이다"
 
 
+def test_tex_span_superscript_becomes_latex():
+    # 구형 문제의 핵심 회귀: 예전에는 "10  - 6"(=10 빼기 6)으로 읽혀 의미가 뒤바뀌었다.
+    tree = _parse(
+        '<div id="d"><span class="tex-span">10<sup class="upper-index"> - 6</sup></span></div>'
+    )
+    assert cf_xpath_text(tree, '//div[@id="d"]') == "$10^{- 6}$"
+
+
+def test_tex_span_subscript_becomes_latex():
+    tree = _parse(
+        '<div id="d"><span class="tex-span"><i>t</i><sub class="lower-index">i</sub></span></div>'
+    )
+    assert cf_xpath_text(tree, '//div[@id="d"]') == "$t_{i}$"
+
+
+def test_tex_span_wraps_variable_and_normalizes_thin_space():
+    # CF 는 수식 안에 얇은 공백(U+2009)을 즐겨 쓴다 — 일반 공백으로 정규화돼야 한다.
+    tree = _parse('<div id="d"><span class="tex-span">1 ≤ <i>w</i> ≤ 100</span></div>')
+    out = cf_xpath_text(tree, '//div[@id="d"]')
+    assert out == "$1 ≤ w ≤ 100$"
+    assert " " not in out
+
+
+def test_tex_span_maps_katex_unsupported_symbol():
+    # KaTeX 0.16 은 × 를 유니코드로 인식하지 못한다 (≤ 는 인식하므로 그대로 둔다).
+    tree = _parse('<div id="d"><span class="tex-span"><i>n</i> × <i>m</i></span></div>')
+    assert cf_xpath_text(tree, '//div[@id="d"]') == "$n \\times m$"
+
+
+def test_tex_span_with_existing_dollar_is_not_wrapped():
+    # 이미 $ 가 있으면 감싸면 짝이 어긋난다.
+    tree = _parse('<div id="d"><span class="tex-span">$k$</span></div>')
+    assert cf_xpath_text(tree, '//div[@id="d"]') == "$k$"
+
+
+def test_tex_span_keeps_surrounding_prose():
+    tree = _parse(
+        '<div id="d"><p>weight <span class="tex-span"><i>w</i></span> kilos</p></div>'
+    )
+    assert cf_xpath_text(tree, '//div[@id="d"]') == "weight $w$ kilos"
+
+
 def test_tex_markers_to_markdown():
     text = "확률은 ⟦img:https://espresso.codeforces.com/a.png⟧ 이다"
     assert tex_markers_to_markdown(text) == (
