@@ -1,11 +1,13 @@
 """CF 문제 본문 추출 — 수식 구분자 정규화와 수식 이미지 마커 (네트워크 불필요)."""
 from lxml import etree
 
-from clients.codeforces import cf_xpath_text, normalize_cf_math
+from clients.codeforces import cf_xpath_text, normalize_cf_math, tex_markers_to_markdown
 
 
 def _parse(html: str):
-    return etree.fromstring(html.encode(), etree.HTMLParser())
+    # 실제 CF 페이지는 <meta charset> 이 있어 인코딩이 자동 감지되지만,
+    # 조각 HTML 에는 없으므로 여기서 명시해야 한글이 깨지지 않는다.
+    return etree.fromstring(html.encode(), etree.HTMLParser(encoding="utf-8"))
 
 
 def test_normalize_inline_math():
@@ -66,6 +68,43 @@ def test_xpath_text_skips_image_without_src():
     assert "⟦img:" not in out
 
 
+def test_xpath_text_keeps_order_with_preceding_sibling_and_consecutive_images():
+    # img 앞에 엘리먼트 형제가 있으면 마커가 parent.text 가 아니라 prev.tail 로 붙는다.
+    # 연속 이미지까지 함께 걸어 순서와 tail 보존을 확인한다.
+    tree = _parse(
+        '<div id="d"><p>앞 <b>굵게</b>'
+        '<img class="tex-formula" src="https://espresso.codeforces.com/1.png"/>사이'
+        '<img class="tex-formula" src="https://espresso.codeforces.com/2.png"/>뒤'
+        '</p></div>'
+    )
+    out = cf_xpath_text(tree, '//div[@id="d"]')
+    first = out.index("⟦img:https://espresso.codeforces.com/1.png⟧")
+    second = out.index("⟦img:https://espresso.codeforces.com/2.png⟧")
+    assert out.index("굵게") < first < out.index("사이") < second < out.index("뒤")
+
+
 def test_xpath_text_returns_empty_when_no_match():
     tree = _parse("<div><p>nothing</p></div>")
     assert cf_xpath_text(tree, '//div[@id="missing"]') == ""
+
+
+def test_xpath_text_drops_section_title_and_script():
+    # note 추출이 cf_xpath_text 를 타면서 새로 적용된 동작 — 프론트가 '노트' 라벨을
+    # 따로 붙이므로 본문에 "Note" 가 섞이면 중복이다.
+    tree = _parse(
+        '<div class="note"><div class="section-title">Note</div>'
+        '<script>var mathjax = 1;</script>본문이다</div>'
+    )
+    out = cf_xpath_text(tree, '//div[contains(@class,"note")]')
+    assert out == "본문이다"
+
+
+def test_tex_markers_to_markdown():
+    text = "확률은 ⟦img:https://espresso.codeforces.com/a.png⟧ 이다"
+    assert tex_markers_to_markdown(text) == (
+        "확률은 ![수식](https://espresso.codeforces.com/a.png) 이다"
+    )
+
+
+def test_tex_markers_to_markdown_leaves_plain_text_untouched():
+    assert tex_markers_to_markdown("마커 없는 본문") == "마커 없는 본문"

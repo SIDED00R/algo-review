@@ -84,27 +84,54 @@ def normalize_cf_math(text: str) -> str:
     return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
 
 
-def _inline_tex_images(el) -> None:
+# 수식 이미지 마커의 유일한 정의. 소비처가 셋이라 포맷이 어긋나면 조용히 깨진다 —
+# 번역 마스킹(cf_translator), README 변환(tex_markers_to_markdown),
+# 모달 렌더링(static/js/problem-modal.js 의 restoreFormulaImages).
+TEX_IMG_MARKER_RE = re.compile(r'⟦img:(https?://[^⟧\s]+)⟧')
+
+
+def tex_markers_to_markdown(text: str) -> str:
+    """수식 이미지 마커를 마크다운 이미지로 바꾼다 — GitHub README push 경로용."""
+    return TEX_IMG_MARKER_RE.sub(r'![수식](\1)', text)
+
+
+def _drop_element_keeping_tail(el, replacement: str = "") -> None:
+    """el 을 트리에서 빼되 뒤따르는 텍스트(tail)는 살린다.
+
+    lxml 의 remove() 는 el.tail 까지 함께 버리기 때문에, 그냥 지우면
+    "<script>…</script>본문" 의 "본문" 같은 뒤 텍스트가 조용히 사라진다.
+    """
+    parent = el.getparent()
+    if parent is None:
+        return
+    text = replacement + (el.tail or "")
+    prev = el.getprevious()
+    if prev is not None:
+        prev.tail = (prev.tail or "") + text
+    else:
+        parent.text = (parent.text or "") + text
+    parent.remove(el)
+
+
+def _replace_tex_images_with_markers(el) -> None:
     """수식 이미지 <img class="tex-formula"> 를 ⟦img:URL⟧ 마커 텍스트로 치환한다.
 
     구형 문제의 수식은 alt 없는 PNG 라 itertext() 평탄화에서 통째로 사라진다.
     프론트가 이 마커를 <img> 로 되살린다.
     """
     for img in el.xpath('.//img[contains(@class,"tex-formula")]'):
-        parent = img.getparent()
         src = img.get("src", "")
-        if parent is None or not src:
-            continue
-        marker = f"⟦img:{src}⟧{img.tail or ''}"
-        prev = img.getprevious()
-        if prev is not None:
-            prev.tail = (prev.tail or "") + marker
-        else:
-            parent.text = (parent.text or "") + marker
-        parent.remove(img)
+        if src:
+            _drop_element_keeping_tail(img, f"⟦img:{src}⟧")
 
 
 def cf_xpath_text(tree, expr: str) -> str:
+    """선택한 요소의 텍스트를 뽑는다.
+
+    주의: 조회 전용이 아니라 tree 를 in-place 로 변경한다 — 선택된 서브트리에서
+    script/style/section-title 과 수식 <img> 를 실제로 제거한다. 같은 tree 를 다른
+    xpath 로 다시 읽는 코드를 추가할 때는 이미 제거된 상태를 본다는 점에 유의할 것.
+    """
     nodes = tree.xpath(expr)
     if not nodes:
         return ""
@@ -115,10 +142,8 @@ def cf_xpath_text(tree, expr: str) -> str:
         './/*[self::script or self::noscript or self::style'
         ' or contains(@class,"section-title")]'
     ):
-        p = unwanted.getparent()
-        if p is not None:
-            p.remove(unwanted)
-    _inline_tex_images(el)
+        _drop_element_keeping_tail(unwanted)
+    _replace_tex_images_with_markers(el)
     return normalize_cf_math(" ".join(el.itertext()).strip())
 
 

@@ -152,6 +152,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `clients.push_files_to_github` | 코드+README 단일 커밋 GitHub push |
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
+| `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | GPT-4o 종합 리포트 생성 |

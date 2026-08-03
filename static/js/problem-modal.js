@@ -89,7 +89,10 @@ async function openProblemModal(ref, title, tierName) {
       .map(({ key, label }) => {
         const parts = sections[key].split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/);
         const escaped = parts.map((part, i) => {
-          if (i % 2 === 1) return part;
+          // 수식 구간도 escape 한다 — KaTeX 는 DOM 텍스트(엔티티가 디코딩된 값)를 읽으므로
+          // 렌더링에는 영향이 없고, \begin{cases} 의 & 나 $a<b$ 의 < 가 HTML 로 먹히는 것과
+          // 문제 본문·번역문을 통한 스크립트 주입을 함께 막는다.
+          if (i % 2 === 1) return escapeHtml(part);
           let text = part;
           if (i > 0) text = text.replace(/^\n+/, '');
           if (i < parts.length - 1) text = text.replace(/\n+$/, '');

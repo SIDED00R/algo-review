@@ -107,7 +107,7 @@ python -m uvicorn server:app --reload --port 8080
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # DB 계층·라우트·마이그레이션 테스트 (기본 SQLite)
+pytest          # DB 계층·라우트·마이그레이션·CF 본문 파싱 테스트 (기본 SQLite)
 ruff check .    # 린트
 ```
 

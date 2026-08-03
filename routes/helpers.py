@@ -55,10 +55,12 @@ def build_readme(problem_ref: str, title: str,
         "",
         date_str,
     ]
+    # CF 본문에는 수식 이미지 마커가 섞여 있다 — 저장소에 그대로 커밋되지 않도록
+    # 마크다운 이미지로 바꾼다. 마커가 없는 BOJ 본문에는 아무 영향이 없다.
     if description:
-        lines += ["", "## 문제 설명", "", description]
+        lines += ["", "## 문제 설명", "", api_client.tex_markers_to_markdown(description)]
     if input_desc:
-        lines += ["", "## 입력", "", input_desc]
+        lines += ["", "## 입력", "", api_client.tex_markers_to_markdown(input_desc)]
     if output_desc:
-        lines += ["", "## 출력", "", output_desc]
+        lines += ["", "## 출력", "", api_client.tex_markers_to_markdown(output_desc)]
     return "\n".join(lines) + "\n"
