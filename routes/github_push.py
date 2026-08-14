@@ -1,8 +1,7 @@
 import db
-import clients as api_client
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from routes.models import PushReviewRequest
-from routes.helpers import build_readme, build_solution_target
+from routes.helpers import push_review_bundle, require_github_target
 from demo_mode import IS_DEMO
 
 router = APIRouter()
@@ -13,43 +12,15 @@ def push_review_to_github(req: PushReviewRequest):
     if IS_DEMO:
         return {"pushed": True, "repo": "demo_user/algorithm-solutions",
                 "path": f"demo/{req.problem_ref}"}
-    gh_settings = db.get_github_settings()
-    if not gh_settings:
-        raise HTTPException(status_code=400, detail="GitHub 연결이 필요합니다. 헤더의 '🐙 GitHub 연결' 버튼을 눌러주세요.")
-    github_repo = gh_settings.get("target_repo", "")
-    github_token = gh_settings.get("access_token", "")
-    if not github_repo or not github_token:
-        raise HTTPException(status_code=400, detail="GitHub 저장소를 선택해주세요.")
+    github_repo, github_token = require_github_target()
 
-    ext = api_client._get_file_extension(req.language)
-    url = req.url or api_client.get_problem_url(req.platform, req.problem_ref)
-
-    if req.platform == "boj":
-        folder, msg = build_solution_target("boj", req.problem_ref, req.title, req.tier_name)
-        if not req.description:
-            sections = api_client.get_boj_problem_sections(int(req.problem_ref))
-            description = sections.get("description", "")
-            input_desc  = sections.get("input", "")
-            output_desc = sections.get("output", "")
-        else:
-            description, input_desc, output_desc = req.description, req.input_desc, req.output_desc
-    else:
-        folder, msg = build_solution_target(req.platform, req.problem_ref, req.title)
-        if not req.description:
-            sections = api_client.get_cf_problem_sections(req.problem_ref)
-            description = sections.get("description", "")
-            input_desc  = sections.get("input", "")
-            output_desc = sections.get("output", "")
-        else:
-            description, input_desc, output_desc = req.description, req.input_desc, req.output_desc
-
-    readme = build_readme(req.problem_ref, req.title,
-                          req.tier_name, req.tags, req.language, url,
-                          description, input_desc, output_desc)
-    ok = api_client.push_files_to_github(github_repo, github_token, [
-        {"path": f"{folder}/README.md", "content": readme},
-        {"path": f"{folder}/{req.problem_ref}{ext}", "content": req.code},
-    ], msg)
-    if not ok:
-        raise HTTPException(status_code=500, detail="GitHub push에 실패했습니다.")
+    # 저장된 최신 리뷰를 README 에 함께 싣는다 — 리뷰 직후 push 이므로 방금 결과가 최신 행이다.
+    reviews = db.get_reviews_by_problem(req.platform, req.problem_ref)
+    folder = push_review_bundle(
+        github_repo, github_token,
+        platform=req.platform, problem_ref=req.problem_ref, title=req.title,
+        tier_name=req.tier_name, tags=req.tags, language=req.language, code=req.code,
+        url=req.url, review=reviews[0] if reviews else None,
+        description=req.description, input_desc=req.input_desc, output_desc=req.output_desc,
+    )
     return {"pushed": True, "repo": github_repo, "path": folder}

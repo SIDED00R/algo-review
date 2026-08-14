@@ -1,6 +1,8 @@
 from db.migrate import run_migrations
 from db.reviews import (
+    PENDING_EFFICIENCY,
     save_review,
+    update_pending_review,
     get_tag_stats,
     get_total_review_count,
     get_cf_tag_stats,
@@ -37,7 +39,8 @@ from db.cache import (
 
 __all__ = [
     "run_migrations",
-    "save_review", "get_tag_stats", "get_total_review_count",
+    "PENDING_EFFICIENCY",
+    "save_review", "update_pending_review", "get_tag_stats", "get_total_review_count",
     "get_cf_tag_stats", "get_average_tier",
     "get_problems_grouped", "get_reviews_by_problem", "get_tier_history",
     "get_review_history", "get_average_cf_rating",

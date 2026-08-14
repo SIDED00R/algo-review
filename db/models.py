@@ -32,6 +32,7 @@ class Review(Base):
     better_algorithm: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     strengths: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'[]'"))
     weaknesses: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'[]'"))
+    language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (

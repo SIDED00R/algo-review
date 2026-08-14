@@ -363,6 +363,7 @@ textarea { resize: vertical; font-family: 'Consolas', 'Fira Code', monospace; fo
 .eff-good { color: var(--green); }
 .eff-ok   { color: var(--yellow); }
 .eff-poor { color: var(--red); }
+.eff-pending { color: var(--text-muted); }
 
 /* ── 리뷰 기록 목록 ── */
 .history-card {

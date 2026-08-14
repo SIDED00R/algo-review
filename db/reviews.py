@@ -8,6 +8,14 @@ from db.models import Review, SolvedHistory, TagStat
 from db.normalize import normalize_common_row
 
 
+PENDING_EFFICIENCY = "pending"
+"""LLM 리뷰 없이 등록한 행의 효율성 마커.
+
+good/ok/poor 판정이 없는 상태이므로 태그 통계 집계에서 제외한다 —
+update_pending_review 가 실제 리뷰로 채울 때 집계한다.
+"""
+
+
 def _normalize_review_row(row: dict) -> dict:
     normalize_common_row(row)
 
@@ -22,21 +30,39 @@ def _normalize_review_row(row: dict) -> dict:
     return row
 
 
+def _bump_tag_stats(session, tags: list, efficiency: str) -> None:
+    """태그별 good/poor 카운트를 누적한다. BOJ 첫 리뷰에서만 호출한다."""
+    for tag in tags:
+        stat = session.get(TagStat, tag)
+        if stat is None:
+            stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
+            session.add(stat)
+            session.flush()
+        stat.total_count += 1
+        if efficiency == "good":
+            stat.good_count += 1
+        else:
+            stat.poor_count += 1
+
+
 def save_review(problem_id: int, title: str, tier: int, tags: list,
                 code: str, feedback: str, efficiency: str,
                 complexity: str = "", better_algorithm: str = "",
                 strengths: list = None, weaknesses: list = None,
                 platform: str = "boj", problem_ref: str | None = None,
-                tier_name: str = ""):
+                tier_name: str = "", language: str = ""):
     strengths = strengths or []
     weaknesses = weaknesses or []
     platform = (platform or "boj").strip().lower()
     problem_ref = (problem_ref or str(problem_id)).strip()
 
     with session_scope(commit=True) as session:
+        # 대기 행은 아직 집계되지 않았으므로 첫 제출 판정에서 뺀다 —
+        # update_pending_review 의 reviewed_before 기준과 어긋나면 집계가 영구 누락된다.
         prior = session.scalar(
             select(func.count()).select_from(Review)
-            .where(Review.platform == platform, Review.problem_ref == problem_ref))
+            .where(Review.platform == platform, Review.problem_ref == problem_ref,
+                   Review.efficiency != PENDING_EFFICIENCY))
         is_first_submission = (prior == 0)
 
         session.add(Review(
@@ -46,22 +72,51 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
             efficiency=efficiency, complexity=complexity, better_algorithm=better_algorithm or "",
             strengths=json.dumps(strengths, ensure_ascii=False),
             weaknesses=json.dumps(weaknesses, ensure_ascii=False),
+            language=language,
             created_at=datetime.now().isoformat(),
         ))
 
-        # tag_stats 는 BOJ 첫 제출에서만 집계한다.
-        if is_first_submission and platform == "boj":
-            for tag in tags:
-                stat = session.get(TagStat, tag)
-                if stat is None:
-                    stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
-                    session.add(stat)
-                    session.flush()
-                stat.total_count += 1
-                if efficiency == "good":
-                    stat.good_count += 1
-                else:
-                    stat.poor_count += 1
+        # tag_stats 는 BOJ 첫 제출에서만 집계한다. 리뷰 대기 행은 판정이 없어 제외한다.
+        if is_first_submission and platform == "boj" and efficiency != PENDING_EFFICIENCY:
+            _bump_tag_stats(session, tags, efficiency)
+
+
+def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool:
+    """최신 '리뷰 대기' 행을 실제 리뷰 결과로 채운다. 대기 행이 없으면 False.
+
+    행을 새로 쌓지 않으므로 제출 회차가 늘지 않는다. save_review 가 미룬 tag_stats 집계는
+    이 문제의 첫 리뷰인 경우 여기서 수행한다.
+    """
+    platform = (platform or "boj").strip().lower()
+    problem_ref = (problem_ref or "").strip()
+
+    with session_scope(commit=True) as session:
+        row = session.scalars(
+            select(Review)
+            .where(Review.platform == platform, Review.problem_ref == problem_ref,
+                   Review.efficiency == PENDING_EFFICIENCY)
+            .order_by(Review.created_at.desc()).limit(1)
+        ).first()
+        if row is None:
+            return False
+
+        # row 를 고치기 전에 세야 한다 — 뒤로 옮기면 autoflush 로 자기 행이 포함된다.
+        reviewed_before = session.scalar(
+            select(func.count()).select_from(Review)
+            .where(Review.platform == platform, Review.problem_ref == problem_ref,
+                   Review.efficiency != PENDING_EFFICIENCY))
+
+        efficiency = result["efficiency"]
+        row.efficiency = efficiency
+        row.complexity = result.get("complexity", "")
+        row.better_algorithm = result.get("better_algorithm") or ""
+        row.feedback = result.get("feedback", "")
+        row.strengths = json.dumps(result.get("strengths", []), ensure_ascii=False)
+        row.weaknesses = json.dumps(result.get("weaknesses", []), ensure_ascii=False)
+
+        if platform == "boj" and reviewed_before == 0:
+            _bump_tag_stats(session, json.loads(row.tags), efficiency)
+        return True
 
 
 def get_tag_stats() -> list:
@@ -86,8 +141,10 @@ def _tally_tag_efficiency(rows: list) -> dict:
     """행 목록을 태그별로 순회해 good/poor/total 카운트를 누적한 dict를 반환."""
     counts: dict[str, dict] = {}
     for row in rows:
-        tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
         eff = row.get("efficiency", "poor")
+        if eff == PENDING_EFFICIENCY:
+            continue  # 리뷰 대기 행은 good/poor 판정이 없다
+        tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
         for tag in tags:
             if tag not in counts:
                 counts[tag] = {"tag": tag, "good_count": 0, "poor_count": 0, "total_count": 0}
@@ -170,7 +227,7 @@ def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
             select(Review.id, Review.problem_id, Review.platform, Review.problem_ref, Review.title,
                    Review.tier, Review.tier_name, Review.tags, Review.code, Review.efficiency,
                    Review.complexity, Review.better_algorithm, Review.strengths, Review.weaknesses,
-                   Review.feedback, Review.created_at)
+                   Review.feedback, Review.language, Review.created_at)
             .where(Review.platform == platform, Review.problem_ref == problem_ref)
             .order_by(Review.created_at.desc())
         ).mappings().all()

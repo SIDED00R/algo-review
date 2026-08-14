@@ -3,7 +3,8 @@ import clients as api_client
 from routes.models import ReviewResponse
 
 
-def save_and_build_response(problem_info: dict, code: str, result: dict) -> ReviewResponse:
+def save_and_build_response(problem_info: dict, code: str, result: dict,
+                            language: str = "") -> ReviewResponse:
     """리뷰 결과를 저장하고 ReviewResponse를 생성한다. review/solved 라우터 공용."""
     db.save_review(
         problem_id=problem_info["id"],
@@ -20,6 +21,7 @@ def save_and_build_response(problem_info: dict, code: str, result: dict) -> Revi
         weaknesses=result.get("weaknesses", []),
         platform=problem_info["platform"],
         problem_ref=problem_info["problem_ref"],
+        language=language,
     )
     return ReviewResponse(
         problem_id=problem_info["id"],

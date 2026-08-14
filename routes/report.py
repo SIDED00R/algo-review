@@ -16,7 +16,9 @@ def get_report():
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 
     tag_stats = db.get_tag_stats()
-    history = db.get_review_history(10)
+    # 대기 행은 판정이 없어 프롬프트에 '→ pending' 으로 새어 나간다 — 리포트에서는 제외한다.
+    history = [r for r in db.get_review_history(20)
+               if r["efficiency"] != db.PENDING_EFFICIENCY][:10]
 
     if not tag_stats:
         raise HTTPException(status_code=400, detail="아직 저장된 기록이 없습니다.")

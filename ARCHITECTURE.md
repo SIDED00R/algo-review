@@ -78,7 +78,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `db/connection.py` | 지연 엔진 싱글턴(`get_engine`)·세션 컨텍스트(`session_scope`)·`dispose_engine` |
 | `db/migrate.py` | 프로그래매틱 Alembic `upgrade head` 실행(`run_migrations`) |
 | `db/normalize.py` | reviews/solved 행 정규화 공용 헬퍼 (platform·problem_ref·tags·tier_name 폴백) |
-| `db/reviews.py` | reviews 테이블 CRUD + 티어/태그 집계 쿼리 |
+| `db/reviews.py` | reviews 테이블 CRUD + 티어/태그 집계 쿼리 + 리뷰 대기 마커(`PENDING_EFFICIENCY`) 처리 |
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
@@ -99,7 +99,10 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 |------|-----------|----------|
 | `routes/auth.py` | `/auth/github/*` | GitHub OAuth 인증 흐름 |
 | `routes/review.py` | `POST /api/review` | AI 코드 리뷰 생성 |
-| `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push |
+| `routes/pending_review.py` | `POST /api/review/pending` | LLM 없이 코드+문제 정보만 push 하고 '리뷰 대기'로 기록 |
+| `routes/rereview.py` | `POST /api/rereview/{platform}/{ref}` | 대기 행을 AI 리뷰로 채우고(회차 증가 없음) README 갱신 |
+| `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
+| `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용) |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
@@ -112,7 +115,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/import_boj.py` | `POST /api/import` | BOJ 제출 기록 크롤링 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
-| `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더, 저장 폴더·커밋 메시지 조립, 설정+override 병합, 파일 push) |
+| `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
 
 ### 프론트엔드 (`static/js/`)
@@ -145,11 +148,14 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `server.py` | `db.run_migrations` | lifespan 기동 시 Alembic `upgrade head` (데모는 `demo_seed.seed` 대신 실행, DB 연결 실패 시 경고만 남기고 기동 계속 — 온디맨드 정지 대응) |
 | `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
 | `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
-| `routes/review.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
-| `routes/review.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
+| `routes/problem_resolve.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
+| `routes/problem_resolve.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
-| `routes/github_push.py` | `clients.push_files_to_github` | 코드+README 단일 커밋 GitHub push |
+| `routes/pending_review.py` | `db.save_review` | 리뷰 대기 행 저장 (push 성공 후에만) |
+| `routes/rereview.py` | `analyzer.analyze_code` | 대기 행 재리뷰 — LLM 을 호출하는 두 번째 경로 |
+| `routes/rereview.py` | `db.update_pending_review` | 대기 행을 리뷰 결과로 갱신 + 태그 통계 첫 집계 |
+| `routes/helpers.py` | `clients.push_files_to_github` | 코드+README 단일 커밋 GitHub push |
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
@@ -171,6 +177,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `problem-modal.js` | `GET /api/problem/cf/{ref}` | CF 문제 내용 조회 |
 | `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
+| `review.js` | `POST /api/review/pending` | 리뷰 실패 시 리뷰 없이 GitHub 등록 |
+| `history.js` | `POST /api/rereview/{platform}/{ref}` | 대기 기록의 AI 리뷰 실행 + README 갱신 |
 | `recommend.js` | `GET /api/recommend` | 문제 추천 요청 |
 | `themes.js` | `GET /api/themes` | 테마 목록 요청 (localStorage 24h 캐시) |
 | `themes.js` | `GET /api/themes/{theme_id}/problems` | 플랫폼별 테마 문제 요청 (메모리/localStorage 30분 캐시) |

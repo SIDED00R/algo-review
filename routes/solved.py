@@ -48,7 +48,8 @@ def review_imported(platform: str, problem_ref: str):
     problem_info["title"] = problem["title"]
     problem_info["tags"] = problem["tags"]
 
-    response = save_and_build_response(problem_info, problem["code"], result)
+    response = save_and_build_response(problem_info, problem["code"], result,
+                                       problem.get("language", ""))
     db.delete_solved_problem(platform, problem_ref)
     return response
 
