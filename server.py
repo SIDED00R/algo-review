@@ -16,7 +16,7 @@ from config import settings
 from db.connection import session_scope
 from demo_mode import IS_DEMO
 from routes import (
-    auth, review, github_push, problem, execute, recommend,
+    auth, review, pending_review, rereview, github_push, problem, execute, recommend,
     history, solved, import_github, import_boj, import_codeforces,
     stats, report, themes,
 )
@@ -80,6 +80,8 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.include_router(auth.router)
 app.include_router(review.router)
+app.include_router(pending_review.router)
+app.include_router(rereview.router)
 app.include_router(github_push.router)
 app.include_router(problem.router)
 app.include_router(execute.router)

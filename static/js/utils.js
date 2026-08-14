@@ -34,11 +34,11 @@ function tierBadgeHtml(cls, name, style) {
 }
 
 function effClass(e) {
-  return { good: 'eff-good', ok: 'eff-ok', poor: 'eff-poor' }[e] || '';
+  return { good: 'eff-good', ok: 'eff-ok', poor: 'eff-poor', pending: 'eff-pending' }[e] || '';
 }
 
 function effLabel(e) {
-  return { good: '● 효율적', ok: '◐ 보통', poor: '● 비효율적' }[e] || e;
+  return { good: '● 효율적', ok: '◐ 보통', poor: '● 비효율적', pending: '◌ 리뷰 대기' }[e] || e;
 }
 
 function problemLabel(problem) {

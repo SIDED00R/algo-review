@@ -1,4 +1,4 @@
-"""Alembic 마이그레이션 자체 검증 — baseline 이 세 가지 DB 상태에 수렴하는지 확인한다."""
+"""Alembic 마이그레이션 자체 검증 — 세 가지 DB 상태가 upgrade head 로 수렴하는지 확인한다."""
 from sqlalchemy import inspect, text
 
 import db
@@ -45,4 +45,7 @@ def test_legacy_db_without_alembic_version_converges(tmp_path, monkeypatch):
     names = _table_names()
     assert "api_cache" in names          # 누락됐던 테이블이 재생성됨
     assert "alembic_version" in names     # stamp 됨
+    # baseline 이후 리비전도 이미 반영된 상태를 덮어쓰지 않고 통과해야 한다.
+    columns = {c["name"] for c in inspect(get_engine()).get_columns("reviews")}
+    assert "language" in columns
     dispose_engine()

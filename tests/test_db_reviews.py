@@ -93,6 +93,68 @@ def test_problems_grouped_counts_and_orders_efficiencies(at_time):
     assert row["efficiencies"] == "poor,good"
 
 
+def test_pending_review_skips_tag_stats():
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    # 판정이 없는 대기 행은 집계하지 않는다 — 통계가 poor 로 왜곡되면 안 된다.
+    assert db.get_tag_stats() == []
+
+
+def test_update_pending_review_fills_row_without_new_submission():
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency=db.PENDING_EFFICIENCY,
+              feedback="", language="Python 3")
+    assert db.update_pending_review("boj", "1", {
+        "efficiency": "good", "complexity": "O(N)", "better_algorithm": None,
+        "feedback": "좋은 풀이", "strengths": ["명확함"], "weaknesses": [],
+    }) is True
+
+    rows = db.get_reviews_by_problem("boj", "1")
+    assert len(rows) == 1  # 행을 새로 쌓지 않아 제출 회차가 늘지 않는다
+    assert rows[0]["efficiency"] == "good"
+    assert rows[0]["complexity"] == "O(N)"
+    assert rows[0]["better_algorithm"] == ""
+    assert rows[0]["feedback"] == "좋은 풀이"
+    assert rows[0]["strengths"] == ["명확함"]
+    assert rows[0]["language"] == "Python 3"
+
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    # 대기 등록 때 미룬 첫 집계가 이 시점에 수행된다.
+    assert stats["dp"]["good_count"] == 1
+    assert stats["dp"]["total_count"] == 1
+
+
+def test_update_pending_review_without_pending_row():
+    mk_review(problem_id=1, problem_ref="1", efficiency="good")
+    assert db.update_pending_review("boj", "1", {"efficiency": "ok"}) is False
+
+
+def test_update_pending_review_does_not_recount_reviewed_problem(at_time):
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    db.update_pending_review("boj", "1", {"efficiency": "poor"})
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    # 이미 리뷰된 문제의 재제출이므로 집계는 첫 리뷰 1건 그대로다.
+    assert stats["dp"]["total_count"] == 1
+    assert stats["dp"]["poor_count"] == 0
+
+
+def test_pending_excluded_from_cf_tag_stats():
+    mk_review(problem_id=1, platform="codeforces", problem_ref="1A", tags=["math"],
+              efficiency=db.PENDING_EFFICIENCY, tier_name="Codeforces 800")
+    assert db.get_cf_tag_stats() == []
+
+
+def test_pending_counts_as_solved_but_not_in_poor_ratio():
+    mk_review(problem_id=1, platform="codeforces", problem_ref="1A", tags=["math"],
+              efficiency="good", tier_name="Codeforces 800")
+    mk_review(problem_id=2, platform="codeforces", problem_ref="2B", tags=["math"],
+              efficiency=db.PENDING_EFFICIENCY, tier_name="Codeforces 900")
+    data = {d["tag"]: d for d in db.get_tag_weakness_data("codeforces")}
+    assert data["math"]["solve_count"] == 2   # 푼 문제 수에는 포함된다
+    assert data["math"]["poor_ratio"] == 0.0  # 판정 비율에는 섞이지 않는다
+
+
 def test_total_review_count_distinct_by_problem_ref():
     mk_review(problem_id=1, problem_ref="1")
     mk_review(problem_id=1, problem_ref="1")  # 재제출 — 중복 문제

@@ -14,6 +14,11 @@
 
 - **코드 리뷰**
   - BOJ 또는 Codeforces 문제 번호와 코드를 입력하면 AI가 시간복잡도, 효율성, 개선점, 강점/약점을 분석합니다.
+  - 리뷰 결과는 GitHub 저장소에 코드 + README(리뷰 섹션 포함)로 push 할 수 있습니다.
+- **리뷰 없이 먼저 등록 → 나중에 AI 리뷰**
+  - LLM 토큰이 없어 리뷰가 실패해도 코드와 문제 정보만으로 GitHub에 올릴 수 있습니다(`리뷰 대기` 상태로 기록).
+  - 나중에 '리뷰 기록' 탭에서 AI 리뷰를 실행하면 같은 기록이 채워지고(제출 회차는 늘지 않음) README의 리뷰 섹션도 갱신됩니다.
+  - 대기 상태는 태그 통계에 섞이지 않고, 실제 리뷰가 채워질 때 처음 집계됩니다.
 - **CF 인앱 문제 뷰어**
   - Codeforces 문제를 앱 내에서 바로 보고 한국어 번역까지 제공합니다.
   - 예제 입출력 직접 실행 (Python / C++) 지원
@@ -220,6 +225,9 @@ gcloud run deploy algo-review-demo \
 ├── routes/                 # FastAPI 라우터 (각 파일이 하나의 도메인 담당)
 │   ├── auth.py             # GitHub OAuth 인증 흐름
 │   ├── review.py           # POST /api/review — AI 코드 리뷰
+│   ├── pending_review.py   # POST /api/review/pending — 리뷰 없이 GitHub 등록(리뷰 대기)
+│   ├── rereview.py         # POST /api/rereview/{platform}/{ref} — 대기 기록 AI 리뷰 + README 갱신
+│   ├── problem_resolve.py  # 문제 식별자 → 문제 메타/본문 해석 (리뷰 경로 공용)
 │   ├── github_push.py      # POST /api/push-review — GitHub push
 │   ├── problem.py          # GET /api/problem/cf/{ref} — CF 문제 조회
 │   ├── execute.py          # POST /api/execute — Python/C++ 코드 실행
@@ -233,7 +241,7 @@ gcloud run deploy algo-review-demo \
 │   ├── import_boj.py       # POST /api/import — BOJ 제출 기록 import
 │   ├── import_codeforces.py# POST /api/import-codeforces — CF import
 │   ├── models.py           # Pydantic 요청/응답 스키마
-│   ├── helpers.py          # GitHub push 공용 헬퍼 (README·대상 조립·설정 병합·push)
+│   ├── helpers.py          # GitHub push 공용 헬퍼 (README+리뷰 섹션·대상 조립·설정 병합·번들 push)
 │   └── review_response.py  # 리뷰 저장 + ReviewResponse 생성 (review/solved 공용)
 │
 └── static/

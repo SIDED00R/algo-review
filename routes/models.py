@@ -14,6 +14,8 @@ class ReviewRequest(BaseModel):
     problem_ref: str | None = None
     problem_statement: str | None = None
     code: str
+    # 저장소 파일 확장자에 쓰인다 — 나중에 재업로드할 때 같은 파일명을 재현하려면 기록해 두어야 한다.
+    language: str = ""
 
     @field_validator("platform")
     @classmethod
