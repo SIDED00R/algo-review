@@ -26,23 +26,31 @@ function currentCodeAndLanguage() {
   return { code, language: (langSelect && langSelect.value) || detectLanguage(code) };
 }
 
-reviewBtn.addEventListener('click', async () => {
+// 입력 폼 전체를 현재 값으로 읽어 요청 본문을 만든다 — 리뷰 요청과 대기 push 가 공유한다.
+function currentReviewPayload() {
   const platform = platformSelect?.value || 'boj';
   const problemId = document.getElementById('problem-id').value.trim();
   const problemStatement = document.getElementById('problem-statement').value.trim();
-  const { code, language } = currentCodeAndLanguage();
+  const payload = {
+    platform, ...currentCodeAndLanguage(),
+    problem_statement: problemStatement || null,
+  };
+  if (platform === 'codeforces') payload.problem_ref = problemId;
+  else payload.problem_id = Number(problemId);
+  return payload;
+}
+
+reviewBtn.addEventListener('click', async () => {
+  const problemId = document.getElementById('problem-id').value.trim();
   const result = document.getElementById('review-result');
+  const payload = currentReviewPayload();
 
   if (!problemId) { showError(result, '문제 번호를 입력하세요.'); return; }
-  if (!code) { showError(result, '코드를 입력하세요.'); return; }
+  if (!payload.code) { showError(result, '코드를 입력하세요.'); return; }
 
   setLoading(reviewBtn, true);
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 코드를 분석 중입니다... (10~20초 소요)</div>';
   result.classList.remove('hidden');
-
-  const payload = { platform, code, language, problem_statement: problemStatement || null };
-  if (platform === 'codeforces') payload.problem_ref = problemId;
-  else payload.problem_id = Number(problemId);
 
   try {
     const data = await fetchJsonOk('/api/review', {
@@ -54,19 +62,20 @@ reviewBtn.addEventListener('click', async () => {
   } catch (e) {
     // LLM 토큰이 없어 리뷰가 안 되는 경우가 있다 — 등록 자체가 막히지 않게 대기 push 경로를 준다.
     showError(result, e.message);
-    renderPendingPushFallback(result, payload);
+    renderPendingPushFallback(result);
   } finally {
     setLoading(reviewBtn, false);
   }
 });
 
-function renderPendingPushFallback(container, payload) {
+function renderPendingPushFallback(container) {
   const box = document.createElement('div');
   box.className = 'result-card';
   box.innerHTML = `
     <h4 style="font-size:.9rem;margin-bottom:6px">리뷰 없이 먼저 올리기</h4>
     <p class="desc" style="font-size:.82rem;margin-bottom:12px">
-      AI 리뷰 없이 코드와 문제 정보만 GitHub에 올립니다.
+      AI 리뷰 없이 코드와 문제 정보만 GitHub에 올립니다. 위 입력값을 그대로 사용하므로
+      문제 번호나 코드를 고쳤다면 고친 값으로 올라갑니다.
       나중에 '리뷰 기록' 탭에서 AI 리뷰를 실행하면 리뷰 기록과 README가 함께 갱신됩니다.
     </p>
     <div style="display:flex;align-items:center;gap:10px">
@@ -85,11 +94,11 @@ function renderPendingPushFallback(container, payload) {
     msg.textContent = '';
     msg.style.color = '';
     try {
-      // 코드·언어는 클릭 시점 값을 다시 읽는다 — 리뷰 실패 후 코드를 고쳤을 수 있다.
+      // 입력값은 클릭 시점에 다시 읽는다 — 리뷰 실패 후 문제 번호나 코드를 고쳤을 수 있다.
       const data = await fetchJsonOk('/api/review/pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, ...currentCodeAndLanguage() }),
+        body: JSON.stringify(currentReviewPayload()),
       }, 'push 실패');
       btn.textContent = '✓ 완료';
       msg.innerHTML = `<span style="color:var(--green)">🐙 <b>${escapeHtml(data.repo || '')}</b>에 push 완료 (리뷰 대기)</span>`;

@@ -44,7 +44,7 @@ function renderHistoryControls(container) {
       <option value="good">효율적</option>
       <option value="ok">보통</option>
       <option value="poor">비효율적</option>
-      <option value="pending">리뷰 대기</option>
+      <option value="${EFF_PENDING}">리뷰 대기</option>
     </select>
     <select id="h-sort" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.85rem">
       <option value="recent">최근순</option>
@@ -168,21 +168,12 @@ async function openReviewModal(platform, problemRef) {
 
     function renderDetail(idx) {
       const r = reviews[idx];
-      const isPending = r.efficiency === 'pending';
+      const isPending = r.efficiency === EFF_PENDING;
       const sl = (r.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
       const wl = (r.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('');
       const hasPoints = sl || wl;
-      const pendingHtml = `
-        <div class="alert alert-info" style="margin-bottom:12px">
-          ⏳ AI 리뷰 대기 중입니다. LLM을 쓸 수 있을 때 아래 버튼을 누르면 리뷰 기록과 GitHub README가 함께 갱신됩니다.
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-          <button id="rereview-btn" class="btn-primary" style="font-size:.85rem;padding:7px 16px"
-            data-platform="${escapeHtml(r.platform)}" data-problem-ref="${escapeHtml(r.problem_ref)}">
-            🤖 지금 AI 리뷰 실행
-          </button>
-          <span id="rereview-msg" style="font-size:.82rem"></span>
-        </div>`;
+      // idx 0 이 최신 회차 — 서버의 재리뷰/재푸시는 문제의 최신 회차를 대상으로 동작한다.
+      const actionHtml = buildRereviewAction(r, isPending, idx === 0);
       document.getElementById('submission-detail-area').innerHTML = `
         <div class="summary-grid" style="margin:16px 0">
           <div class="summary-item">
@@ -192,7 +183,7 @@ async function openReviewModal(platform, problemRef) {
           ${r.complexity ? `<div class="summary-item"><div class="summary-label">시간복잡도</div><div class="summary-value">${escapeHtml(r.complexity)}</div></div>` : ''}
           ${r.better_algorithm ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.82rem;color:var(--yellow)">${escapeHtml(r.better_algorithm)}</div></div>` : ''}
         </div>
-        ${isPending ? pendingHtml : ''}
+        ${actionHtml}
         ${hasPoints ? `
         <div class="points-grid" style="margin-bottom:16px">
           <div class="points-box good"><h4>✓ 잘한 점</h4><ul>${sl || '<li>-</li>'}</ul></div>
@@ -225,13 +216,41 @@ async function openReviewModal(platform, problemRef) {
   }
 }
 
+// 재리뷰 / 문서 재업로드 액션 영역. 서버는 문제의 최신 회차를 대상으로 동작하므로
+// 버튼도 최신 회차에서만 준다 — 과거 대기 회차에 버튼을 두면 눌러도 아무 일이 없다.
+function buildRereviewAction(r, isPending, isLatest) {
+  if (!isLatest) {
+    return isPending
+      ? `<div class="alert alert-info" style="margin-bottom:12px">
+           ⏳ 리뷰 대기 회차입니다. 이후 회차에 리뷰가 있어 이 회차는 대기 상태로 남습니다.
+         </div>`
+      : '';
+  }
+
+  const label = isPending ? '🤖 지금 AI 리뷰 실행' : '📤 GitHub 문서 다시 올리기';
+  const notice = isPending
+    ? `<div class="alert alert-info" style="margin-bottom:12px">
+         ⏳ AI 리뷰 대기 중입니다. LLM을 쓸 수 있을 때 아래 버튼을 누르면 리뷰 기록과 GitHub README가 함께 갱신됩니다.
+       </div>`
+    : '';
+  return `${notice}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button id="rereview-btn" class="btn-primary" style="font-size:.85rem;padding:7px 16px"
+        data-platform="${escapeHtml(r.platform)}" data-problem-ref="${escapeHtml(r.problem_ref)}"
+        data-label="${escapeHtml(label)}">
+        ${label}
+      </button>
+      <span id="rereview-msg" style="font-size:.82rem"></span>
+    </div>`;
+}
+
 async function runRereview(e) {
   const btn = e.currentTarget;
   const msg = document.getElementById('rereview-msg');
   const platform = btn.dataset.platform;
   const problemRef = btn.dataset.problemRef;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> 리뷰 중... (10~20초)';
+  btn.innerHTML = '<span class="spinner"></span> 처리 중... (리뷰는 10~20초)';
   msg.textContent = '';
   msg.style.color = '';
 
@@ -240,13 +259,14 @@ async function runRereview(e) {
       `/api/rereview/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`,
       { method: 'POST' }, '재리뷰 실패');
     if (!data.pushed) {
-      alert(data.detail || 'GitHub 갱신에 실패했습니다. 리뷰는 저장되었으니 버튼을 다시 누르면 업로드만 재시도합니다.');
+      alert(`${data.detail || 'GitHub 갱신에 실패했습니다.'}\n\n` +
+            "최신 회차의 '📤 GitHub 문서 다시 올리기' 버튼으로 업로드만 재시도할 수 있습니다 (리뷰는 다시 돌리지 않습니다).");
     }
     await openReviewModal(platform, problemRef);  // 갱신된 리뷰로 모달 재렌더
     loadHistory();
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = '🤖 지금 AI 리뷰 실행';
+    btn.textContent = btn.dataset.label;
     msg.textContent = err.message;
     msg.style.color = 'var(--red)';
   }

@@ -1,7 +1,15 @@
+"""GitHub push 공용 헬퍼 — README 조립, 저장 폴더/커밋 메시지, 저장소 타깃 병합, 파일 push.
+
+push 함수가 둘인 이유: push_solution 은 파일별 PUT(가져오기처럼 수백 건을 훑는 경로에서
+한 문제가 실패해도 나머지가 진행되어야 한다), push_review_bundle 은 README+코드를
+한 커밋으로 묶는다(단건 등록은 저장소 이력이 문제 단위로 남는 게 낫다).
+"""
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 import db
 import clients as api_client
+
+KST = timezone(timedelta(hours=9))
 
 
 def push_solution(repo: str, token: str, folder: str, file_stem: str,
@@ -57,7 +65,8 @@ def _review_section_lines(review: dict) -> list[str]:
 def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str, title: str,
                        tier_name: str, tags: list, language: str, code: str, url: str = "",
                        review: dict | None = None, description: str = "",
-                       input_desc: str = "", output_desc: str = "") -> str:
+                       input_desc: str = "", output_desc: str = "",
+                       submitted_at: str = "") -> str:
     """README + 코드 파일을 저장소에 push 하고 폴더 경로를 반환한다. 실패 시 HTTPException(500).
 
     description 이 비어 있으면 플랫폼별 문제 본문을 자동 수집한다 — LLM 이 아니라 스크래핑이라
@@ -75,7 +84,7 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
         output_desc = sections.get("output", "")
 
     readme = build_readme(problem_ref, title, tier_name, tags, language, url,
-                          description, input_desc, output_desc, review)
+                          description, input_desc, output_desc, review, submitted_at)
     ok = api_client.push_files_to_github(repo, token, [
         {"path": f"{folder}/README.md", "content": readme},
         {"path": f"{folder}/{problem_ref}{ext}", "content": code},
@@ -96,13 +105,25 @@ def require_github_target() -> tuple[str, str]:
     return github_repo, github_token
 
 
+def _submitted_at_str(submitted_at: str) -> str:
+    """'제출 일자' 표기. 재업로드는 원래 제출 시각을 그대로 써야 앱 기록과 어긋나지 않는다."""
+    if submitted_at:
+        try:
+            return _format_kst(datetime.fromisoformat(submitted_at))
+        except ValueError:
+            pass
+    return _format_kst(datetime.now(KST))
+
+
+def _format_kst(moment: datetime) -> str:
+    return f"{moment.year}년 {moment.month}월 {moment.day}일 {moment.strftime('%H:%M:%S')}"
+
+
 def build_readme(problem_ref: str, title: str,
                  tier_name: str, tags: list, language: str, url: str,
                  description: str = "", input_desc: str = "", output_desc: str = "",
-                 review: dict | None = None) -> str:
-    KST = timezone(timedelta(hours=9))
-    now = datetime.now(KST)
-    date_str = f"{now.year}년 {now.month}월 {now.day}일 {now.strftime('%H:%M:%S')}"
+                 review: dict | None = None, submitted_at: str = "") -> str:
+    date_str = _submitted_at_str(submitted_at)
     tags_str = ", ".join(f"`{t}`" for t in tags) if tags else "없음"
 
     lines = [

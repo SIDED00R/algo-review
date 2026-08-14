@@ -36,4 +36,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if _has_language_column():
-        op.drop_column('reviews', 'language')
+        # batch 모드로 감싼다 — 구 SQLite(3.35 미만)는 DROP COLUMN 을 지원하지 않는다.
+        with op.batch_alter_table('reviews') as batch_op:
+            batch_op.drop_column('language')

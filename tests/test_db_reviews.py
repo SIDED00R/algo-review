@@ -122,6 +122,17 @@ def test_update_pending_review_fills_row_without_new_submission():
     assert stats["dp"]["total_count"] == 1
 
 
+def test_normal_review_after_pending_still_counts_tags(at_time):
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    at_time("2024-01-02T00:00:00")
+    # 대기 등록 후 리뷰 탭에서 '분석 시작'을 다시 돌린 경우 — 대기 행 때문에 첫 집계를 놓치면 안 된다.
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert stats["dp"]["good_count"] == 1
+    assert stats["dp"]["total_count"] == 1
+
+
 def test_update_pending_review_without_pending_row():
     mk_review(problem_id=1, problem_ref="1", efficiency="good")
     assert db.update_pending_review("boj", "1", {"efficiency": "ok"}) is False

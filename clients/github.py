@@ -1,6 +1,10 @@
 import base64
+import logging
+
 import requests
 from clients.utils import _ext_to_language
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def exchange_github_code(code: str, client_id: str, client_secret: str) -> str:
@@ -76,7 +80,8 @@ def push_file_to_github(repo: str, token: str, path: str, content: str, commit_m
         resp = requests.put(url, json=body, headers=headers, timeout=15)
         resp.raise_for_status()
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning("GitHub 파일 push 실패 (repo=%s, path=%s): %s", repo, path, e)
         return False
 
 
@@ -131,7 +136,9 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
             )
         update_resp.raise_for_status()
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning("GitHub 번들 push 실패 (repo=%s, files=%s): %s",
+                       repo, [f["path"] for f in files], e)
         return False
 
 

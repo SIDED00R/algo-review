@@ -33,12 +33,15 @@ function tierBadgeHtml(cls, name, style) {
   return `<span class="tier-badge ${cls}"${style ? ` style="${style}"` : ''}>${name}</span>`;
 }
 
+// 백엔드 db.PENDING_EFFICIENCY 와 같은 값 — 리뷰 없이 등록한 행의 마커
+const EFF_PENDING = 'pending';
+
 function effClass(e) {
-  return { good: 'eff-good', ok: 'eff-ok', poor: 'eff-poor', pending: 'eff-pending' }[e] || '';
+  return { good: 'eff-good', ok: 'eff-ok', poor: 'eff-poor', [EFF_PENDING]: 'eff-pending' }[e] || '';
 }
 
 function effLabel(e) {
-  return { good: '● 효율적', ok: '◐ 보통', poor: '● 비효율적', pending: '◌ 리뷰 대기' }[e] || e;
+  return { good: '● 효율적', ok: '◐ 보통', poor: '● 비효율적', [EFF_PENDING]: '◌ 리뷰 대기' }[e] || e;
 }
 
 function problemLabel(problem) {

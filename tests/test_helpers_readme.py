@@ -19,6 +19,13 @@ def test_readme_pending_review_shows_waiting_notice():
     assert "AI 리뷰 대기 중" in out
 
 
+def test_readme_uses_original_submitted_at_when_given():
+    # 재업로드는 원래 제출 시각을 유지해야 앱 기록의 회차 날짜와 어긋나지 않는다.
+    out = build_readme("1000", "A+B", "Bronze V", ["구현"], "Python 3",
+                       "https://boj.kr/1000", submitted_at="2026-08-01T09:30:00")
+    assert "2026년 8월 1일 09:30:00" in out
+
+
 def test_readme_completed_review_includes_details():
     out = _readme({
         "efficiency": "good", "complexity": "O(N)", "better_algorithm": "세그먼트 트리",

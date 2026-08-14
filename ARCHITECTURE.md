@@ -153,6 +153,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
 | `routes/pending_review.py` | `db.save_review` | 리뷰 대기 행 저장 (push 성공 후에만) |
+| `routes/rereview.py` | `analyzer.analyze_code` | 대기 행 재리뷰 — LLM 을 호출하는 두 번째 경로 |
 | `routes/rereview.py` | `db.update_pending_review` | 대기 행을 리뷰 결과로 갱신 + 태그 통계 첫 집계 |
 | `routes/helpers.py` | `clients.push_files_to_github` | 코드+README 단일 커밋 GitHub push |
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |

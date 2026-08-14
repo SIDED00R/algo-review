@@ -19,6 +19,9 @@ _PENDING_REVIEW = {"efficiency": db.PENDING_EFFICIENCY}
 def push_without_review(req: ReviewRequest):
     if not req.code.strip():
         raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
+    # 언어를 모르면 확장자가 .txt 로 떨어져 나중에 재업로드할 파일을 특정할 수 없다.
+    if not req.language.strip():
+        raise HTTPException(status_code=400, detail="언어를 선택해주세요. 파일 확장자를 정하는 데 필요합니다.")
 
     if IS_DEMO:
         # 데모는 외부 API·GitHub 를 치지 않는다 — mock 문제 정보로 기록만 남긴다.
@@ -27,12 +30,13 @@ def push_without_review(req: ReviewRequest):
     else:
         info = resolve_problem_info(req.platform, req.problem_id, req.problem_ref)
         github_repo, github_token = require_github_target()
+        # 문제 본문은 넘기지 않고 push_review_bundle 의 스크래핑에 맡긴다 — 재리뷰 push 도
+        # 같은 방식이라, 붙여 넣은 본문을 실었다가 나중에 조용히 덮어쓰는 일이 없다.
         folder = push_review_bundle(
             github_repo, github_token,
             platform=info["platform"], problem_ref=info["problem_ref"], title=info["title"],
             tier_name=info["tier_name"], tags=info["tags"], language=req.language,
             code=req.code, url=info.get("url", ""), review=_PENDING_REVIEW,
-            description=(req.problem_statement or "").strip(),
         )
 
     # push 성공 후에만 기록한다 — 저장소에 없는 유령 기록이 남지 않는다.

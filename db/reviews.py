@@ -57,9 +57,12 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
     problem_ref = (problem_ref or str(problem_id)).strip()
 
     with session_scope(commit=True) as session:
+        # 대기 행은 아직 집계되지 않았으므로 첫 제출 판정에서 뺀다 —
+        # update_pending_review 의 reviewed_before 기준과 어긋나면 집계가 영구 누락된다.
         prior = session.scalar(
             select(func.count()).select_from(Review)
-            .where(Review.platform == platform, Review.problem_ref == problem_ref))
+            .where(Review.platform == platform, Review.problem_ref == problem_ref,
+                   Review.efficiency != PENDING_EFFICIENCY))
         is_first_submission = (prior == 0)
 
         session.add(Review(
@@ -97,6 +100,7 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         if row is None:
             return False
 
+        # row 를 고치기 전에 세야 한다 — 뒤로 옮기면 autoflush 로 자기 행이 포함된다.
         reviewed_before = session.scalar(
             select(func.count()).select_from(Review)
             .where(Review.platform == platform, Review.problem_ref == problem_ref,
