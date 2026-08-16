@@ -3,6 +3,7 @@ import clients as api_client
 import analyzer
 from fastapi import APIRouter, HTTPException
 from config import settings
+from routes.problem_resolve import resolve_problem_info
 from routes.review_response import save_and_build_response
 
 router = APIRouter()
@@ -20,7 +21,8 @@ def review_imported(platform: str, problem_ref: str):
         raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 세션 쿠키로 다시 가져오기 해주세요.")
 
     if platform == "codeforces":
-        problem_info = api_client.get_codeforces_problem_info(problem_ref)
+        # 조회 실패를 400/500 으로 매핑하는 공용 해석기를 쓴다(직접 호출하면 ValueError 가 500 으로만 샌다).
+        problem_info = resolve_problem_info("codeforces", None, problem_ref)
         if problem.get("title"):
             problem_info["title"] = problem["title"]
         statement = api_client.get_codeforces_problem_statement(problem_ref)
@@ -32,7 +34,7 @@ def review_imported(platform: str, problem_ref: str):
             "problem_ref": str(problem_id),
             "title": problem["title"],
             "tier": problem["tier"],
-            "tier_name": problem.get("tier_name") or api_client.TIER_NAMES.get(problem["tier"], "?"),
+            "tier_name": problem["tier_name"],   # normalize_common_row 가 항상 채운다
             "tags": problem["tags"],
         }
         statement = api_client.get_problem_statement(problem_id)

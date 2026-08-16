@@ -50,11 +50,13 @@ def get_weak_tags_scored(top_n: int = 5, platform: str | None = None) -> list[st
     return [d["tag"] for d in scored[:top_n]]
 
 
-def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exclude: set | None = None) -> list[dict]:
+def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exclude: set | None = None,
+                        weak_tags: list[str] | None = None) -> list[dict]:
+    # weak_tags 를 받으면 재계산하지 않는다 — 호출부가 이미 구했다면 태그 가중치 풀스캔을 한 번 아낀다.
     if platform == "codeforces":
-        return _get_cf_recommendations(top_weak_tags, extra_exclude=extra_exclude)
+        return _get_cf_recommendations(top_weak_tags, extra_exclude=extra_exclude, weak_tags=weak_tags)
 
-    weak_tags = get_weak_tags_scored(top_weak_tags, platform="boj")
+    weak_tags = weak_tags or get_weak_tags_scored(top_weak_tags, platform="boj")
     if not weak_tags:
         return []
 
@@ -92,8 +94,9 @@ def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exc
     return recommendations
 
 
-def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = None) -> list[dict]:
-    weak_tags = get_weak_tags_scored(top_weak_tags, platform="codeforces")
+def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = None,
+                            weak_tags: list[str] | None = None) -> list[dict]:
+    weak_tags = weak_tags or get_weak_tags_scored(top_weak_tags, platform="codeforces")
     if not weak_tags:
         return []
 

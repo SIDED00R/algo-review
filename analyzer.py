@@ -6,6 +6,8 @@ from config import settings
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
+# openai SDK 기본값은 read 600s·재시도 2회 — 제공자가 멎으면 워커 스레드가 수십 분 잡힌다.
+_API_TIMEOUT = settings.openai_timeout
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
@@ -66,6 +68,7 @@ efficiency 기준:
         ],
         response_format={"type": "json_object"},
         max_tokens=_MAX_TOKENS_REVIEW,
+        timeout=_API_TIMEOUT,
     )
 
     raw = response.choices[0].message.content.strip()
@@ -113,6 +116,7 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         model=GPT_MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=_MAX_TOKENS_REPORT,
+        timeout=_API_TIMEOUT,
     )
 
     return response.choices[0].message.content.strip()

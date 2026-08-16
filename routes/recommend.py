@@ -3,7 +3,7 @@ import clients as api_client
 import recommender
 from recommender import CF_RANGE_LOW, CF_RANGE_HARD_HIGH
 from fastapi import APIRouter, HTTPException, Query
-from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS
+from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
 
 router = APIRouter()
 
@@ -15,7 +15,8 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
 
     if IS_DEMO:
-        return {**DEMO_RECOMMENDATIONS, "platform": platform}
+        demo = DEMO_RECOMMENDATIONS_BOJ if platform == "boj" else DEMO_RECOMMENDATIONS
+        return {**demo, "platform": platform}
 
     extra_exclude: set = set()
     if exclude:
@@ -47,7 +48,8 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         return {"avg_tier": avg_tier, "tier_name": tier_name,
                 "weak_tags": [], "recommendations": [], "platform": platform}
 
-    recs = recommender.get_recommendations(top_weak_tags=3, platform=platform, extra_exclude=extra_exclude)
+    recs = recommender.get_recommendations(top_weak_tags=3, platform=platform, extra_exclude=extra_exclude,
+                                           weak_tags=weak_tags[:3])
 
     return {
         "avg_tier": avg_tier,

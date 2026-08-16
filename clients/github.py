@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 
 import requests
 from clients.utils import _ext_to_language
@@ -172,10 +173,12 @@ def get_baekjoonhub_problems(repo: str, token: str | None = None) -> list[dict]:
             continue
 
         folder = parts[2]
-        try:
-            problem_id = int(folder.split(".")[0].strip())
-        except ValueError:
+        # BaekjoonHub 는 "1000. A+B", 이 앱이 올린 폴더는 "1000번. 제목" 형태다.
+        # 앞의 숫자만 떼어내 두 포맷을 함께 받는다(전자만 파싱하면 앱이 올린 저장소를 되가져올 때 전부 스킵된다).
+        m = re.match(r"\d+", folder.strip())
+        if not m:
             continue
+        problem_id = int(m.group())
 
         if problem_id not in problems:
             problems[problem_id] = {

@@ -27,8 +27,9 @@ def _extract_tag_names(data: dict) -> list[str]:
     tags = []
     for tag in data.get("tags", []):
         display_names = tag.get("displayNames", [])
-        ko = next((d["name"] for d in display_names if d["language"] == "ko"), None)
-        en = next((d["name"] for d in display_names if d["language"] == "en"), None)
+        # 스키마가 흔들려도 KeyError 로 import 전체를 죽이지 않는다(호출부 루프가 try 밖이다).
+        ko = next((d.get("name") for d in display_names if d.get("language") == "ko"), None)
+        en = next((d.get("name") for d in display_names if d.get("language") == "en"), None)
         name = ko or en or tag.get("key", "")
         if name:
             tags.append(name)
