@@ -121,13 +121,13 @@ def github_oauth_callback(request: Request, code: str = "", error: str = "", sta
 def github_status():
     if IS_DEMO:
         return DEMO_GITHUB_STATUS
-    settings = db.get_github_settings()
-    if not settings:
+    gh_settings = db.get_github_settings()
+    if not gh_settings:
         return {"connected": False}
     return {
         "connected": True,
-        "username": settings.get("github_username", ""),
-        "target_repo": settings.get("target_repo", ""),
+        "username": gh_settings["github_username"],
+        "target_repo": gh_settings["target_repo"],
     }
 
 
@@ -149,11 +149,11 @@ def github_disconnect():
 def get_github_repos():
     if IS_DEMO:
         return {"repos": DEMO_REPOS}
-    settings = db.get_github_settings()
-    if not settings:
+    gh_settings = db.get_github_settings()
+    if not gh_settings:
         raise HTTPException(status_code=400, detail="GitHub 연결이 필요합니다.")
     try:
-        repos = api_client.get_github_user_repos(settings["access_token"])
+        repos = api_client.get_github_user_repos(gh_settings["access_token"])
     except Exception:
         _logger.exception("GitHub repos lookup failed")
         raise HTTPException(status_code=500, detail="레포지토리 조회에 실패했습니다.")

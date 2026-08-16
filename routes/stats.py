@@ -24,7 +24,6 @@ def get_stats(platform: str | None = "boj"):
         tag_stats = db.get_cf_tag_stats()
         return {
             "platform": "codeforces",
-            "avg_rating": avg_rating,
             "avg_tier_name": f"CF {int(avg_rating)}",
             "total_reviews": total_reviews,
             "tag_stats": tag_stats,

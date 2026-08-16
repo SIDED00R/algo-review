@@ -388,6 +388,8 @@ def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
             "id": ref,
             "title": p.get("name", ref),
             "tier": 0,
+            # 배지 표시 전용 짧은 라벨. 저장 경로로 흘리면 안 된다 —
+            # 리뷰에 남는 라벨은 cf_rating_label('Codeforces N')이고 평균 레이팅 파서가 그 접두사를 읽는다.
             "tier_name": f"CF {rating}",
             "rating": rating,
             "url": f"https://codeforces.com/problemset/problem/{contest_id}/{index}",

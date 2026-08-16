@@ -34,8 +34,8 @@ def build_solution_target(platform: str, problem_ref, title: str, tier_name: str
 def merged_github_target(repo_override: str = "", token_override: str = "") -> tuple[str, str]:
     """override 우선으로 GitHub 저장소/토큰을 병합, 둘 다 없으면 ("", "") 반환."""
     gh_settings = db.get_github_settings()
-    github_repo = (repo_override or "").strip() or ((gh_settings.get("target_repo") if gh_settings else "") or "")
-    github_token = (token_override or "").strip() or ((gh_settings.get("access_token") if gh_settings else "") or "")
+    github_repo = (repo_override or "").strip() or (gh_settings["target_repo"] if gh_settings else "")
+    github_token = (token_override or "").strip() or (gh_settings["access_token"] if gh_settings else "")
     return github_repo, github_token
 
 

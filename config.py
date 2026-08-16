@@ -1,8 +1,4 @@
-"""중앙 설정 — 환경변수를 읽어 SQLAlchemy 접속 URL 을 조립한다.
-
-기존 운영 Cloud Run 환경변수(DB_TYPE / DB_SOCKET / DB_NAME / DB_USER / DB_PASSWORD)를
-필드명과 1:1 로 매핑하므로, 배포 시 서비스 환경변수를 바꿀 필요가 없다.
-"""
+"""중앙 설정 — 환경변수를 읽어 SQLAlchemy 접속 URL 을 조립한다."""
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

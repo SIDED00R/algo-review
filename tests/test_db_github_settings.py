@@ -16,7 +16,7 @@ def test_empty_target_repo_preserves_existing():
     got = db.get_github_settings()
     assert got["access_token"] == "tok2"
     assert got["github_username"] == "user2"
-    # target_repo 를 빈 문자열로 저장해도 기존 값이 보존된다(CASE WHEN).
+    # target_repo 를 빈 문자열로 저장해도 기존 값이 보존된다.
     assert got["target_repo"] == "owner/repo"
 
 

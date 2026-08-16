@@ -43,7 +43,7 @@
 
 ### 1. 요구사항
 
-- Python 3.11+
+- Python 3.13
 - OpenAI API 키
 
 ### 2. 설치
@@ -71,32 +71,13 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-주요 항목:
+필수 항목만 예시:
 
 ```env
 OPENAI_API_KEY=your_openai_key
-
-# 선택: GitHub OAuth (리뷰 → GitHub push 기능)
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-APP_URL=http://localhost:8080
-
-# 선택: Codeforces 소스 코드 import
-CODEFORCES_API_KEY=your_codeforces_key
-CODEFORCES_API_SECRET=your_codeforces_secret
-
-# 선택: CORS 허용 출처 (기본값: http://localhost:8080)
-# CORS_ORIGINS=http://localhost:8000,https://yourdomain.com
-
-# 선택: PostgreSQL 사용 시
-# DB_TYPE=postgres
-# DB_NAME=boj_review
-# DB_USER=boj_user
-# DB_PASSWORD=your_password
-# DB_HOST=localhost
-# DB_PORT=5432
-# DB_SOCKET=/cloudsql/PROJECT:REGION:INSTANCE
 ```
+
+나머지 선택 항목(GitHub OAuth, Codeforces import, CORS, PostgreSQL 등)은 `.env.example` 참조.
 
 ### 4. 실행
 
@@ -128,7 +109,7 @@ CI(`.github/workflows/deploy.yml`)는 PR·push 마다 lint + test(SQLite/Postgre
 
 ### 자동 배포 (CI/CD)
 
-`main` 브랜치에 머지되면 GitHub Actions(`.github/workflows/deploy.yml`)가 Cloud Run 두 서비스(`algo-review`, `algo-review-demo`)에 자동 배포합니다. GCP 인증은 Workload Identity Federation(장기 키 없음)을 사용하며, 워크플로 탭에서 수동 실행(`workflow_dispatch`)도 가능합니다. 아래 명령들은 수동 배포가 필요할 때 사용합니다.
+`main` 브랜치에 머지되면 GitHub Actions(`.github/workflows/deploy.yml`)가 Cloud Run 두 서비스(`algo-review`, `algo-review-demo`)에 자동 배포합니다. 아래 명령들은 수동 배포가 필요할 때 사용합니다.
 
 ### Cloud Run (SQLite)
 
@@ -197,78 +178,35 @@ gcloud run deploy algo-review-demo \
 ├── warmup.py               # 기동 직후 테마 캐시 백그라운드 예열
 ├── ARCHITECTURE.md         # 레이어 다이어그램 & 호출관계 문서
 ├── requirements.txt        # Python 의존성
+├── requirements-dev.txt    # 개발용 의존성 (pytest, ruff 등)
+├── pyproject.toml          # ruff·pytest 설정
+├── alembic.ini             # Alembic 설정
+├── .env.example            # 환경변수 템플릿
 ├── Dockerfile              # Cloud Run 컨테이너 이미지 (uvicorn, 8080 포트)
 ├── .dockerignore
 ├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo)
 ├── LICENSE                 # MIT
-├── assets/                 # README 데모 GIF
+├── assets/                 # 데모 GIF (미사용)
 │
-├── clients/                # 외부 API 클라이언트 (각 파일이 하나의 플랫폼 담당)
-│   ├── solved_ac.py        # solved.ac API, BOJ 스크래핑, TIER_NAMES 상수
-│   ├── codeforces.py       # Codeforces API, 문제 메타/본문 스크래핑, problemset 스냅샷 캐시
-│   ├── github.py           # GitHub OAuth, 파일 push, BaekjoonHub import
-│   └── utils.py            # get_problem_url(), 파일 확장자 매핑
+├── clients/                # 외부 API 클라이언트 (플랫폼별 분리) — 파일별 책임은 ARCHITECTURE.md 참조
 │
 ├── config.py               # 환경변수 → SQLAlchemy 접속 URL (pydantic-settings)
-├── db/                     # DB 레이어 — SQLAlchemy 2.0 ORM (SQLite/PostgreSQL 단일 코드 경로)
-│   ├── models.py           # ORM 모델 5개 + 인덱스
-│   ├── connection.py       # 엔진 싱글턴 + session_scope
-│   ├── migrate.py          # Alembic upgrade head 실행 (run_migrations)
-│   ├── normalize.py        # reviews/solved 행 정규화 공용 헬퍼
-│   ├── reviews.py          # reviews 테이블 CRUD + 티어/태그 집계
-│   ├── solved.py           # solved_history 테이블 CRUD
-│   ├── github_settings.py  # github_settings 테이블 CRUD
-│   └── cache.py            # api_cache 테이블 — 외부 API 파생 페이로드 TTL 캐시
-│
+├── db/                     # DB 레이어 (SQLAlchemy 2.0 ORM) — 파일별 책임은 ARCHITECTURE.md 참조
 ├── migrations/             # Alembic (env.py + versions/)
 │
-├── routes/                 # FastAPI 라우터 (각 파일이 하나의 도메인 담당)
-│   ├── auth.py             # GitHub OAuth 인증 흐름
-│   ├── review.py           # POST /api/review — AI 코드 리뷰
-│   ├── pending_review.py   # POST /api/review/pending — 리뷰 없이 GitHub 등록(리뷰 대기)
-│   ├── rereview.py         # POST /api/rereview/{platform}/{ref} — 대기 기록 AI 리뷰 + README 갱신
-│   ├── problem_resolve.py  # 문제 식별자 → 문제 메타/본문 해석 (리뷰 경로 공용)
-│   ├── github_push.py      # POST /api/push-review — GitHub push
-│   ├── problem.py          # GET /api/problem/cf/{ref} — CF 문제 조회
-│   ├── execute.py          # POST /api/execute — Python/C++ 코드 실행
-│   ├── recommend.py        # GET /api/recommend — 문제 추천
-│   ├── themes.py           # GET /api/themes, GET /api/themes/{id}/problems — 테마별 대표 문제
-│   ├── history.py          # GET /api/reviews/* — 리뷰 기록 조회
-│   ├── solved.py           # /api/solved-history/* — import 기록 관리
-│   ├── stats.py            # GET /api/stats, /api/tier-history — 통계
-│   ├── report.py           # GET /api/report — 종합 분석 리포트
-│   ├── import_github.py    # POST /api/import-github — BaekjoonHub import
-│   ├── import_boj.py       # POST /api/import — BOJ 제출 기록 import
-│   ├── import_codeforces.py# POST /api/import-codeforces — CF import
-│   ├── models.py           # Pydantic 요청/응답 스키마
-│   ├── helpers.py          # GitHub push 공용 헬퍼 (README+리뷰 섹션·대상 조립·설정 병합·번들 push)
-│   └── review_response.py  # 리뷰 저장 + ReviewResponse 생성 (review/solved 공용)
+├── routes/                 # FastAPI 라우터 (도메인별 분리) — 엔드포인트 목록은 ARCHITECTURE.md 참조
+│
+├── tests/                  # pytest (DB 계층·라우트·마이그레이션·CF 본문 파싱)
 │
 └── static/
     ├── index.html
     ├── style.css
     ├── img/                # UI 아이콘 (github.svg)
-    └── js/                 # 각 파일이 하나의 UI 기능 담당
-        ├── utils.js            # 공통 순수 함수
-        ├── editor.js           # CodeMirror 에디터
-        ├── theme.js            # 다크/라이트 테마
-        ├── tabs.js             # 탭 전환 네비게이션
-        ├── github.js           # GitHub OAuth 연결 UI
-        ├── tier-chart.js       # 티어 변화 Chart.js 그래프
-        ├── review.js           # 코드 리뷰 탭
-        ├── recommend.js        # 문제 추천 탭
-        ├── themes.js           # 테마별 문제 탭 (플랫폼 토글 + 테마 칩 + 3계층 캐시)
-        ├── problem-modal.js    # CF 문제 뷰어 모달
-        ├── stats.js            # 태그 통계 시각화
-        ├── history.js          # 리뷰 기록 탭
-        ├── report.js           # 종합 분석 리포트 탭
-        ├── import-history.js   # import 기록 목록, 필터/페이징, AI 리뷰 요청
-        ├── import-github.js    # BaekjoonHub import 버튼 핸들러
-        ├── import-boj.js       # BOJ import 버튼 핸들러
-        └── import-codeforces.js# CF import 버튼 핸들러
+    └── js/                 # UI 기능별 모듈 17개 — 파일별 책임은 ARCHITECTURE.md 참조
 ```
 
-> 상세 레이어 다이어그램, 호출관계, 보안 조치 내역은 [ARCHITECTURE.md](./ARCHITECTURE.md)를 참조하세요.
+> 파일별 단일 책임, 엔드포인트 목록, 레이어 다이어그램, 호출관계, 보안 조치 내역은
+> [ARCHITECTURE.md](./ARCHITECTURE.md)를 참조하세요.
 
 ## 기술 스택
 
@@ -291,6 +229,7 @@ gcloud run deploy algo-review-demo \
 | `CODEFORCES_API_KEY` | 선택 | CF 소스코드 import용 |
 | `CODEFORCES_API_SECRET` | 선택 | CF 소스코드 import용 |
 | `OPENAI_MODEL` | 선택 | 사용할 OpenAI 모델 — 미설정 시 리뷰·리포트 `gpt-4o`, 번역 `gpt-4o-mini`. 설정하면 리뷰·번역 모두 이 값으로 대체 |
+| `OPENAI_BASE_URL` | 선택 | OpenAI 호환 엔드포인트 URL — 다른 제공자(예: Gemini)로 전환할 때만 지정 |
 | `OPENAI_MAX_TOKENS` | 선택 | 리뷰·번역 응답 최대 토큰 (기본값: 리뷰 `2048`, 번역 `2000`) |
 | `OPENAI_REPORT_MAX_TOKENS` | 선택 | 종합 리포트 응답 최대 토큰 (기본값: `1024`) |
 | `OPENAI_TEMPERATURE` | 선택 | CF 번역 temperature (기본값: `0.3`) |
