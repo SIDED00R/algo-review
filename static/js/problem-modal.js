@@ -39,6 +39,7 @@ async function openProblemModal(ref, title, tierName) {
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
   document.getElementById('pm-title').textContent = `${ref}. ${title}`;
+  document.getElementById('pm-difficulty').className = `tier-badge ${cfRatingClass(Number(String(tierName).replace(/[^0-9]/g, '')))}`;
   document.getElementById('pm-difficulty').textContent = tierName;
   document.getElementById('pm-meta').textContent = '';
   document.getElementById('pm-link').innerHTML = '';
@@ -158,14 +159,12 @@ function removeCustomCase(id) {
 
 function getCustomCases() {
   return [...document.querySelectorAll('.pm-custom-case')].map(el => {
-    const idMatch = el.id.match(/pm-custom-(\d+)/);
-    if (!idMatch) return null;
-    const id = idMatch[1];
+    const id = el.id.match(/pm-custom-(\d+)/)[1];
     return {
       input: document.getElementById(`pm-custom-input-${id}`)?.value ?? '',
       output: document.getElementById(`pm-custom-output-${id}`)?.value ?? '',
     };
-  }).filter(Boolean);
+  });
 }
 
 async function runSamples() {

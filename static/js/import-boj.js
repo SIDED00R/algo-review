@@ -21,10 +21,10 @@ importBtn.addEventListener('click', async () => {
     }, '가져오기 실패');
 
     const failMsg = data.failed && data.failed.length > 0
-      ? `<br><span style="color:var(--text-muted);font-size:.82rem">정보 조회 실패: ${data.failed.join(', ')}</span>`
+      ? `<br><span style="color:var(--text-muted);font-size:.82rem">정보 조회 실패: ${escapeHtml(data.failed.join(', '))}</span>`
       : '';
     const bojGithubMsg = (data.github_pushed > 0)
-      ? `<br><span style="color:var(--green);font-size:.82rem">🐙 GitHub <b>${data.github_repo}</b>에 <b>${data.github_pushed}</b>개 push 완료 (BOJ/ 폴더)</span>`
+      ? `<br><span style="color:var(--green);font-size:.82rem">🐙 GitHub <b>${escapeHtml(data.github_repo)}</b>에 <b>${data.github_pushed}</b>개 push 완료 (BOJ/ 폴더)</span>`
       : '';
     result.innerHTML = `
       <div class="alert alert-info" style="color:var(--green)">

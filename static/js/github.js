@@ -1,10 +1,17 @@
+function showDisconnectedGithubUI(iconBtn, statusBadge, connectInner) {
+  iconBtn.classList.remove('connected');
+  iconBtn.title = 'GitHub 연결';
+  statusBadge.style.display = 'none';
+  connectInner.style.display = 'block';
+}
+
 async function loadGithubStatus() {
+  const iconBtn = document.getElementById('github-icon-btn');
+  const statusBadge = document.getElementById('github-status-badge');
+  const connectInner = document.getElementById('github-connect-inner');
   try {
     const res = await fetch('/auth/github/status');
     const data = await res.json();
-    const iconBtn = document.getElementById('github-icon-btn');
-    const statusBadge = document.getElementById('github-status-badge');
-    const connectInner = document.getElementById('github-connect-inner');
     const usernameBadge = document.getElementById('github-username-badge');
     const repoSelect = document.getElementById('github-repo-select');
 
@@ -34,12 +41,11 @@ async function loadGithubStatus() {
         });
       });
     } else {
-      iconBtn.classList.remove('connected');
-      iconBtn.title = 'GitHub 연결';
-      statusBadge.style.display = 'none';
-      connectInner.style.display = 'block';
+      showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
     }
-  } catch {}
+  } catch {
+    showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
+  }
 }
 
 document.getElementById('github-icon-btn')?.addEventListener('click', (e) => {

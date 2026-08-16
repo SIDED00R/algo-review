@@ -4,7 +4,7 @@ const TIER_GROUPS = {
 };
 
 function tierInGroup(tier, key) {
-  const r = TIER_GROUPS[key] || [0, 30];
+  const r = TIER_GROUPS[key];
   return tier >= r[0] && tier <= r[1];
 }
 

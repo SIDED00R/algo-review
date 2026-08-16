@@ -72,7 +72,7 @@ function getFilteredReviews() {
     if (q && !`${problemLabel(p)} ${p.title} ${(p.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
     if (tier && !tierInGroup(p.tier, tier)) return false;
     if (eff) {
-      const lastEff = (p.efficiencies || '').split(',')[0] || 'ok';
+      const lastEff = p.efficiencies.split(',')[0];
       if (lastEff !== eff) return false;
     }
     return true;
@@ -99,8 +99,8 @@ function renderProblemList(container, problems) {
   const frag = document.createDocumentFragment();
   problems.forEach(p => {
     const tc = tierClass(p.tier);
-    const effList = (p.efficiencies || '').split(',');
-    const lastEff = effList[0] || 'ok';
+    const effList = p.efficiencies.split(',');
+    const lastEff = effList[0];
     const div = document.createElement('div');
     div.className = 'history-card';
     div.dataset.platform = p.platform || 'boj';
