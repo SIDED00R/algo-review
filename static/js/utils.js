@@ -91,8 +91,15 @@ function showError(container, msg) {
 async function fetchJsonOk(url, options, fallbackMsg) {
   const res = await fetch(url, options);
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || fallbackMsg);
+  // pydantic 검증 실패(422)는 detail 이 객체 배열이라 그대로 쓰면 "[object Object]" 가 보인다.
+  if (!res.ok) throw new Error(errorDetail(data) || fallbackMsg);
   return data;
+}
+
+function errorDetail(data) {
+  const d = data && data.detail;
+  if (Array.isArray(d)) return d.map(e => (e && e.msg) || '').filter(Boolean).join(' / ');
+  return typeof d === 'string' ? d : '';
 }
 
 function detectLanguage(code) {

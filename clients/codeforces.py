@@ -3,6 +3,7 @@ import time
 import random
 import hashlib
 from functools import lru_cache
+from itertools import zip_longest
 from urllib.parse import urlencode, urljoin
 import requests
 from bs4 import BeautifulSoup
@@ -196,6 +197,26 @@ def cf_xpath_text(tree, expr: str) -> str:
     return normalize_cf_math(" ".join(el.itertext()).strip())
 
 
+def _extract_samples(container) -> list[dict]:
+    """예제 입출력 쌍 목록.
+
+    CF는 sample-test 가 문제당 하나이고 그 안에 input/output <pre> 쌍이 여러 개 들어간다 —
+    컨테이너 단위로 순회하며 첫 쌍만 취하면 2번째 이후 예제가 통째로 사라진다.
+    zip 대신 zip_longest 를 쓰는 이유: 인터랙티브 문제처럼 output 이 없는 쪽이 섞이면
+    zip 은 짧은 쪽에서 잘라 예제 전체를 날린다. 없는 쪽은 빈 문자열로 보존한다.
+    """
+    samples = []
+    for test in container.xpath('.//div[contains(@class,"sample-test")]'):
+        inp_pres = test.xpath('.//div[contains(@class,"input")]//pre')
+        out_pres = test.xpath('.//div[contains(@class,"output")]//pre')
+        for inp, out in zip_longest(inp_pres, out_pres):
+            samples.append({
+                "input":  "\n".join(inp.itertext()).strip() if inp is not None else "",
+                "output": "\n".join(out.itertext()).strip() if out is not None else "",
+            })
+    return samples
+
+
 def _extract_cf_sections(tree) -> dict:
     return {
         "description": cf_xpath_text(tree, f'{_CF_PROBLEM_BASE_XPATH}/div[2]'),
@@ -246,20 +267,8 @@ def scrape_cf_problem(problem_ref: str) -> dict:
 
     note_text = cf_xpath_text(tree, '//*[contains(@class,"note")]')
 
-    samples = []
     sample_container = tree.xpath(f'{_CF_PROBLEM_BASE_XPATH}/div[5]')
-    if sample_container:
-        sc = sample_container[0]
-        # 컨테이너 전체에서 input/output <pre>를 각각 뽑아 zip 하면 인터랙티브 문제처럼
-        # output 이 없는 예제가 하나만 섞여도 전체 개수가 어긋나 samples 가 통째로 비어버린다.
-        # sample-test 단위(예제 쌍)로 순회해 짝을 맞추고, 없는 쪽은 빈 문자열로 보존한다.
-        for test in sc.xpath('.//div[contains(@class,"sample-test")]'):
-            inp_pres = test.xpath('.//div[contains(@class,"input")]//pre')
-            out_pres = test.xpath('.//div[contains(@class,"output")]//pre')
-            samples.append({
-                "input":  "\n".join(inp_pres[0].itertext()).strip() if inp_pres else "",
-                "output": "\n".join(out_pres[0].itertext()).strip() if out_pres else "",
-            })
+    samples = _extract_samples(sample_container[0]) if sample_container else []
 
     sections = _extract_cf_sections(tree)
 
