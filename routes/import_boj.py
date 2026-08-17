@@ -15,6 +15,8 @@ def import_history(req: ImportRequest):
 
     try:
         submissions = api_client.get_user_submissions(req.boj_id, req.max_pages)
+    except api_client.BojCrawlError as e:
+        raise HTTPException(status_code=502, detail=f"BOJ 제출 목록을 불러오지 못했습니다({e}). 잠시 후 다시 시도해주세요.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"제출 기록 크롤링 실패: {e}")
 

@@ -127,4 +127,12 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         timeout=_API_TIMEOUT,
     )
 
+    if response.choices[0].finish_reason == "length":
+        # max_tokens 에 걸려 리포트가 중간에서 잘렸다 — 캐시가 없어 매번 재생성되므로
+        # 잘린 채로 200을 내보내지 않고 사람이 읽을 수 있는 에러로 분기한다.
+        raise ValueError(
+            f"AI 응답이 최대 토큰({_MAX_TOKENS_REPORT})을 초과해 잘렸습니다. "
+            "데이터가 너무 많을 수 있습니다."
+        )
+
     return response.choices[0].message.content.strip()

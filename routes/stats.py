@@ -1,6 +1,7 @@
 import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
+from routes.models import _normalize_platform
 
 router = APIRouter()
 
@@ -12,9 +13,10 @@ def get_tier_history():
 
 @router.get("/api/stats")
 def get_stats(platform: str | None = "boj"):
-    platform = (platform or "boj").strip().lower()
-    if platform not in {"boj", "codeforces"}:
-        raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
+    try:
+        platform = _normalize_platform(platform)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     history = db.get_review_history(20, platform=platform)
     total_reviews = db.get_total_review_count(platform)

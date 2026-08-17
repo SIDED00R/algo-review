@@ -1,6 +1,4 @@
 """번역 전후 수식 이미지 마커 마스킹 (API 호출 없음)."""
-import pytest
-
 import cf_translator
 from cf_translator import _mask_image_markers, _unmask_image_markers
 
@@ -69,15 +67,17 @@ class _FakeOpenAI:
         })()
 
 
-def test_translate_raises_when_response_truncated(monkeypatch):
-    # max_tokens 에 걸려 문장 중간에서 잘린 응답을 그대로 반환하면 호출부(routes/problem.py)가
-    # 성공으로 오인해 영구 캐시한다 — finish_reason="length" 는 예외로 알려야 한다.
+def test_translate_returns_partial_content_when_truncated(monkeypatch):
+    # 잘린 응답을 예외로 던지면 routes/problem.py 의 60초 TTL 캐시가 영구히 재시도해
+    # 유료 호출이 반복된다 — 잘린 번역이라도 성공으로 간주해 영구 캐시되도록,
+    # 예외 대신 부분 번역문 + 안내 문구를 반환해야 한다.
     monkeypatch.setattr(
         cf_translator, "OpenAI",
         lambda **kwargs: _FakeOpenAI("잘린 번역문...", "length"),
     )
-    with pytest.raises(ValueError):
-        cf_translator.translate_cf_text("원문", "제목")
+    result = cf_translator.translate_cf_text("원문", "제목")
+    assert "잘린 번역문..." in result
+    assert "일부 생략" in result
 
 
 def test_translate_returns_content_when_not_truncated(monkeypatch):

@@ -1,5 +1,6 @@
 from clients.solved_ac import (
     TIER_NAMES,
+    BojCrawlError,
     get_problems_bulk,
     get_problem_info,
     get_problem_statement,
@@ -35,6 +36,7 @@ from clients.utils import (
 
 __all__ = [
     "TIER_NAMES",
+    "BojCrawlError",
     "get_problems_bulk", "get_problem_info", "get_problem_statement",
     "get_boj_problem_sections", "search_problems_by_tag", "get_tag_key_by_name",
     "get_user_submissions", "get_submission_code",

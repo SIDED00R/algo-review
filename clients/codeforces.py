@@ -33,16 +33,27 @@ def cf_rating_label(rating) -> str:
     return f"Codeforces {rating}" if rating else "Codeforces Unrated"
 
 
+# miss 마다 강제 갱신하면 오타 한 번에 problemset 전체(수 MB, timeout 30s)를 재다운로드하고
+# 프로세스 전역 스냅샷을 비워 다른 요청까지 재다운로드를 유발한다 — 프로세스당 쿨다운으로 막는다.
+_FORCE_REFRESH_COOLDOWN = 600  # 10분에 1회만 강제 갱신
+_last_force_refresh = 0.0
+
+
 def get_codeforces_problem_info(problem_ref: str) -> dict:
+    global _last_force_refresh
     from clients.utils import get_problem_url
     contest_id, index = normalize_codeforces_problem_ref(problem_ref)
     problem = _get_codeforces_problem_lookup().get((contest_id, index))
     if not problem:
         # 스냅샷은 프로세스 기동 시점에 한 번 고정된다 — 그 뒤 새로 열린 대회의 문제는
-        # miss가 난다. 주기적 TTL 대신 실제 miss가 났을 때만 1회 강제 갱신 후 재조회한다.
-        _get_cf_problemset_snapshot.cache_clear()
-        _get_codeforces_problem_lookup.cache_clear()
-        problem = _get_codeforces_problem_lookup().get((contest_id, index))
+        # miss가 난다. 주기적 TTL 대신 실제 miss가 났을 때만 강제 갱신 후 재조회하되,
+        # 쿨다운 중이면 곧바로 miss 처리한다(오타 반복이 매번 전체 재다운로드로 번지지 않도록).
+        now = time.time()
+        if now - _last_force_refresh >= _FORCE_REFRESH_COOLDOWN:
+            _last_force_refresh = now
+            _get_cf_problemset_snapshot.cache_clear()
+            _get_codeforces_problem_lookup.cache_clear()
+            problem = _get_codeforces_problem_lookup().get((contest_id, index))
     if not problem:
         raise ValueError(f"Codeforces 문제를 찾을 수 없습니다: {contest_id}{index}")
 

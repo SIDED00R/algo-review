@@ -232,8 +232,8 @@ DEMO_GITHUB_STATUS = {
 }
 
 DEMO_REPOS = [
-    "demo_user/algorithm-solutions",
-    "demo_user/competitive-programming",
+    {"full_name": "demo_user/algorithm-solutions", "private": False},
+    {"full_name": "demo_user/competitive-programming", "private": False},
 ]
 
 DEMO_REPORT = (

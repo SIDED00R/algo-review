@@ -199,6 +199,10 @@ def get_tag_key_by_name(tag_name: str) -> str:
     return tag_name.lower().replace(" ", "_")
 
 
+class BojCrawlError(Exception):
+    """acmicpc 요청 자체가 실패했음(네트워크 오류·차단 등) — 정상 응답인데 결과가 없는 것과 구분한다."""
+
+
 def get_user_submissions(boj_id: str, max_pages: int = 5) -> list[dict]:
     submissions = []
     seen_ids = set()
@@ -221,17 +225,24 @@ def get_user_submissions(boj_id: str, max_pages: int = 5) -> list[dict]:
                 timeout=15,
             )
             resp.raise_for_status()
-        except Exception:
+        except Exception as e:
+            # 첫 페이지 요청 자체가 실패 — 네트워크 오류·차단 등. "결과 없음"과 구분해 알린다.
+            if top is None:
+                raise BojCrawlError(f"BOJ 제출 목록 조회 실패: {e}") from e
             break
 
         soup = BeautifulSoup(resp.text, "html.parser")
         tbody = soup.select_one("table.table-striped tbody")
         if not tbody:
+            # 정상 응답이면 제출이 0건이어도 테이블 뼈대는 존재한다 — 아예 없다면 페이지 형식이
+            # 예상과 다르다(로그인 리다이렉트·차단 등). 첫 페이지에서만 실패로 본다.
+            if top is None:
+                raise BojCrawlError("BOJ 제출 목록 페이지 형식이 예상과 다릅니다.")
             break
 
         rows = tbody.select("tr[id^='solution-']")
         if not rows:
-            break
+            break  # 결과 없음(정상) — 더 이상 페이지가 없거나 애초에 제출 기록이 없다.
 
         min_id = None
         for row in rows:
