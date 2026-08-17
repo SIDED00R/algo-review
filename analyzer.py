@@ -6,6 +6,8 @@ from config import settings
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
+# openai SDK 기본값은 read 600s·재시도 2회 — 제공자가 멎으면 워커 스레드가 수십 분 잡힌다.
+_API_TIMEOUT = settings.openai_timeout
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
@@ -66,7 +68,16 @@ efficiency 기준:
         ],
         response_format={"type": "json_object"},
         max_tokens=_MAX_TOKENS_REVIEW,
+        timeout=_API_TIMEOUT,
     )
+
+    if response.choices[0].finish_reason == "length":
+        # max_tokens 에 걸려 JSON 이 중간에 잘렸다 — json.loads 로 넘기면 유료 호출을 다 쓴
+        # 뒤 알아보기 힘든 JSONDecodeError 로 500이 난다. 사람이 읽을 수 있는 에러로 분기한다.
+        raise ValueError(
+            f"AI 응답이 최대 토큰({_MAX_TOKENS_REVIEW})을 초과해 잘렸습니다. "
+            "코드가 너무 길 수 있습니다."
+        )
 
     raw = response.choices[0].message.content.strip()
     result = json.loads(raw)
@@ -113,6 +124,15 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         model=GPT_MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=_MAX_TOKENS_REPORT,
+        timeout=_API_TIMEOUT,
     )
+
+    if response.choices[0].finish_reason == "length":
+        # max_tokens 에 걸려 리포트가 중간에서 잘렸다 — 캐시가 없어 매번 재생성되므로
+        # 잘린 채로 200을 내보내지 않고 사람이 읽을 수 있는 에러로 분기한다.
+        raise ValueError(
+            f"AI 응답이 최대 토큰({_MAX_TOKENS_REPORT})을 초과해 잘렸습니다. "
+            "데이터가 너무 많을 수 있습니다."
+        )
 
     return response.choices[0].message.content.strip()

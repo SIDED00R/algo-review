@@ -7,6 +7,7 @@ import time
 from fastapi import APIRouter, HTTPException
 
 from config import settings
+from demo_mode import IS_DEMO, demo_block
 from routes.models import ExecuteRequest
 
 router = APIRouter()
@@ -71,6 +72,9 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
 
 @router.post("/api/execute")
 def execute_code(req: ExecuteRequest):
+    # 데모는 공개 배포라 임의 코드 실행을 열어둘 수 없다(import 계열은 이미 차단돼 있다).
+    if IS_DEMO:
+        demo_block("코드 실행은 데모 버전에서 지원되지 않습니다.")
     start = time.time()
     lang = req.language.lower()
     if "python" in lang or "pypy" in lang:

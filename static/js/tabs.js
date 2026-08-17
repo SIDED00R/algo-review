@@ -22,14 +22,12 @@ const menuToggle = document.getElementById('menu-toggle');
 const mainNav = document.getElementById('main-nav');
 
 function closeNav() {
-  mainNav?.classList.remove('open');
-  if (menuToggle) {
-    menuToggle.classList.remove('open');
-    menuToggle.setAttribute('aria-expanded', 'false');
-  }
+  mainNav.classList.remove('open');
+  menuToggle.classList.remove('open');
+  menuToggle.setAttribute('aria-expanded', 'false');
 }
 
-menuToggle?.addEventListener('click', () => {
+menuToggle.addEventListener('click', () => {
   const isOpen = mainNav.classList.toggle('open');
   menuToggle.classList.toggle('open', isOpen);
   menuToggle.setAttribute('aria-expanded', String(isOpen));

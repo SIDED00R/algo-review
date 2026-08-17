@@ -9,10 +9,6 @@ from db.models import Review, SolvedHistory
 from db.normalize import normalize_common_row, resolve_tier_name
 
 
-def _normalize_solved_row(row: dict) -> dict:
-    return normalize_common_row(row)
-
-
 def _row_to_dict(obj) -> dict:
     return {col.name: getattr(obj, col.name) for col in obj.__table__.columns}
 
@@ -81,7 +77,7 @@ def get_solved_problem(platform: str, problem_ref: str) -> dict | None:
         if obj is None:
             return None
         row = _row_to_dict(obj)
-    return _normalize_solved_row(row)
+    return normalize_common_row(row)
 
 
 def get_solved_history() -> list:
@@ -95,7 +91,7 @@ def get_solved_history() -> list:
         ).mappings().all()
     result = [dict(r) for r in rows]
     for r in result:
-        _normalize_solved_row(r)
+        normalize_common_row(r)
         r["has_code"] = bool(r["has_code"])
     return result
 

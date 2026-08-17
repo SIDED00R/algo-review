@@ -3,7 +3,7 @@ const problemIdInput = document.getElementById('problem-id');
 const problemIdHelp = document.getElementById('problem-id-help');
 
 function syncProblemInputUI() {
-  const platform = platformSelect?.value || 'boj';
+  const platform = platformSelect.value || 'boj';
   if (platform === 'codeforces') {
     problemIdInput.placeholder = '예) 4A 또는 4/A';
     problemIdHelp.textContent = 'Codeforces: contestId + index 형식으로 입력하세요. 예) 4A, 4/A';
@@ -13,7 +13,7 @@ function syncProblemInputUI() {
   }
 }
 
-platformSelect?.addEventListener('change', syncProblemInputUI);
+platformSelect.addEventListener('change', syncProblemInputUI);
 syncProblemInputUI();
 
 const reviewBtn = document.getElementById('review-btn');
@@ -28,7 +28,7 @@ function currentCodeAndLanguage() {
 
 // 입력 폼 전체를 현재 값으로 읽어 요청 본문을 만든다 — 리뷰 요청과 대기 push 가 공유한다.
 function currentReviewPayload() {
-  const platform = platformSelect?.value || 'boj';
+  const platform = platformSelect.value || 'boj';
   const problemId = document.getElementById('problem-id').value.trim();
   const problemStatement = document.getElementById('problem-statement').value.trim();
   const payload = {

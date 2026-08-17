@@ -11,13 +11,14 @@ router = APIRouter()
 
 @router.post("/api/review", response_model=ReviewResponse)
 def review_code(req: ReviewRequest):
+    if not req.code.strip():
+        raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
+
     if IS_DEMO:
-        return save_and_build_response(DEMO_PROBLEM_INFO, req.code, DEMO_REVIEW_RESULT)
+        return save_and_build_response(DEMO_PROBLEM_INFO, req.code, DEMO_REVIEW_RESULT, req.language)
 
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
-    if not req.code.strip():
-        raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
 
     problem_info = resolve_problem_info(req.platform, req.problem_id, req.problem_ref)
     statement = resolve_statement(req.platform, problem_info, req.problem_statement)

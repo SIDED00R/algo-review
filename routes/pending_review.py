@@ -37,6 +37,8 @@ def push_without_review(req: ReviewRequest):
             platform=info["platform"], problem_ref=info["problem_ref"], title=info["title"],
             tier_name=info["tier_name"], tags=info["tags"], language=req.language,
             code=req.code, url=info.get("url", ""), review=_PENDING_REVIEW,
+            # 아직 저장소에 문서가 없는 최초 등록 경로 — 스크래핑이 실패해도 본문 없이 등록을 진행한다.
+            require_sections=False,
         )
 
     # push 성공 후에만 기록한다 — 저장소에 없는 유령 기록이 남지 않는다.

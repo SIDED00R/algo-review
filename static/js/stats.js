@@ -39,7 +39,7 @@ function renderStats(container, data) {
     const barColor = poorRatio > 0.6 ? 'var(--red)' : poorRatio > 0.3 ? 'var(--yellow)' : 'var(--green)';
     return `
       <div class="stat-bar-row">
-        <span class="stat-tag-name" title="${s.tag}">${s.tag}</span>
+        <span class="stat-tag-name" title="${escapeHtml(s.tag)}">${escapeHtml(s.tag)}</span>
         <div class="stat-bar-wrap">
           <div class="stat-bar" style="width:${Math.round(poorRatio*100)}%;background:${barColor}"></div>
         </div>
@@ -49,9 +49,9 @@ function renderStats(container, data) {
 
   let historyHtml = data.history.map(r => {
     const tc = isCf ? '' : tierClass(r.tier);
-    const tierLabel = tierBadgeHtml(tc, r.tier_name, 'font-size:.75rem');
+    const tierLabel = tierBadgeHtml(tc, escapeHtml(r.tier_name), 'font-size:.75rem');
     return `<tr>
-      <td><a href="${problemUrl(r)}" target="_blank">${problemLabel(r)}. ${r.title}</a></td>
+      <td><a href="${escapeHtml(problemUrl(r))}" target="_blank">${escapeHtml(problemLabel(r))}. ${escapeHtml(r.title)}</a></td>
       <td>${tierLabel}</td>
       <td class="${effClass(r.efficiency)}">${effLabel(r.efficiency)}</td>
       <td style="color:var(--text-muted);font-size:.82rem">${r.created_at.slice(0,10)}</td>
@@ -60,8 +60,8 @@ function renderStats(container, data) {
 
   const levelLabel = isCf ? '평균 레이팅' : '평균 레벨';
   const levelValue = isCf
-    ? `<span style="font-weight:700">${data.avg_tier_name}</span>`
-    : tierBadgeHtml(tierClass(Math.floor(data.avg_tier)), data.avg_tier_name);
+    ? `<span style="font-weight:700">${escapeHtml(data.avg_tier_name)}</span>`
+    : tierBadgeHtml(tierClass(Math.floor(data.avg_tier)), escapeHtml(data.avg_tier_name));
 
   container.innerHTML = `
     <div class="result-card">

@@ -30,8 +30,8 @@ function renderHistoryControls(container) {
   ctrl.id = 'history-controls';
   ctrl.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center';
   ctrl.innerHTML = `
-    <input id="h-search" type="text" placeholder="제목 또는 태그 검색..." style="flex:1;min-width:140px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.85rem" />
-    <select id="h-tier" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.85rem">
+    <input id="h-search" type="text" placeholder="제목 또는 태그 검색..." style="flex:1;min-width:140px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem" />
+    <select id="h-tier" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem">
       <option value="">전체 난이도</option>
       <option value="bronze">브론즈</option>
       <option value="silver">실버</option>
@@ -39,14 +39,14 @@ function renderHistoryControls(container) {
       <option value="platinum">플래티넘</option>
       <option value="diamond">다이아</option>
     </select>
-    <select id="h-eff" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.85rem">
+    <select id="h-eff" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem">
       <option value="">전체 효율</option>
       <option value="good">효율적</option>
       <option value="ok">보통</option>
       <option value="poor">비효율적</option>
       <option value="${EFF_PENDING}">리뷰 대기</option>
     </select>
-    <select id="h-sort" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.85rem">
+    <select id="h-sort" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem">
       <option value="recent">최근순</option>
       <option value="tier_desc">난이도 높은순</option>
       <option value="tier_asc">난이도 낮은순</option>
@@ -72,7 +72,7 @@ function getFilteredReviews() {
     if (q && !`${problemLabel(p)} ${p.title} ${(p.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
     if (tier && !tierInGroup(p.tier, tier)) return false;
     if (eff) {
-      const lastEff = (p.efficiencies || '').split(',')[0] || 'ok';
+      const lastEff = p.efficiencies.split(',')[0];
       if (lastEff !== eff) return false;
     }
     return true;
@@ -99,8 +99,8 @@ function renderProblemList(container, problems) {
   const frag = document.createDocumentFragment();
   problems.forEach(p => {
     const tc = tierClass(p.tier);
-    const effList = (p.efficiencies || '').split(',');
-    const lastEff = effList[0] || 'ok';
+    const effList = p.efficiencies.split(',');
+    const lastEff = effList[0];
     const div = document.createElement('div');
     div.className = 'history-card';
     div.dataset.platform = p.platform || 'boj';

@@ -1,4 +1,5 @@
 """번역 전후 수식 이미지 마커 마스킹 (API 호출 없음)."""
+import cf_translator
 from cf_translator import _mask_image_markers, _unmask_image_markers
 
 _URL_A = "https://espresso.codeforces.com/a7487d7e62f90136b78ae3fbf0a008396f146e13.png"
@@ -35,3 +36,53 @@ def test_mask_leaves_text_without_markers_untouched():
     masked, urls = _mask_image_markers("$n$ 개의 요리")
     assert masked == "$n$ 개의 요리"
     assert urls == []
+
+
+class _FakeMessage:
+    def __init__(self, content):
+        self.content = content
+
+
+class _FakeChoice:
+    def __init__(self, content, finish_reason):
+        self.message = _FakeMessage(content)
+        self.finish_reason = finish_reason
+
+
+class _FakeCompletions:
+    def __init__(self, content, finish_reason):
+        self._content = content
+        self._finish_reason = finish_reason
+
+    def create(self, **kwargs):
+        return type("_FakeResponse", (), {
+            "choices": [_FakeChoice(self._content, self._finish_reason)],
+        })()
+
+
+class _FakeOpenAI:
+    def __init__(self, content, finish_reason):
+        self.chat = type("_FakeChat", (), {
+            "completions": _FakeCompletions(content, finish_reason),
+        })()
+
+
+def test_translate_returns_partial_content_when_truncated(monkeypatch):
+    # 잘린 응답을 예외로 던지면 routes/problem.py 의 60초 TTL 캐시가 영구히 재시도해
+    # 유료 호출이 반복된다 — 잘린 번역이라도 성공으로 간주해 영구 캐시되도록,
+    # 예외 대신 부분 번역문 + 안내 문구를 반환해야 한다.
+    monkeypatch.setattr(
+        cf_translator, "OpenAI",
+        lambda **kwargs: _FakeOpenAI("잘린 번역문...", "length"),
+    )
+    result = cf_translator.translate_cf_text("원문", "제목")
+    assert "잘린 번역문..." in result
+    assert "일부 생략" in result
+
+
+def test_translate_returns_content_when_not_truncated(monkeypatch):
+    monkeypatch.setattr(
+        cf_translator, "OpenAI",
+        lambda **kwargs: _FakeOpenAI("완전한 번역문", "stop"),
+    )
+    assert cf_translator.translate_cf_text("원문", "제목") == "완전한 번역문"

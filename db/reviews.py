@@ -264,11 +264,15 @@ def get_review_history(limit: int = 10, platform: str | None = None) -> list:
 
 
 def get_average_cf_rating() -> float:
+    """최근 30개 고유 문제의 CF 레이팅 평균 — get_average_tier 와 동일한 윈도우(static/js/recommend.js 라벨과 일치)."""
     rn = func.row_number().over(
         partition_by=Review.problem_ref, order_by=Review.created_at.desc()).label("rn")
     with session_scope() as session:
-        sub = select(Review.tier_name, rn).where(Review.platform == "codeforces").subquery()
-        names = session.scalars(select(sub.c.tier_name).where(sub.c.rn == 1)).all()
+        sub = select(Review.tier_name, Review.created_at, rn).where(Review.platform == "codeforces").subquery()
+        names = session.scalars(
+            select(sub.c.tier_name).where(sub.c.rn == 1)
+            .order_by(sub.c.created_at.desc()).limit(_AVG_TIER_WINDOW)
+        ).all()
 
     ratings = []
     for tn in names:
@@ -280,18 +284,15 @@ def get_average_cf_rating() -> float:
     return sum(ratings) / len(ratings) if ratings else 1200.0
 
 
-def get_tag_weakness_data(platform: str | None = None) -> list:
+def get_tag_weakness_data(platform: str) -> list:
     with session_scope() as session:
-        rstmt = select(Review.tags, Review.efficiency, Review.created_at)
-        sstmt = select(SolvedHistory.tags, SolvedHistory.imported_at)
-        if platform:
-            rstmt = rstmt.where(Review.platform == platform)
-            sstmt = sstmt.where(SolvedHistory.platform == platform)
+        rstmt = select(Review.tags, Review.efficiency, Review.created_at).where(Review.platform == platform)
+        sstmt = select(SolvedHistory.tags, SolvedHistory.imported_at).where(SolvedHistory.platform == platform)
         review_rows = [dict(r) for r in session.execute(rstmt).mappings().all()]
         solved_rows = [dict(r) for r in session.execute(sstmt).mappings().all()]
 
-        # tag_stats는 BOJ 전용 — boj가 아닌 플랫폼 지정 시에만 제외하고, 미지정/boj면 그대로 사용한다.
-        if platform and platform != "boj":
+        # tag_stats는 BOJ 전용 — boj가 아닌 플랫폼이면 제외한다.
+        if platform != "boj":
             stat_rows = []
         else:
             stat_rows = [dict(r) for r in session.execute(

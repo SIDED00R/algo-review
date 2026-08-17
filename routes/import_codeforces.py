@@ -30,6 +30,8 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             api_key=api_key,
             api_secret=api_secret,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Codeforces 기록 조회 실패: {e}")
 

@@ -150,3 +150,37 @@ def test_tex_markers_to_markdown():
 
 def test_tex_markers_to_markdown_leaves_plain_text_untouched():
     assert tex_markers_to_markdown("마커 없는 본문") == "마커 없는 본문"
+
+
+def test_multiple_samples_are_all_extracted():
+    """CF 는 sample-test 가 문제당 하나이고 그 안에 예제 쌍이 여러 개다 —
+    컨테이너 단위로 첫 쌍만 취하면 2번째 이후 예제가 통째로 사라진다."""
+    from clients.codeforces import _extract_samples
+
+    tree = _parse("""
+      <div class="sample-test">
+        <div class="input"><pre>1 2</pre></div>
+        <div class="output"><pre>3</pre></div>
+        <div class="input"><pre>4 5</pre></div>
+        <div class="output"><pre>9</pre></div>
+      </div>""")
+    assert _extract_samples(tree) == [
+        {"input": "1 2", "output": "3"},
+        {"input": "4 5", "output": "9"},
+    ]
+
+
+def test_sample_without_output_is_preserved():
+    """인터랙티브 문제는 output 이 없다 — zip 이면 짧은 쪽에서 잘려 예제가 전부 날아간다."""
+    from clients.codeforces import _extract_samples
+
+    tree = _parse("""
+      <div class="sample-test">
+        <div class="input"><pre>1</pre></div>
+        <div class="input"><pre>2</pre></div>
+        <div class="output"><pre>ok</pre></div>
+      </div>""")
+    assert _extract_samples(tree) == [
+        {"input": "1", "output": "ok"},
+        {"input": "2", "output": ""},
+    ]

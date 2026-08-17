@@ -1,3 +1,7 @@
+import logging
+
+import requests
+
 import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
@@ -5,6 +9,7 @@ from routes.models import GithubImportRequest
 from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.post("/api/import-github")
@@ -15,6 +20,13 @@ def import_from_github(req: GithubImportRequest):
 
     try:
         problems = api_client.get_baekjoonhub_problems(repo, req.token)
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else 502
+        if status == 404:
+            raise HTTPException(status_code=404, detail="저장소를 찾을 수 없습니다. owner/repo 형식과 철자를 확인하세요.")
+        if status == 401:
+            raise HTTPException(status_code=401, detail="GitHub 토큰이 유효하지 않습니다.")
+        raise HTTPException(status_code=502, detail=f"GitHub API 오류: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GitHub API 오류: {e}")
 
@@ -40,8 +52,10 @@ def import_from_github(req: GithubImportRequest):
             code = ""
             try:
                 code = api_client.get_raw_github_content(repo, p["path"], req.token)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("파일 내용 다운로드 실패 (problem_id=%s, path=%s): %s", problem_id, p["path"], e)
+                failed.append(problem_id)
+                continue
 
             db.save_solved_problem(
                 problem_id=problem_id,

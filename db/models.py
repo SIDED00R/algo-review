@@ -1,4 +1,4 @@
-"""SQLAlchemy 2.0 ORM 모델 — 기존 스키마(db/schema.py 폐기 전)와 컬럼·기본값·인덱스명이 일치한다.
+"""SQLAlchemy 2.0 ORM 모델 — 운영 스키마와 컬럼·기본값·인덱스명이 일치한다.
 
 주의:
 - 날짜 컬럼(created_at/imported_at/updated_at)은 Text 로 유지한다. 기존 데이터가 ISO 문자열이고

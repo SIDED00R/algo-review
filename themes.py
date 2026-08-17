@@ -69,16 +69,25 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
         return cached
 
     if platform == "boj":
-        bands = _fetch_boj_pool(theme["boj_tag"])
+        fresh = _fetch_boj_pool(theme["boj_tag"])
     else:
-        bands = _fetch_cf_pool(theme["cf_tag"])
+        fresh = _fetch_cf_pool(theme["cf_tag"])
 
-    if any(bands):
-        # 성공 결과만 저장 — 일시적 실패([[], [], []])가 기존 캐시를 덮지 않게 한다.
+    bands = fresh
+    stale = db.cache_get_stale(key)
+    # 밴드별로 따로 fetch하므로 일부만 실패할 수 있다(레이트리밋 등) — 실패(빈) 밴드는 이전 캐시로
+    # 채워 부분 실패가 이미 좋은 밴드까지 지우지 않게 한다. 밴드 수가 다르면(설정 변경) 병합하지
+    # 않는다 — zip이 짧은 쪽으로 잘라 잘린 결과를 캐시에 못박아 버린다.
+    if stale is not None and len(stale) == len(fresh):
+        bands = [new_band if new_band else old_band for new_band, old_band in zip(fresh, stale)]
+
+    # 새로 받은 밴드가 하나라도 있을 때만 저장한다 — 전면 실패까지 저장하면 updated_at이 갱신돼
+    # TTL(24시간) 내내 재시도가 멈춘 채 옛 데이터만 나간다.
+    if any(fresh):
         db.cache_set(key, bands)
         return bands
 
-    return db.cache_get_stale(key)
+    return stale
 
 
 def build_theme_response(platform: str, theme: dict) -> dict:

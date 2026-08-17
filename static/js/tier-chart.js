@@ -107,6 +107,14 @@ async function loadTierChart() {
     const tickValues = RATING_TIERS.map(t => t.min);
     const tickLabels = Object.fromEntries(RATING_TIERS.map(t => [t.min, t.label]));
 
+    if (typeof Chart === 'undefined') {
+      document.getElementById('tier-chart').classList.add('hidden');
+      const emptyEl = document.getElementById('tier-chart-empty');
+      emptyEl.textContent = '차트 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.';
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+
     const ctx = document.getElementById('tier-chart').getContext('2d');
     tierChartInstance = new Chart(ctx, {
       type: 'line',

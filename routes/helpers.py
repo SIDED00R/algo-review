@@ -34,8 +34,8 @@ def build_solution_target(platform: str, problem_ref, title: str, tier_name: str
 def merged_github_target(repo_override: str = "", token_override: str = "") -> tuple[str, str]:
     """override 우선으로 GitHub 저장소/토큰을 병합, 둘 다 없으면 ("", "") 반환."""
     gh_settings = db.get_github_settings()
-    github_repo = (repo_override or "").strip() or ((gh_settings.get("target_repo") if gh_settings else "") or "")
-    github_token = (token_override or "").strip() or ((gh_settings.get("access_token") if gh_settings else "") or "")
+    github_repo = (repo_override or "").strip() or (gh_settings["target_repo"] if gh_settings else "")
+    github_token = (token_override or "").strip() or (gh_settings["access_token"] if gh_settings else "")
     return github_repo, github_token
 
 
@@ -66,19 +66,37 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
                        tier_name: str, tags: list, language: str, code: str, url: str = "",
                        review: dict | None = None, description: str = "",
                        input_desc: str = "", output_desc: str = "",
-                       submitted_at: str = "") -> str:
+                       submitted_at: str = "", require_sections: bool = True) -> str:
     """README + 코드 파일을 저장소에 push 하고 폴더 경로를 반환한다. 실패 시 HTTPException(500).
 
     description 이 비어 있으면 플랫폼별 문제 본문을 자동 수집한다 — LLM 이 아니라 스크래핑이라
     리뷰 없이 올리는 경로에서도 그대로 동작한다.
+
+    require_sections: 스크래핑 실패(None) 시 502로 막을지 여부. 기존 문서를 덮어쓰는 갱신
+    경로(재리뷰·재푸시)는 본문 없이 재생성하면 이미 올라간 문제 설명을 지우므로 True(기본값)로
+    막는다. 아직 문서가 없는 최초 등록 경로(리뷰 없이 등록)는 지울 기존 문서가 없으므로
+    False 로 넘겨 스크래핑 실패에도 등록이 진행되게 한다.
     """
     ext = api_client._get_file_extension(language)
     url = url or api_client.get_problem_url(platform, problem_ref)
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 
     if not description:
-        sections = (api_client.get_boj_problem_sections(int(problem_ref)) if platform == "boj"
-                    else api_client.get_cf_problem_sections(problem_ref))
+        if platform == "boj":
+            try:
+                boj_problem_id = int(problem_ref)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="BOJ 문제 번호는 숫자여야 합니다.")
+            sections = api_client.get_boj_problem_sections(boj_problem_id)
+        else:
+            sections = api_client.get_cf_problem_sections(problem_ref)
+        if sections is None:
+            if require_sections:
+                # 스크래핑 실패(None)를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해
+                # 이미 잘 올라가 있던 문제 설명을 지워버린다 — push 자체를 중단해 유지한다.
+                raise HTTPException(status_code=502, detail="문제 본문을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
+            # 최초 등록 경로: 지킬 기존 문서가 없으므로 본문 없이 진행한다.
+            sections = {}
         description = sections.get("description", "")
         input_desc = sections.get("input", "")
         output_desc = sections.get("output", "")

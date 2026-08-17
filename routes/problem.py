@@ -45,7 +45,8 @@ async def get_cf_problem(problem_ref: str):
         return cached
 
     try:
-        raw = api_client.scrape_cf_problem(problem_ref)
+        # 동기 HTTP 호출(최대 10초)이라 이벤트 루프를 막지 않게 스레드로 뺀다 — 아래 번역과 같은 이유.
+        raw = await asyncio.to_thread(api_client.scrape_cf_problem, problem_ref)
     except ValueError:
         raise HTTPException(400, "잘못된 문제 번호 형식 (예: 4A, 1234B)")
     except Exception as e:

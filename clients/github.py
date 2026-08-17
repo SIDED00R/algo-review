@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 
 import requests
 from clients.utils import _ext_to_language
@@ -50,19 +51,18 @@ def get_github_user_repos(token: str) -> list[dict]:
 
 
 def get_github_file_sha(repo: str, path: str, token: str) -> str | None:
+    """파일이 없으면(404) None. 그 외 실패(타임아웃 등)는 전파한다 —
+    삼키면 호출부가 sha 없이 PUT해 새 파일로 오인, GitHub 422로 이어진다."""
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "Authorization": f"token {token}",
     }
     url = f"https://api.github.com/repos/{repo}/contents/{path}"
-    try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code == 404:
-            return None
-        resp.raise_for_status()
-        return resp.json().get("sha")
-    except Exception:
+    resp = requests.get(url, headers=headers, timeout=10)
+    if resp.status_code == 404:
         return None
+    resp.raise_for_status()
+    return resp.json().get("sha")
 
 
 def push_file_to_github(repo: str, token: str, path: str, content: str, commit_message: str) -> bool:
@@ -72,11 +72,11 @@ def push_file_to_github(repo: str, token: str, path: str, content: str, commit_m
     }
     url = f"https://api.github.com/repos/{repo}/contents/{path}"
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    sha = get_github_file_sha(repo, path, token)
-    body = {"message": commit_message, "content": encoded}
-    if sha:
-        body["sha"] = sha
     try:
+        sha = get_github_file_sha(repo, path, token)
+        body = {"message": commit_message, "content": encoded}
+        if sha:
+            body["sha"] = sha
         resp = requests.put(url, json=body, headers=headers, timeout=15)
         resp.raise_for_status()
         return True
@@ -172,10 +172,12 @@ def get_baekjoonhub_problems(repo: str, token: str | None = None) -> list[dict]:
             continue
 
         folder = parts[2]
-        try:
-            problem_id = int(folder.split(".")[0].strip())
-        except ValueError:
+        # BaekjoonHub 는 "1000. A+B", 이 앱이 올린 폴더는 "1000번. 제목" 형태다.
+        # 앞의 숫자만 떼어내 두 포맷을 함께 받는다(전자만 파싱하면 앱이 올린 저장소를 되가져올 때 전부 스킵된다).
+        m = re.match(r"\d+", folder.strip())
+        if not m:
             continue
+        problem_id = int(m.group())
 
         if problem_id not in problems:
             problems[problem_id] = {

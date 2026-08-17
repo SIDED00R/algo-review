@@ -22,6 +22,13 @@ class ReviewRequest(BaseModel):
     def _validate_platform(cls, v):
         return _normalize_platform(v)
 
+    @field_validator("code")
+    @classmethod
+    def code_max_length(cls, v):
+        if len(v) > 50_000:
+            raise ValueError("코드는 50,000자를 초과할 수 없습니다.")
+        return v
+
 
 class ImportRequest(BaseModel):
     boj_id: str

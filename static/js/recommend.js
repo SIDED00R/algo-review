@@ -38,15 +38,15 @@ function renderRecommend(container, data) {
       <div class="summary-grid">
         <div class="summary-item">
           <div class="summary-label">현재 평균 레벨 <span style="font-size:.75rem;color:var(--text-muted)">(최근 30개)</span></div>
-          <div class="summary-value">${tierBadgeHtml(tc, data.tier_name)}</div>
+          <div class="summary-value">${tierBadgeHtml(tc, escapeHtml(data.tier_name))}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">추천 난이도 범위</div>
-          <div class="summary-value" style="font-size:.9rem">${data.tier_range || '-'}</div>
+          <div class="summary-value" style="font-size:.9rem">${escapeHtml(data.tier_range || '-')}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">취약 태그</div>
-          <div class="summary-value" style="font-size:.82rem">${(data.weak_tags || []).join(', ')}</div>
+          <div class="summary-value" style="font-size:.82rem">${escapeHtml((data.weak_tags || []).join(', '))}</div>
         </div>
       </div>
   `;

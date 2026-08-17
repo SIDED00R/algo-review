@@ -34,7 +34,7 @@ def test_stats_codeforces_empty(client):
     assert r.status_code == 200
     body = r.json()
     assert body["platform"] == "codeforces"
-    assert body["avg_rating"] == 1200.0
+    assert body["avg_tier_name"] == "CF 1200"   # 기록이 없을 때의 기본 레이팅
 
 
 def test_stats_rejects_unknown_platform(client):

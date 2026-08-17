@@ -98,6 +98,11 @@ _SOLVED = [
 def seed():
     db.run_migrations()
 
+    if db.get_total_review_count() > 0:
+        # save_review는 append-only라 재기동마다 다시 시드하면 같은 문제의 리뷰가
+        # 계속 쌓인다(11/22/33행, submission_count 2·3 등) — 이미 시드됐으면 건너뛴다.
+        return
+
     for r in _REVIEWS:
         db.save_review(
             problem_id=r["problem_id"],

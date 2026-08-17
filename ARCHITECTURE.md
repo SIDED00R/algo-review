@@ -13,9 +13,9 @@
                          │ HTTP (fetch)
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Routes (routes/)                                       │
-│  auth · review · github_push · problem · execute · recommend   │
-│  themes · history · solved · stats · report                    │
-│  import_github · import_boj · import_codeforces                │
+│  auth · review · pending_review · rereview · github_push        │
+│  problem · execute · recommend · themes · history · solved      │
+│  stats · report · import_github · import_boj · import_codeforces│
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
@@ -31,6 +31,7 @@
 │  models · connection         │       │  solved.ac · Codeforces          │
 │  reviews · solved · cache    │       │  GitHub · OpenAI                 │
 │  github_settings · migrate   │       └──────────────────────────────────┘
+│  normalize                   │
 └────────┬────────────────────┘
          │
 ┌────────▼──────────────────────┐
@@ -145,7 +146,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | Caller | Callee | 목적 |
 |--------|--------|------|
-| `server.py` | `db.run_migrations` | lifespan 기동 시 Alembic `upgrade head` (데모는 `demo_seed.seed` 대신 실행, DB 연결 실패 시 경고만 남기고 기동 계속 — 온디맨드 정지 대응) |
+| `server.py` | `db.run_migrations` | lifespan 기동 시 Alembic `upgrade head` |
 | `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
 | `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
 | `routes/problem_resolve.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
@@ -191,34 +192,13 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | # | 위치 | 조치 내용 |
 |---|------|----------|
 | 1 | `routes/execute.py` | subprocess 실행 시 `_SAFE_ENV_KEYS`만 허용 → API 키 환경변수 노출 차단 |
-| 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 (구 `db/schema.py` ALTER 화이트리스트 대체) |
+| 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
 | 5 | `server.py` | 전역 예외 핸들러 — DB 연결 실패(`OperationalError`)는 503 + 안내, 그 외 미처리 예외는 500 generic(내부 상세 비노출) + traceback 로깅 |
-| 5 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
+| 6 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
 
 ---
 
-## 환경변수 레퍼런스
-
-| 변수 | 필수 | 설명 |
-|------|------|------|
-| `OPENAI_API_KEY` | ✅ | AI 코드 리뷰·리포트 및 CF 문제 번역 |
-| `GITHUB_CLIENT_ID` | — | GitHub OAuth 앱 Client ID |
-| `GITHUB_CLIENT_SECRET` | — | GitHub OAuth 앱 Client Secret |
-| `APP_URL` | — | 서버 공개 URL (OAuth redirect 용, 예: `https://myapp.run.app`) |
-| `CODEFORCES_API_KEY` | — | CF API 서명 (소스코드 가져오기용) |
-| `CODEFORCES_API_SECRET` | — | CF API 서명 |
-| `OPENAI_MODEL` | — | 사용할 OpenAI 모델 — 미설정 시 리뷰·리포트 `gpt-4o`, 번역 `gpt-4o-mini`. 설정하면 둘 다 이 값으로 대체 |
-| `OPENAI_MAX_TOKENS` | — | 리뷰·번역 응답 최대 토큰 (기본값: 리뷰 `2048`, 번역 `2000`) |
-| `OPENAI_REPORT_MAX_TOKENS` | — | 종합 리포트 응답 최대 토큰 (기본값: `1024`) |
-| `OPENAI_TEMPERATURE` | — | CF 번역 temperature (기본값: `0.3`) |
-| `OPENAI_TIMEOUT` | — | CF 번역 API 타임아웃(초) (기본값: `15`) |
-| `COMPILE_TIMEOUT` | — | `/api/execute` C++ 컴파일 타임아웃(초) (기본값: `30`) |
-| `DATABASE_URL` | — | SQLAlchemy 접속 URL 직접 지정 (설정 시 아래 `DB_*` 를 모두 무시) |
-| `DB_TYPE` | — | `postgres` 설정 시 PostgreSQL 사용 (기본: SQLite) |
-| `DB_PATH` | — | SQLite 파일 경로 (기본값: 프로젝트 루트 `coding_recommend.db`) |
-| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | — | PostgreSQL 연결 정보 |
-| `DB_HOST` / `DB_PORT` / `DB_SOCKET` | — | PostgreSQL 호스트 설정 (`DB_SOCKET`=Cloud SQL unix 소켓) |
-| `CORS_ORIGINS` | — | 허용할 CORS 출처 (쉼표 구분, 기본: `http://localhost:8080`) |
-| `DEMO_MODE` | — | `true` 설정 시 mock 데이터로 동작 (외부 API 키 불필요) |
+## 환경변수
+전체 목록은 [README](./README.md#환경변수-전체-목록), 값 템플릿과 제공자별 설정 예시는 `.env.example` 참조.

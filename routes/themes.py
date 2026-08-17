@@ -10,7 +10,7 @@ def get_themes(response: Response):
     # 테마 목록은 정적이라 브라우저 캐시를 허용한다.
     response.headers["Cache-Control"] = "public, max-age=3600"
     themes = DEMO_THEME_LIST if IS_DEMO else theme_service.get_theme_list()
-    return {"themes": themes, "platforms": list(theme_service.PLATFORMS)}
+    return {"themes": themes}
 
 
 @router.get("/api/themes/{theme_id}/problems")

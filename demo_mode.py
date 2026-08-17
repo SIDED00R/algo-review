@@ -130,6 +130,39 @@ DEMO_RECOMMENDATIONS = {
     ],
 }
 
+# BOJ 탭용 — 위 CF 데이터를 platform 만 바꿔 돌려주면 BOJ 탭에 CF 문제·레이팅이 뜬다.
+DEMO_RECOMMENDATIONS_BOJ = {
+    "avg_tier": 11,
+    "tier_name": "Gold V",
+    "tier_range": "Silver II ~ Gold II",
+    "weak_tags": ["다이나믹 프로그래밍", "그래프 이론", "그리디 알고리즘"],
+    "recommendations": [
+        {
+            "tag": "다이나믹 프로그래밍",
+            "tag_key": "dp",
+            "problems": [
+                {"id": 1932, "title": "정수 삼각형", "tier": 10, "tier_name": "Silver I"},
+                {"id": 9251, "title": "LCS", "tier": 11, "tier_name": "Gold V"},
+            ],
+        },
+        {
+            "tag": "그래프 이론",
+            "tag_key": "graphs",
+            "problems": [
+                {"id": 1753, "title": "최단경로", "tier": 12, "tier_name": "Gold IV"},
+                {"id": 1197, "title": "최소 스패닝 트리", "tier": 12, "tier_name": "Gold IV"},
+            ],
+        },
+        {
+            "tag": "그리디 알고리즘",
+            "tag_key": "greedy",
+            "problems": [
+                {"id": 1931, "title": "회의실 배정", "tier": 10, "tier_name": "Silver I"},
+            ],
+        },
+    ],
+}
+
 # 테마 데모 데이터 — 테마당 실측 대표 문제 3개(쉬움→어려움 사다리), 플랫폼 네이티브 난이도.
 DEMO_THEME_LIST = [
     {"id": "dp", "label": "다이나믹 프로그래밍"},
@@ -199,8 +232,8 @@ DEMO_GITHUB_STATUS = {
 }
 
 DEMO_REPOS = [
-    "demo_user/algorithm-solutions",
-    "demo_user/competitive-programming",
+    {"full_name": "demo_user/algorithm-solutions", "private": False},
+    {"full_name": "demo_user/competitive-programming", "private": False},
 ]
 
 DEMO_REPORT = (
