@@ -3,7 +3,7 @@ import time
 import random
 import hashlib
 from functools import lru_cache
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin
 import requests
 from bs4 import BeautifulSoup
 
@@ -36,6 +36,12 @@ def get_codeforces_problem_info(problem_ref: str) -> dict:
     from clients.utils import get_problem_url
     contest_id, index = normalize_codeforces_problem_ref(problem_ref)
     problem = _get_codeforces_problem_lookup().get((contest_id, index))
+    if not problem:
+        # 스냅샷은 프로세스 기동 시점에 한 번 고정된다 — 그 뒤 새로 열린 대회의 문제는
+        # miss가 난다. 주기적 TTL 대신 실제 miss가 났을 때만 1회 강제 갱신 후 재조회한다.
+        _get_cf_problemset_snapshot.cache_clear()
+        _get_codeforces_problem_lookup.cache_clear()
+        problem = _get_codeforces_problem_lookup().get((contest_id, index))
     if not problem:
         raise ValueError(f"Codeforces 문제를 찾을 수 없습니다: {contest_id}{index}")
 
@@ -159,6 +165,11 @@ def _replace_tex_images_with_markers(el) -> None:
     for img in el.xpath('.//img[contains(@class,"tex-formula")]'):
         src = img.get("src", "")
         if src:
+            # 소비처(cf_translator/tex_markers_to_markdown/problem-modal.js) 정규식이
+            # https?:// 만 매칭한다 — "//espresso.codeforces.com/..." 같은 프로토콜 상대
+            # 경로는 절대 URL로 승격해야 README에 리터럴 마커가 그대로 남지 않는다.
+            if not re.match(r'^https?://', src):
+                src = urljoin("https://codeforces.com", src)
             _drop_element_keeping_tail(img, f"⟦img:{src}⟧")
 
 
@@ -193,7 +204,8 @@ def _extract_cf_sections(tree) -> dict:
     }
 
 
-def get_cf_problem_sections(problem_ref: str) -> dict:
+def get_cf_problem_sections(problem_ref: str) -> dict | None:
+    """실패 시 None — 호출부가 빈 섹션으로 착각해 기존 README 본문을 지우지 않도록 구분한다."""
     try:
         from lxml import etree
 
@@ -202,10 +214,10 @@ def get_cf_problem_sections(problem_ref: str) -> dict:
         resp = requests.get(url, headers=CODEFORCES_HEADERS, timeout=15)
         resp.raise_for_status()
 
-        tree = etree.fromstring(resp.text.encode(), etree.HTMLParser())
+        tree = etree.fromstring(resp.content, etree.HTMLParser())
         return _extract_cf_sections(tree)
     except Exception:
-        return {"description": "", "input": "", "output": ""}
+        return None
 
 
 def scrape_cf_problem(problem_ref: str) -> dict:
@@ -220,7 +232,7 @@ def scrape_cf_problem(problem_ref: str) -> dict:
     })
     resp.raise_for_status()
 
-    tree = etree.fromstring(resp.text.encode(), etree.HTMLParser())
+    tree = etree.fromstring(resp.content, etree.HTMLParser())
 
     def _limit_value(xpath_expr: str) -> str:
         nodes = tree.xpath(xpath_expr)
@@ -238,12 +250,15 @@ def scrape_cf_problem(problem_ref: str) -> dict:
     sample_container = tree.xpath(f'{_CF_PROBLEM_BASE_XPATH}/div[5]')
     if sample_container:
         sc = sample_container[0]
-        inp_pres = sc.xpath('.//div[contains(@class,"input")]//pre')
-        out_pres = sc.xpath('.//div[contains(@class,"output")]//pre')
-        for inp_pre, out_pre in zip(inp_pres, out_pres):
+        # 컨테이너 전체에서 input/output <pre>를 각각 뽑아 zip 하면 인터랙티브 문제처럼
+        # output 이 없는 예제가 하나만 섞여도 전체 개수가 어긋나 samples 가 통째로 비어버린다.
+        # sample-test 단위(예제 쌍)로 순회해 짝을 맞추고, 없는 쪽은 빈 문자열로 보존한다.
+        for test in sc.xpath('.//div[contains(@class,"sample-test")]'):
+            inp_pres = test.xpath('.//div[contains(@class,"input")]//pre')
+            out_pres = test.xpath('.//div[contains(@class,"output")]//pre')
             samples.append({
-                "input":  "\n".join(inp_pre.itertext()).strip(),
-                "output": "\n".join(out_pre.itertext()).strip(),
+                "input":  "\n".join(inp_pres[0].itertext()).strip() if inp_pres else "",
+                "output": "\n".join(out_pres[0].itertext()).strip() if out_pres else "",
             })
 
     sections = _extract_cf_sections(tree)
@@ -285,10 +300,18 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
         headers=CODEFORCES_HEADERS,
         timeout=30,
     )
+    # CF API 는 실패 시 HTTP 400 + {"status":"FAILED","comment":"..."} 를 준다. comment 를
+    # raise_for_status() 보다 먼저 확인해야 한다 — 그러지 않으면 이 흔한 실패에서 CF 의 친절한
+    # 메시지 대신 requests 의 HTTPError 전문(요청 URL의 apiKey/apiSig 포함)이 그대로 새어나간다.
+    try:
+        payload = resp.json()
+    except ValueError:
+        payload = None
+    if payload and payload.get("comment"):
+        raise ValueError(payload["comment"])
     resp.raise_for_status()
-    payload = resp.json()
-    if payload.get("status") != "OK":
-        raise ValueError(payload.get("comment", "Codeforces API 오류"))
+    if payload is None or payload.get("status") != "OK":
+        raise ValueError("Codeforces API 오류")
     return payload["result"]
 
 
@@ -300,10 +323,13 @@ def _get_cf_problemset_snapshot() -> tuple[list[dict], dict]:
     problems = result.get("problems", [])
     if not problems:
         raise ValueError("Codeforces problemset 응답이 비어 있습니다.")
-    stats_map = {
-        (s["contestId"], s["index"]): s["solvedCount"]
-        for s in result.get("problemStatistics", [])
-    }
+    stats_map = {}
+    for s in result.get("problemStatistics", []):
+        contest_id = s.get("contestId")
+        index = s.get("index")
+        if not contest_id or not index:
+            continue
+        stats_map[(contest_id, index)] = s.get("solvedCount", 0)
     return problems, stats_map
 
 
@@ -379,7 +405,7 @@ def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
             continue
         contest_id = p.get("contestId")
         index = p.get("index", "")
-        if not contest_id:
+        if not contest_id or not index:
             continue
         ref = f"{contest_id}{index}"
         if ref in exclude_refs:

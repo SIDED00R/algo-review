@@ -73,12 +73,17 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
     else:
         bands = _fetch_cf_pool(theme["cf_tag"])
 
+    stale = db.cache_get_stale(key)
+    if stale is not None:
+        # 밴드별로 따로 fetch하므로 일부만 실패할 수 있다(레이트리밋 등) — 실패(빈) 밴드는
+        # 이전 캐시로 채워, 부분 실패가 이미 좋은 밴드까지 지우지 않게 한다.
+        bands = [new_band if new_band else old_band for new_band, old_band in zip(bands, stale)]
+
     if any(bands):
-        # 성공 결과만 저장 — 일시적 실패([[], [], []])가 기존 캐시를 덮지 않게 한다.
         db.cache_set(key, bands)
         return bands
 
-    return db.cache_get_stale(key)
+    return stale
 
 
 def build_theme_response(platform: str, theme: dict) -> dict:

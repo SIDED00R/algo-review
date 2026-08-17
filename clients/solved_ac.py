@@ -134,7 +134,7 @@ def get_boj_problem_sections(problem_id: int) -> dict:
 
 
 def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
-                           exclude_ids: set[int], page: int = 1) -> list[dict]:
+                           exclude_ids: set[int]) -> list[dict]:
     tier_map_inv = _build_tier_key_map()
     min_key = tier_map_inv.get(min_tier, "b1")
     max_key = tier_map_inv.get(max_tier, "p5")
@@ -143,7 +143,7 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
     url = f"{SOLVED_AC_BASE}/search/problem"
     params = {
         "query": query,
-        "page": page,
+        "page": 1,
         "sort": "solved",
         "direction": "desc",
     }

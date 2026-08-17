@@ -28,3 +28,12 @@ def test_asset_urls_share_one_version(client):
 def test_shell_document_is_revalidated(client):
     # 셸이 캐시되면 새 자산 URL 이 사용자에게 도달하지 못한다.
     assert client.get("/").headers["cache-control"] == "no-cache"
+
+
+def test_all_local_asset_references_are_versioned(client):
+    # 새 자산을 ?v= 없이 추가해도 위 두 테스트는 통과한다 — 여기서 로컬 참조를 전부 뽑아 확인한다.
+    html = client.get("/").text
+    refs = re.findall(r'(?:src|href)="(/static/[^"]+)"', html)
+    assert refs, "정적 자산 참조를 찾지 못했다"
+    unversioned = [ref for ref in refs if "?v=" not in ref]
+    assert not unversioned, f"버전이 없는 로컬 자산 참조: {unversioned}"

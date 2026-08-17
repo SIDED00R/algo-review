@@ -31,13 +31,23 @@ def cache_get(key: str, max_age_sec: int):
         return None
     if age > max_age_sec:
         return None
-    return json.loads(payload)
+    # 손상된 페이로드(수동 편집, 부분 쓰기 등)도 fromisoformat 과 같은 이유로 감싼다 —
+    # 여기서 예외가 나가면 cache_set 에 도달하지 못해 그 키가 영구히 자가 복구 불능이 된다.
+    try:
+        return json.loads(payload)
+    except (TypeError, ValueError):
+        return None
 
 
 def cache_get_stale(key: str):
     """수명과 무관하게 캐시 페이로드를 반환한다 — 외부 API 실패 시 폴백용."""
     row = _fetch(key)
-    return json.loads(row[0]) if row else None
+    if not row:
+        return None
+    try:
+        return json.loads(row[0])
+    except (TypeError, ValueError):
+        return None
 
 
 def cache_set(key: str, payload) -> None:

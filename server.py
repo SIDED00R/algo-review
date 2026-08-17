@@ -114,8 +114,11 @@ def health():
 # 정적 자산 캐시 버전 — index.html 의 `?v=__V__` 를 기동 시 한 번 치환한다.
 # Cloud Run 이 리비전마다 넣어 주는 K_REVISION 을 토큰으로 쓰므로 배포하면 18개 자산 URL 이
 # 한꺼번에 갱신된다. 날짜를 손으로 적던 방식은 갱신 누락이 반복됐다(#87).
-# 로컬에는 K_REVISION 이 없어 index.html 의 mtime 으로 대체한다.
-_ASSET_VERSION = os.getenv("K_REVISION") or str(int((STATIC_DIR / "index.html").stat().st_mtime))
+# 로컬에는 K_REVISION 이 없어 static/ 전체 파일 중 가장 최근 mtime 으로 대체한다 —
+# index.html 만 보면 JS/CSS 만 고쳤을 때 토큰이 그대로라 브라우저가 옛 자산을 계속 쓴다.
+_ASSET_VERSION = os.getenv("K_REVISION") or str(int(max(
+    p.stat().st_mtime for p in STATIC_DIR.rglob("*") if p.is_file()
+)))
 _INDEX_HTML = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace("__V__", _ASSET_VERSION)
 
 

@@ -77,8 +77,18 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 
     if not description:
-        sections = (api_client.get_boj_problem_sections(int(problem_ref)) if platform == "boj"
-                    else api_client.get_cf_problem_sections(problem_ref))
+        if platform == "boj":
+            try:
+                boj_problem_id = int(problem_ref)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="BOJ 문제 번호는 숫자여야 합니다.")
+            sections = api_client.get_boj_problem_sections(boj_problem_id)
+        else:
+            sections = api_client.get_cf_problem_sections(problem_ref)
+        if sections is None:
+            # 스크래핑 실패(None)를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해
+            # 이미 잘 올라가 있던 문제 설명을 지워버린다 — push 자체를 중단해 유지한다.
+            raise HTTPException(status_code=502, detail="문제 본문을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
         description = sections.get("description", "")
         input_desc = sections.get("input", "")
         output_desc = sections.get("output", "")

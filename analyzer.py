@@ -71,6 +71,14 @@ efficiency 기준:
         timeout=_API_TIMEOUT,
     )
 
+    if response.choices[0].finish_reason == "length":
+        # max_tokens 에 걸려 JSON 이 중간에 잘렸다 — json.loads 로 넘기면 유료 호출을 다 쓴
+        # 뒤 알아보기 힘든 JSONDecodeError 로 500이 난다. 사람이 읽을 수 있는 에러로 분기한다.
+        raise ValueError(
+            f"AI 응답이 최대 토큰({_MAX_TOKENS_REVIEW})을 초과해 잘렸습니다. "
+            "코드가 너무 길 수 있습니다."
+        )
+
     raw = response.choices[0].message.content.strip()
     result = json.loads(raw)
 

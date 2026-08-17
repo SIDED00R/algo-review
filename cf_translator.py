@@ -68,6 +68,11 @@ def translate_cf_text(text: str, title: str) -> str:
         temperature=_TEMPERATURE,
         timeout=_API_TIMEOUT,
     )
+    if resp.choices[0].finish_reason == "length":
+        # 응답이 max_tokens 에 걸려 문장 중간에서 잘렸다 — 이걸 그대로 반환하면 호출부가
+        # 성공으로 오인해 영구 캐시한다. 예외로 알려 60초 TTL 재시도 경로로 보낸다.
+        raise ValueError(f"translation truncated at max_tokens ({_MAX_TOKENS})")
+
     # text 는 이 시점에 마스킹된 상태이므로 폴백이든 번역문이든 똑같이 되돌린다.
     result = resp.choices[0].message.content.strip() or text
     return _unmask_image_markers(result, image_urls)
