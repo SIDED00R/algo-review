@@ -325,16 +325,22 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
         headers=CODEFORCES_HEADERS,
         timeout=30,
     )
-    # CF API 는 실패 시 HTTP 400 + {"status":"FAILED","comment":"..."} 를 준다. comment 를
-    # raise_for_status() 보다 먼저 확인해야 한다 — 그러지 않으면 이 흔한 실패에서 CF 의 친절한
-    # 메시지 대신 requests 의 HTTPError 전문(요청 URL의 apiKey/apiSig 포함)이 그대로 새어나간다.
+    # 이 요청의 쿼리스트링에는 apiKey·apiSig 가 들어 있다. requests 의 HTTPError 메시지는
+    # 요청 URL 전문을 포함하므로 raise_for_status() 를 그대로 쓰면 안 된다 — 그 예외는
+    # routes/import_codeforces.py 의 `except Exception as e` 를 타고 500 detail 로
+    # **클라이언트에게 반환**되고 로그에도 남는다. 서버에 CODEFORCES_API_KEY 가 설정된
+    # 배포에서는 요청자가 키를 넣지 않아도 운영자 키+유효 서명이 노출된다.
+    # 그래서 상태코드만 담은 ValueError 로 치환한다.
     try:
         payload = resp.json()
     except ValueError:
         payload = None
+    # CF API 는 실패 시 HTTP 400 + {"status":"FAILED","comment":"..."} 를 준다 —
+    # comment 가 있으면 CF 의 친절한 메시지를 그대로 쓴다(URL 을 포함하지 않는다).
     if payload and payload.get("comment"):
         raise ValueError(payload["comment"])
-    resp.raise_for_status()
+    if not resp.ok:
+        raise ValueError(f"Codeforces API 오류 (HTTP {resp.status_code})")
     if payload is None or payload.get("status") != "OK":
         raise ValueError("Codeforces API 오류")
     return payload["result"]

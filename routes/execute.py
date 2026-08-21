@@ -83,6 +83,18 @@ def execute_code(req: ExecuteRequest):
     # 데모는 공개 배포라 임의 코드 실행을 열어둘 수 없다(import 계열은 이미 차단돼 있다).
     if IS_DEMO:
         demo_block("코드 실행은 데모 버전에서 지원되지 않습니다.")
+    # 운영도 공개 배포다(allUsers) — 예전에는 데모만 막고 운영은 열려 있었다.
+    # 자식 프로세스는 앱과 같은 uid·같은 네트워크 네임스페이스에서 돌기 때문에,
+    # 환경변수 필터·cwd 격리·-I 를 다 걸어도 두 경로가 남는다:
+    #   ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 액세스 토큰
+    #   ② /proc/1/environ → 앱 프로세스의 환경변수 전체(같은 uid 면 읽힌다)
+    # 둘 다 컨테이너 안에서는 막을 수 없다(네트워크 차단은 NET_ADMIN 이 필요하다).
+    # 그래서 기본 비활성이고, 켜려면 실행 전용 신뢰 경계를 먼저 만들어야 한다
+    # (권한 0 서비스 계정 + 시크릿 미주입 + egress 제한).
+    if not settings.execute_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="코드 실행이 비활성화되어 있습니다. 로컬에서 EXECUTE_ENABLED=true 로 실행해주세요.")
     start = time.time()
     lang = req.language.lower()
     if "python" in lang or "pypy" in lang:

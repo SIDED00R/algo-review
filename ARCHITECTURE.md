@@ -211,7 +211,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | # | 위치 | 조치 내용 |
 |---|------|----------|
-| 1 | `routes/execute.py` | subprocess 실행 시 `_SAFE_ENV_KEYS`만 허용 + `cwd`를 임시 디렉터리로 격리 + 파이썬은 `-I`(isolated) → 환경변수와 **작업 디렉터리**를 둘 다 끊는다. 환경변수만 막으면 제출 코드가 `import config` 로 .env 를 읽을 수 있다(`config` 의 `env_file` 은 CWD 상대 경로다). `tests/test_execute_isolation.py` 가 고정 |
+| 1 | `routes/execute.py` | 임의 코드 실행은 **기본 비활성**(`EXECUTE_ENABLED`)이다. 자식 프로세스가 앱과 같은 uid·같은 네트워킬 네임스페이스에서 돌기 때문에, `_SAFE_ENV_KEYS` 필터·`cwd` 겪리·`-I` 를 다 걸어도 다음 둘은 남는다 — ① 네트워킬 egress → GCE 메타데이타 서버 → 런타임 SA 토큰, ② `/proc/1/environ` → 앱 환경변수 전지. 둘 다 콘테이너 안에선 막을 수 없다(네트워킬 차단은 `NET_ADMIN` 필수). 켜려면 실행 전용 신뢰 경계가 선행되어야 한다(권한 0 SA + 시횬립 미주입 + egress 제한). `tests/test_execute_isolation.py` 가 게이트와 겪리를 함게 고정 |
 | 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |

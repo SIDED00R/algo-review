@@ -42,3 +42,56 @@ def test_normal_code_still_runs():
 
     assert r["exit_code"] == 0
     assert r["stdout"].strip() == "6 hello"
+
+
+# ── 엔드포인트 게이트 (회귀) ──
+#
+# 운영 서비스는 allUsers 공개이고 앱에는 인증이 없다. 자식 프로세스가 앱과 같은 uid·같은
+# 네트워크 네임스페이스에서 도는 한, 환경변수 필터·cwd 격리·-I 로도 두 경로가 남는다:
+#   ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 액세스 토큰
+#   ② /proc/1/environ → 앱 프로세스의 환경변수 전체
+# 그래서 엔드포인트 자체를 기본 비활성으로 둔다.
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from routes import execute as execute_route
+
+_REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
+
+
+def _client():
+    app = FastAPI()
+    app.include_router(execute_route.router)
+    return TestClient(app)
+
+
+def test_endpoint_is_disabled_by_default(monkeypatch):
+    monkeypatch.setattr(execute_route.settings, "execute_enabled", False)
+    monkeypatch.setattr(execute_route, "_run_python",
+                        lambda *a, **k: pytest.fail("게이트가 닫혀 있으면 실행하면 안 된다"))
+
+    resp = _client().post("/api/execute", json=_REQ)
+
+    assert resp.status_code == 403
+    assert "EXECUTE_ENABLED" in resp.json()["detail"]
+
+
+def test_endpoint_runs_when_explicitly_enabled(monkeypatch):
+    monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
+
+    resp = _client().post("/api/execute", json=_REQ)
+
+    assert resp.status_code == 200
+    assert resp.json()["stdout"].strip() == "1"
+
+
+def test_demo_mode_blocks_even_when_enabled(monkeypatch):
+    """데모 가드가 게이트보다 먼저다 — 데모에 EXECUTE_ENABLED 가 켜져도 막힌다."""
+    monkeypatch.setattr(execute_route, "IS_DEMO", True)
+    monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
+    monkeypatch.setattr(execute_route, "_run_python",
+                        lambda *a, **k: pytest.fail("데모에서 실행하면 안 된다"))
+
+    assert _client().post("/api/execute", json=_REQ).status_code == 403
