@@ -10,6 +10,9 @@ _C_LANG_RE = re.compile(r"(?:^|\s)c(?:\d+|2x)?(?:\s|$)")
 _CPP_LANG_RE = re.compile(r"(?:c|g|clang)\+\+")
 # `go` 를 부분문자열로 찾으면 `Algol 68`·`Golfscript` 가 .go 로 걸린다 — 단어로 본다.
 _GO_LANG_RE = re.compile(r"(?:^|\s)(?:go|golang)(?:\s|$)")
+# `d` 도 같은 이유로 단어 경계가 필요하다 — `"d " in lang` 은 `Standard ML`·`Second Language`
+# 를 .d 로 잡는다. BOJ 채점 목록의 실제 표기는 `D`·`D DMD32 v2.101.2` 다.
+_D_LANG_RE = re.compile(r"(?:^|\s)d(?:\s|$)")
 
 
 def get_problem_url(platform: str, problem_ref: str | int) -> str:
@@ -55,7 +58,7 @@ def _get_file_extension(language: str) -> str:
         return ".ts"
     if "f#" in lang:
         return ".fs"
-    if "d " in lang or lang == "d":
+    if _D_LANG_RE.search(lang):
         return ".d"
     return ".txt"
 

@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     compile_timeout: int = 30
     cors_origins: str = "http://localhost:8080"
     demo_mode: bool = False
+    # 임의 코드 실행(/api/execute)은 기본으로 닫는다. 자식 프로세스는 앱과 같은 uid·같은
+    # 네트워크 네임스페이스에서 돌기 때문에, 앱 프로세스에 비밀이나 권한이 붙어 있는 배포에서는
+    # 어떤 인프로세스 하드닝으로도 안전해지지 않는다(메타데이터 서버 도달·/proc/1/environ).
+    # 로컬 개발에서만 EXECUTE_ENABLED=true 로 켠다.
+    execute_enabled: bool = False
 
     @property
     def sqlalchemy_url(self) -> URL | str:

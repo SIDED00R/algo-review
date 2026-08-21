@@ -160,6 +160,9 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         timeout=_API_TIMEOUT,
     )
 
+    # 인덱싱보다 먼저 확인한다 — 순서가 뒤집히면 choices 가 빈 응답에서 IndexError 가 나고
+    # 가드가 도달하지 못한다(analyze_code 는 올바른 순서였는데 여기만 뒤집혀 있었다).
+    _require_choice(response)
     if response.choices[0].finish_reason == "length":
         # max_tokens 에 걸려 리포트가 중간에서 잘렸다 — 캐시가 없어 매번 재생성되므로
         # 잘린 채로 200을 내보내지 않고 사람이 읽을 수 있는 에러로 분기한다.
@@ -168,5 +171,4 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
             "데이터가 너무 많을 수 있습니다."
         )
 
-    _require_choice(response)
     return (response.choices[0].message.content or "").strip()

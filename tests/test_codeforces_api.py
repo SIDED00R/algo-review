@@ -41,3 +41,44 @@ def test_api_request_surfaces_cf_comment_without_leaking_credentials(monkeypatch
     assert message == "handle: User with handle nope not found"
     assert "AK" not in message  # apiKey 값이 메시지에 새지 않는다
     assert captured["params"].get("apiSig")  # 실제로는 서명돼 있었다 — raise_for_status를 탔다면 샜을 것
+
+
+def test_signed_request_error_never_leaks_the_api_signature():
+    """서명된 요청의 쿼리스트링에는 apiKey·apiSig 가 들어 있다.
+
+    requests 의 HTTPError 메시지는 요청 URL 전문을 포함하므로 raise_for_status() 를 그대로
+    쓰면 안 된다 — 그 예외는 routes/import_codeforces.py 의 `except Exception as e` 를 타고
+    500 detail 로 클라이언트에게 반환되고 로그에도 남는다. 서버에 CODEFORCES_API_KEY 가
+    설정된 배포에서는 요청자가 키를 넣지 않아도 운영자 키+유효 서명이 노출된다.
+    """
+    import pytest
+
+    import clients.codeforces as cf
+
+    class _Resp:
+        status_code = 502
+        ok = False
+        url = ("https://codeforces.com/api/user.status"
+               "?apiKey=SECRETKEY123&apiSig=abc123DEADBEEF&handle=x")
+
+        def json(self):
+            raise ValueError("not json")   # CF 가 HTML 오류 페이지를 준 경우
+
+        def raise_for_status(self):
+            import requests
+            raise requests.HTTPError(f"502 Server Error: for url: {self.url}")
+
+    original = cf.requests.get
+    cf.requests.get = lambda *a, **k: _Resp()
+    try:
+        with pytest.raises(ValueError) as exc:
+            cf._codeforces_api_request("user.status", {"handle": "x"},
+                                       api_key="SECRETKEY123", api_secret="SECRET456")
+        message = str(exc.value)
+    finally:
+        cf.requests.get = original
+
+    assert "SECRETKEY123" not in message
+    assert "DEADBEEF" not in message
+    assert "apiSig" not in message
+    assert "502" in message   # 상태코드는 남긴다
