@@ -36,7 +36,12 @@ if command -v node > /dev/null 2>&1; then
   # 같아진다 — 아래 grep 검사가 놓치는 다중 선언자(`const a = 1, b = 2`)와 구조 분해
   # (`const {a, b} = x`)까지 사양대로 잡힌다.
   # 이어 붙여도 새로 생기는 오류는 없다(function 끼리·var 끼리 재선언은 합법).
-  combined=$(mktemp)
+  # 확장자가 `.js` 여야 한다 — Node 22 는 확장자로 모듈 타입을 판정하고, mktemp 의
+  # 무확장자 파일에는 ERR_UNKNOWN_FILE_EXTENSION 을 던진다(게이트 자체가 실패한다).
+  # package.json 이 없으므로 `.js` 는 CommonJS 스크립트로 파싱된다 — 브라우저의
+  # <script> 와 같은 조건이다.
+  tmpdir=$(mktemp -d)
+  combined="$tmpdir/_all.js"
   # 파일마다 개행을 덧붙인다 — 마지막 줄이 주석이면 다음 파일 첫 줄이 삼켜진다.
   for f in "${files[@]}"; do cat "$f"; echo; done > "$combined"
   if ! node --check "$combined" 2> "$combined.err"; then
@@ -59,7 +64,7 @@ if command -v node > /dev/null 2>&1; then
   else
     echo "  전역 스코프 합본 파싱도 통과"
   fi
-  rm -f "$combined" "$combined.err"
+  rm -rf "$tmpdir"
 else
   # 아래 두 검사는 node 없이도 유효하므로 여기서 중단하지 않는다.
   # CI 는 actions/setup-node 로 node 를 설치하므로 이 분기를 타지 않는다.
