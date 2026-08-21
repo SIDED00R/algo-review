@@ -24,8 +24,9 @@ function restoreFormulaImages(html) {
 }
 
 function bindCfProblemClicks(rootEl) {
-  rootEl.querySelectorAll('.cf-clickable').forEach(el => {
-    el.addEventListener('click', () => {
+  rootEl.querySelectorAll('.is-clickable').forEach(el => {
+    // 마우스뿐 아니라 키보드로도 열 수 있어야 한다 — div 라 기본 동작이 없다.
+    makeRowActivatable(el, () => {
       openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
     });
   });
@@ -312,6 +313,6 @@ const problemModalEl = document.getElementById('problem-modal');
 problemModalEl.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeProblemModal();
 });
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !problemModalEl.classList.contains('hidden')) closeProblemModal();
-});
+// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. 예전에는 Esc 가 document 레벨에
+// 있어, 문제 모달 위에 ⌘K 팔레트를 열고 Esc 를 누르면 둘이 함께 닫혔다.
+registerModal('problem-modal', closeProblemModal, { initial: '#pm-close-btn' });

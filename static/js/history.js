@@ -116,7 +116,7 @@ function renderProblemList(container, problems) {
         <span class="${effClass(lastEff)}">${escapeHtml(effLabel(lastEff))}</span>
         <span class="row-dim">제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(String(p.last_submitted || '').slice(0, 10))}</span>
       </div>`;
-    div.addEventListener('click', () => openReviewModal(div.dataset.platform, div.dataset.problemRef));
+    makeRowActivatable(div, () => openReviewModal(div.dataset.platform, div.dataset.problemRef));
     frag.appendChild(div);
   });
   container.appendChild(frag);
@@ -281,6 +281,8 @@ function closeReviewModal() {
 }
 
 document.getElementById('modal-close').addEventListener('click', closeReviewModal);
+// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다 — 예전에는 이 모달만 셋 다 없었다.
+registerModal('review-modal', closeReviewModal, { initial: '#modal-close' });
 document.getElementById('review-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeReviewModal();
 });

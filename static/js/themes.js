@@ -124,7 +124,7 @@ function renderThemeProblems(container, data) {
       if (isCf) {
         // CF 문제는 인앱 뷰어로 — 난이도는 네이티브 레이팅(*1300) 표기.
         html += `
-        <div class="rec-problem-card cf-clickable"
+        <div class="rec-problem-card is-clickable"
              data-ref="${escapeHtml(String(p.id))}"
              data-title="${escapeHtml(p.title)}"
              data-tier="*${escapeHtml(String(p.rating))}">
@@ -154,8 +154,12 @@ function renderThemeProblems(container, data) {
 document.querySelectorAll('.btn-toggle[data-themes-platform]').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.dataset.themesPlatform === themesPlatform) return;
-    document.querySelectorAll('.btn-toggle[data-themes-platform]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.btn-toggle[data-themes-platform]').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     themesPlatform = btn.dataset.themesPlatform;
     if (selectedThemeId) loadThemeProblems();
   });

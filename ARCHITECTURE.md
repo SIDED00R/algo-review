@@ -142,6 +142,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `theme.js` | 다크/라이트 테마 토글 (`html[data-theme]`). 첫 페인트 전 확정은 `index.html` `<head>` 인라인 스크립트가 담당 |
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
+| `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
@@ -239,6 +240,13 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 서드파티 CDN | `marked`·`DOMPurify` 를 무가드로 부르면 CDN 이 막힐 때 ReferenceError 가 나고, **서버가 이미 저장·과금한 리뷰 결과가 화면에서 통째로 사라진다** | `renderMarkdown()` 한 곳만 두고 미로드 시 평문으로 폴백한다. `Chart`·KaTeX 는 원래 같은 가드가 있었다 |
 | 503 vs 빈 데이터 | `res.ok` 를 보지 않으면 온디맨드 DB 정지(503)가 빈 배열로 흘러 "기록이 없습니다"로 표시된다 — 사용자가 장애를 알 수 없다 | 모든 조회가 `fetchJsonOk` 를 쓴다(비-JSON 응답도 본문 앞머리를 보여준다). `dataset.loaded` 는 성공했을 때만 세운다 |
 | CodeMirror 모드 등록 | `mode/rust` 는 `CodeMirror.defineSimpleMode` 를 쓴다 — `addon/mode/simple` 이 없으면 rust.min.js 가 죽고 Rust 하이라이팅이 **조용히 등록되지 않는다**(페이지에 uncaught TypeError 가 남는다) | addon 을 모드 스크립트보다 먼저 로드한다. 모드 등록 여부는 헤드리스 브라우저로 실측해야 잡힌다 |
+| CSS 특이도 | 앱 스타일을 서드파티 뒤에 두는 것은 **동일 특이도일 때만** 이긴다. `input[type="text"]`(0,1,1)는 `.cmdk-input`(0,1,0)을 파일 순서와 무관하게 이겨, 그 블록의 선언 6개가 전부 무효였다(테두리 없는 입력이 1px 테두리 + 6px radius + 12px 패딩으로 렌더) | JS 가 만드는 컨트롤에 클래스만 주는 규칙은 요소 선택자를 함께 붙여 특이도를 맞춘다. 헤드리스 브라우저의 computed style 로만 잡힌다 |
+| outline 클리핑 | 래퍼에 `overflow:hidden` 이 있으면 **자식**의 `outline-offset` 링은 전량 잘린다 — 포커스 표시가 사라진 채 규칙은 남아 있다 | 링은 래퍼 자신의 `:focus-within` 에 그린다. 자기 overflow 는 자기 outline 을 자르지 않는다 |
+| 구조 의존 셀렉터 | `.row:first-child` 로 목록 상단선을 주면, 첫 자식이 `.toolbar` 인 컨테이너에서는 영원히 매칭되지 않는다(리뷰 기록 탭만 상단선이 없었다) | 인접 선택자(`.row + .row`)로 뒤집어 컨테이너 구조에 의존하지 않게 한다 |
+| 비텍스트 대비 | 텍스트 대비(1.4.3)만 검산하면 **1.4.11(비텍스트 3:1)** 이 빠진다. 폼·`.btn-secondary`·칩은 배경이 지면과 1.03~1.06:1 이라 테두리가 유일한 식별 수단인데 `--line`/`--line-strong` 은 1.15~1.68:1 이었다 | 컨트롤 경계 전용 `--line-control` 을 분리한다(카드 구분선은 장식이라 대상 아님 — 일괄 상향하면 화면이 시끄러워진다) |
+| ARIA 선언 vs 동작 | `role="tablist"` 를 선언하면 보조기술 사용자는 화살표 키 이동을 기대한다. 선언만 있고 동작이 없으면 없는 것보다 나쁘다 | 화살표·Home·End + roving tabindex 를 `tabs.js` 에 둔다. 마크업의 초기 `tabindex` 도 맞춘다(JS 실행 전 상태) |
+| 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달 셋 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |
+| 문자열 수준 테스트 | 빌드 스텝이 없어 JS/CSS 배선은 문자열 검사가 유일한 방어선이다. 정확 문자열은 공백·인용부호에 깨지고, 느슨한 부분문자열은 `ArrowRightX` 같은 오타를 통과시킨다. **결함을 설명하는 주석에 그 결함의 코드 형태가 적혀 있어** 거짓 빨강도 난다 | 정규식으로 쓰고, 규칙을 찾는 검사는 주석을 제거한 사본을 본다(`tests/test_frontend_invariants.py`) |
 
 ---
 

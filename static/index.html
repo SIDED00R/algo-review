@@ -74,13 +74,13 @@
     <div class="header-inner">
       <span class="logo">ALGO REVIEW</span>
       <nav id="main-nav" role="tablist" aria-label="주요 화면">
-        <button class="tab-btn active" data-tab="review" role="tab" id="tabbtn-review" aria-selected="true" aria-controls="tab-review">코드 리뷰</button>
-        <button class="tab-btn" data-tab="recommend" role="tab" id="tabbtn-recommend" aria-selected="false" aria-controls="tab-recommend">문제 추천</button>
-        <button class="tab-btn" data-tab="themes" role="tab" id="tabbtn-themes" aria-selected="false" aria-controls="tab-themes">테마별 문제</button>
-        <button class="tab-btn" data-tab="stats" role="tab" id="tabbtn-stats" aria-selected="false" aria-controls="tab-stats">통계</button>
-        <button class="tab-btn" data-tab="report" role="tab" id="tabbtn-report" aria-selected="false" aria-controls="tab-report">종합 리포트</button>
-        <button class="tab-btn" data-tab="history" role="tab" id="tabbtn-history" aria-selected="false" aria-controls="tab-history">리뷰 기록</button>
-        <button class="tab-btn" data-tab="import" role="tab" id="tabbtn-import" aria-selected="false" aria-controls="tab-import">기록 가져오기</button>
+        <button class="tab-btn active" data-tab="review" role="tab" id="tabbtn-review" aria-selected="true" aria-controls="tab-review" tabindex="0">코드 리뷰</button>
+        <button class="tab-btn" data-tab="recommend" role="tab" id="tabbtn-recommend" aria-selected="false" aria-controls="tab-recommend" tabindex="-1">문제 추천</button>
+        <button class="tab-btn" data-tab="themes" role="tab" id="tabbtn-themes" aria-selected="false" aria-controls="tab-themes" tabindex="-1">테마별 문제</button>
+        <button class="tab-btn" data-tab="stats" role="tab" id="tabbtn-stats" aria-selected="false" aria-controls="tab-stats" tabindex="-1">통계</button>
+        <button class="tab-btn" data-tab="report" role="tab" id="tabbtn-report" aria-selected="false" aria-controls="tab-report" tabindex="-1">종합 리포트</button>
+        <button class="tab-btn" data-tab="history" role="tab" id="tabbtn-history" aria-selected="false" aria-controls="tab-history" tabindex="-1">리뷰 기록</button>
+        <button class="tab-btn" data-tab="import" role="tab" id="tabbtn-import" aria-selected="false" aria-controls="tab-import" tabindex="-1">기록 가져오기</button>
       </nav>
       <div class="header-actions">
         <div class="github-wrap">
@@ -103,7 +103,7 @@
           </div>
         </div>
         <button id="cmdk-open" class="kbd-hint" aria-label="명령 팔레트 열기">
-          <span>검색</span><kbd>⌘K</kbd>
+          <span>검색</span><kbd id="cmdk-kbd">Ctrl K</kbd>
         </button>
         <button id="theme-toggle" class="theme-btn" aria-label="테마 변경" aria-pressed="false">
           <svg aria-hidden="true"><use href="#i-moon" /></svg>
@@ -133,12 +133,13 @@
         </div>
         <div>
           <label class="label" for="problem-id">문제 번호</label>
-          <input id="problem-id" type="text" placeholder="예) 1000" />
+          <input id="problem-id" type="text" placeholder="예) 1000"
+            aria-describedby="problem-id-help" />
           <p id="problem-id-help" class="hint">백준: 숫자만 입력하세요. 예) 1000</p>
         </div>
         <div>
           <label class="label" for="code-language">언어</label>
-          <select id="code-language">
+          <select id="code-language" aria-describedby="code-language-help">
             <option value="GNU C++17">C++ (GNU C++17)</option>
             <option value="Python 3" selected>Python 3</option>
             <option value="PyPy3">PyPy3</option>
@@ -154,7 +155,7 @@
             <option value="Ruby">Ruby</option>
             <option value="">자동 감지</option>
           </select>
-          <p class="hint">GitHub push 시 파일 확장자에 사용됩니다.</p>
+          <p id="code-language-help" class="hint">GitHub push 시 파일 확장자에 사용됩니다.</p>
         </div>
       </div>
 
@@ -164,7 +165,7 @@
           <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
           문제 설명 직접 붙여넣기 (선택)
         </summary>
-        <textarea id="problem-statement" rows="6" spellcheck="false"
+        <textarea id="problem-statement" rows="6" spellcheck="false" aria-label="문제 설명"
           placeholder="Codeforces 문제문 자동 수집이 실패하면 여기에 직접 붙여 넣을 수 있습니다."></textarea>
       </details>
 
@@ -207,8 +208,8 @@
       </div>
       <div class="toolbar">
         <div class="platform-toggle">
-          <button class="btn-toggle active" data-themes-platform="codeforces">Codeforces</button>
-          <button class="btn-toggle" data-themes-platform="boj">백준</button>
+          <button class="btn-toggle active" data-themes-platform="codeforces" aria-pressed="true">Codeforces</button>
+          <button class="btn-toggle" data-themes-platform="boj" aria-pressed="false">백준</button>
         </div>
       </div>
       <div id="themes-chips" class="theme-chips"></div>
@@ -234,8 +235,8 @@
       </div>
       <div class="toolbar">
         <div class="platform-toggle">
-          <button class="btn-toggle active" data-platform="boj">백준</button>
-          <button class="btn-toggle" data-platform="codeforces">Codeforces</button>
+          <button class="btn-toggle active" data-platform="boj" aria-pressed="true">백준</button>
+          <button class="btn-toggle" data-platform="codeforces" aria-pressed="false">Codeforces</button>
         </div>
         <button id="stats-btn" class="btn-primary btn-sm">통계 불러오기</button>
       </div>
@@ -261,14 +262,6 @@
       </div>
       <div id="history-list" aria-live="polite"></div>
 
-      <div id="review-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="리뷰 기록 상세">
-        <div class="modal-box">
-          <button class="modal-close" id="modal-close" aria-label="닫기">
-            <svg aria-hidden="true"><use href="#i-close" /></svg>
-          </button>
-          <div id="modal-content"></div>
-        </div>
-      </div>
     </section>
 
     <!-- ── 기록 가져오기 탭 ── -->
@@ -407,6 +400,17 @@
   </main>
 
   <!-- ── 문제 풀기 모달 ── -->
+  <!-- 모달은 전부 body 직하위에 둔다 — 탭 섹션 안에 있으면 다른 탭 활성 시 조상이
+       display:none 이 되어 열 수도, 포커스할 수도 없다(리뷰 기록 모달이 그 상태였다). -->
+  <div id="review-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="리뷰 기록 상세">
+    <div class="modal-box">
+      <button class="modal-close" id="modal-close" aria-label="닫기">
+        <svg aria-hidden="true"><use href="#i-close" /></svg>
+      </button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
   <div id="problem-modal" class="pm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pm-title">
     <div class="pm-box">
       <div class="pm-header">
@@ -497,6 +501,8 @@
   <script src="/static/js/editor.js?v=__V__"></script>
   <!-- 공통 유틸 (다른 모듈보다 먼저 로드) -->
   <script src="/static/js/utils.js?v=__V__"></script>
+  <!-- registerModal 을 제공한다 — 소비자(problem-modal·history·command-palette)보다 먼저 -->
+  <script src="/static/js/modal-a11y.js?v=__V__"></script>
   <!-- 기능별 모듈 -->
   <script src="/static/js/theme.js?v=__V__"></script>
   <script src="/static/js/github.js?v=__V__"></script>
