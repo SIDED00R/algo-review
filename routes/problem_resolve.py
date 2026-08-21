@@ -38,11 +38,29 @@ def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str
     return info
 
 
+# 본문 수집 함수들은 예외를 던지지 않고 실패 문자열을 반환한다. 그걸 그대로 LLM 에 넘기면
+# 프롬프트의 문제 설명 자리에 에러 메시지가 박힌다 — acmicpc.net 종료 이후 BOJ 리뷰가
+# 실제로 이 상태였다. 빈 본문을 주는 편이 낫다(analyzer 가 제목·티어·태그·코드로 분석한다).
+_SCRAPE_FAILURE_PREFIXES = (
+    "크롤링 실패",
+    "문제 설명을 가져올 수 없습니다",
+    "문제 설명 자동 수집에 실패했습니다",
+)
+
+
+def is_scrape_failure(text: str) -> bool:
+    """수집 함수가 본문 대신 돌려준 실패 문자열인지 판정한다."""
+    stripped = (text or "").strip()
+    return not stripped or stripped.startswith(_SCRAPE_FAILURE_PREFIXES)
+
+
 def resolve_statement(platform: str, info: dict, custom_statement: str | None = None) -> str:
-    """LLM 리뷰에 넣을 문제 본문. 사용자가 붙여 넣은 본문이 있으면 그것을 쓴다."""
+    """LLM 리뷰에 넣을 문제 본문. 사용자가 붙여 넣은(또는 저장된) 본문이 있으면 그것을 쓴다."""
     custom = (custom_statement or "").strip()
     if custom:
         return custom
     if platform == "codeforces":
-        return api_client.get_codeforces_problem_statement(info["problem_ref"])
-    return api_client.get_problem_statement(int(info["problem_ref"]))
+        scraped = api_client.get_codeforces_problem_statement(info["problem_ref"])
+    else:
+        scraped = api_client.get_problem_statement(int(info["problem_ref"]))
+    return "" if is_scrape_failure(scraped) else scraped

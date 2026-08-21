@@ -52,6 +52,10 @@ def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool,
             platform=platform, problem_ref=problem_ref, title=review["title"],
             tier_name=review["tier_name"], tags=review["tags"], language=review["language"],
             code=review["code"], review=review, submitted_at=review.get("created_at", ""),
+            # 저장된 본문이 있으면 그걸 쓴다 — 없으면 push_review_bundle 이 스크래핑한다.
+            # BOJ 는 acmicpc.net 종료로 스크래핑이 죽어 빈 섹션이 돌아오고, 그대로 README 를
+            # 재생성하면 이미 올라가 있던 문제 설명을 지운다.
+            description=review.get("problem_statement", ""),
         )
     except HTTPException as e:
         return False, f"GitHub 업로드 실패: {e.detail} 리뷰는 저장되었습니다."

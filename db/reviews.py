@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import distinct, func, select, update
 
 from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
@@ -236,6 +236,52 @@ def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
     for r in result:
         _normalize_review_row(r)
     return result
+
+
+def get_problems_missing_statement(platform: str | None = None) -> list:
+    """problem_statement 가 빈 행이 있는 문제를 (platform, problem_ref) 단위로 모아 반환한다.
+
+    본문은 문제 단위로 같으므로 회차마다 다시 수집하지 않는다. 폴더명 재현에 쓸
+    title·tier_name 은 회차마다 다를 수 있어(제목이 바뀐 문제) 후보를 모두 넘긴다.
+    """
+    with session_scope() as session:
+        stmt = (select(Review.platform, Review.problem_ref, Review.problem_id,
+                       Review.title, Review.tier_name)
+                .where(Review.problem_statement == "")
+                .order_by(Review.created_at.desc()))
+        if platform:
+            stmt = stmt.where(Review.platform == platform)
+        rows = session.execute(stmt).mappings().all()
+
+    grouped: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        key = (r["platform"], r["problem_ref"])
+        g = grouped.setdefault(key, {
+            "platform": r["platform"], "problem_ref": r["problem_ref"],
+            "problem_id": r["problem_id"], "empty_rows": 0, "name_candidates": [],
+        })
+        g["empty_rows"] += 1
+        candidate = (r["title"], r["tier_name"])
+        if candidate not in g["name_candidates"]:
+            g["name_candidates"].append(candidate)
+    return list(grouped.values())
+
+
+def set_problem_statement(platform: str, problem_ref: str, statement: str) -> int:
+    """해당 문제의 problem_statement 가 빈 행을 모두 채우고 갱신 행 수를 반환한다.
+
+    이미 값이 있는 행은 건드리지 않는다 — 사용자가 직접 붙여 넣은 원문을 백필 값으로
+    덮어쓰면 안 된다.
+    """
+    if not statement:
+        return 0
+    with session_scope(commit=True) as session:
+        result = session.execute(
+            update(Review)
+            .where(Review.platform == platform, Review.problem_ref == problem_ref,
+                   Review.problem_statement == "")
+            .values(problem_statement=statement))
+        return result.rowcount or 0
 
 
 def get_tier_history() -> list:

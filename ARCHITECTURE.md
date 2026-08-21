@@ -54,6 +54,7 @@
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /health`, 전역 예외 핸들러 |
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/CORS 등 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
+| `backfill_statements.py` | 기존 기록의 `problem_statement` 백필(일회성 CLI). BOJ 는 GitHub README, CF 는 codeforces.com 재수집. dry-run 기본, `--apply` 로만 기록 |
 
 ### 서비스 레이어
 | 파일 | 단일 책임 |
@@ -103,7 +104,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/pending_review.py` | `POST /api/review/pending` | LLM 없이 코드+문제 정보만 push 하고 '리뷰 대기'로 기록 |
 | `routes/rereview.py` | `POST /api/rereview/{platform}/{ref}` | 대기 행을 AI 리뷰로 채우고(회차 증가 없음) README 갱신 |
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
-| `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용) |
+| `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
@@ -225,6 +226,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem_resolve.py` `resolve_statement` | 요청에 `problem_statement` 가 있으면 **무조건** 그것을 쓴다. 이전 문제의 붙여넣은 본문이 폼에 남아 있으면 다른 문제를 그 본문으로 리뷰한다 | `load-submission.js` 가 값이 없어도 `''` 를 조건 없이 대입한다. `tests/test_load_submission_wiring.py` 가 이 코드의 존재를 고정 |
 | `reviews.language` | 자유 문자열이다 — import 경로가 CF/BOJ 원문(`"GNU G++17 7.3.0"`)을 그대로 저장한다. `select.value` 에 없는 값을 넣으면 조용히 실패해 빈 select 가 된다 | `submissionLanguageOption()` 이 option 존재를 확인하고, 없으면 `detectLanguage(code)` 로 재추론한다(반환 도메인이 option value 와 같다) |
 | 탭 전환 | 전환 로직을 복제하면 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛴다 | `activateTab()` 한 곳만 둔다. 배선 테스트가 다른 JS 에 `.tab-content` 토글이 없음을 확인 |
+| 본문 수집 함수 | `get_problem_statement()`·`get_codeforces_problem_statement()` 는 예외를 던지지 않고 **실패 문자열**을 반환한다. acmicpc.net 종료 후 BOJ 리뷰는 프롬프트의 문제 설명 자리에 `"크롤링 실패: 404 …"` 를 넣고 있었다 | `resolve_statement()` 가 `is_scrape_failure()` 로 걸러 빈 본문을 준다. 백필도 저장 직전에 같은 검사를 한다 — 저장하면 그 문제의 리뷰가 영구히 오염된다 |
+| BOJ README 재푸시 | `get_boj_problem_sections()` 는 실패 시 `None` 이 아니라 빈 문자열 dict 를 반환해 `push_review_bundle` 의 `require_sections` 가드가 걸리지 않는다 → 본문 없는 README 로 덮어써 **이미 올라간 문제 설명이 지워진다** | `rereview`·`github_push` 가 저장된 `problem_statement` 를 `description` 으로 넘겨 스크래핑을 건너뛴다 |
 
 ---
 
