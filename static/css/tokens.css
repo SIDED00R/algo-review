@@ -134,6 +134,16 @@
   --status-danger-bg: var(--eff-poor-bg);
   --status-danger-line: var(--eff-poor-line);
 
+  /* 데이터 시각화(통계 바·티어 차트) — 판정 배지와 색은 같지만 소비처가 JS 다.
+     stats.js·tier-chart.js 가 --eff-* 를 직접 읽으면, CSS 만 훑는 불변식 테스트
+     (test_chrome_does_not_consume_verdict_tokens)가 그 사용을 볼 수 없어 판정
+     팔레트를 조정할 때 차트 선과 통계 바가 조용히 함께 변한다.
+     초기값이 동일하므로 이 분리 자체로는 화면이 바뀌지 않는다. */
+  --bar-low: var(--eff-good-fg);
+  --bar-mid: var(--eff-ok-fg);
+  --bar-high: var(--eff-poor-fg);
+  --chart-line: var(--eff-good-fg);
+
   /* 구형 CF 문제의 수식은 투명 배경 PNG 라 다크 테마에서 반전해야 보인다. */
   --formula-img-filter: invert(1);
 }

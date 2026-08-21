@@ -25,12 +25,10 @@ _RESULT = {
 
 
 @pytest.fixture
-def client(monkeypatch):
+def minimal_client(monkeypatch, minimal_app):
     monkeypatch.setattr(solved_route, "IS_DEMO", False)
     monkeypatch.setattr(solved_route.settings, "openai_api_key", "sk-test")
-    app = FastAPI()
-    app.include_router(solved_route.router)
-    return TestClient(app)
+    return minimal_app(solved_route.router)
 
 
 def _seed_boj():
@@ -38,7 +36,12 @@ def _seed_boj():
 
 
 def _capture(seen):
-    """analyze_code 대역. setdefault 의 반환값을 그대로 쓰면 truthy 일 때 결과가 뒤바뀐다."""
+    """analyze_code 대역 — 인자를 seen 에 기록하고 고정 결과를 돌려준다.
+
+    한 줄짜리 대역(`lambda ...: seen.setdefault("statement", s) or _RESULT`)으로 쓰면
+    setdefault 가 truthy 를 돌려줄 때 `or` 가 단락돼 dict 대신 문자열이 반환된다
+    (KeyError: 'efficiency'). 그래서 명시 함수로 둔다.
+    """
     def _fake(info, statement, code):
         seen["info"] = dict(info)
         seen["statement"] = statement
@@ -47,7 +50,7 @@ def _capture(seen):
     return _fake
 
 
-def test_scrape_failure_never_reaches_the_llm(client, monkeypatch):
+def test_scrape_failure_never_reaches_the_llm(minimal_client, monkeypatch):
     """수집 실패 문자열이 analyzer 에 도달하면 안 된다 — 빈 본문이어야 한다."""
     monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",
                         lambda pid: "크롤링 실패: 404 Client Error: Not Found for url: ...")
@@ -55,20 +58,20 @@ def test_scrape_failure_never_reaches_the_llm(client, monkeypatch):
     monkeypatch.setattr(solved_route.analyzer, "analyze_code", _capture(seen))
     _seed_boj()
 
-    resp = client.post("/api/review-imported/boj/1000")
+    resp = minimal_client.post("/api/review-imported/boj/1000")
 
     assert resp.status_code == 200
     assert seen["statement"] == ""
 
 
-def test_successful_scrape_reaches_the_llm(client, monkeypatch):
+def test_successful_scrape_reaches_the_llm(minimal_client, monkeypatch):
     monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",
                         lambda pid: "【문제】두 정수 A와 B를 입력받아 A+B를 출력한다.")
     seen = {}
     monkeypatch.setattr(solved_route.analyzer, "analyze_code", _capture(seen))
     _seed_boj()
 
-    resp = client.post("/api/review-imported/boj/1000")
+    resp = minimal_client.post("/api/review-imported/boj/1000")
 
     assert resp.status_code == 200
     assert "A+B를 출력" in seen["statement"]
@@ -99,7 +102,7 @@ def test_demo_mode_blocks_history_clear(monkeypatch):
     assert db.get_solved_problem("boj", "1000") is not None  # 데모 시드가 지워지면 안 된다
 
 
-def test_empty_solved_title_does_not_overwrite_resolved_title(client, monkeypatch):
+def test_empty_solved_title_does_not_overwrite_resolved_title(minimal_client, monkeypatch):
     """solved 행의 제목이 비어 있으면 문제 조회에서 받은 제목을 살린다.
 
     CF 전용 경로다 — CF 는 제목·태그를 문제 조회에서 받아오고, BOJ 는 solved 행에서 직접
@@ -116,7 +119,7 @@ def test_empty_solved_title_does_not_overwrite_resolved_title(client, monkeypatc
                            tags=[], code="print(1)", language="Python 3",
                            platform="codeforces", problem_ref="4A")
 
-    resp = client.post("/api/review-imported/codeforces/4A")
+    resp = minimal_client.post("/api/review-imported/codeforces/4A")
 
     assert resp.status_code == 200
     # 응답(=저장된 값)을 본다. seen["info"] 는 analyze_code 호출 시점 스냅샷이라

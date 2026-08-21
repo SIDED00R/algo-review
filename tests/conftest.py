@@ -114,6 +114,27 @@ def fresh_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def minimal_app():
+    """라우터만 얹은 최소 앱 팩토리 — `client` 와 **다른 것**임을 이름으로 구분한다.
+
+    아래 `client` 는 server.app 전체라 전역 예외 핸들러가 걸려 있다(OperationalError
+    → 503, 미처리 예외 → 500 + 고정 문구). 최소 앱에는 그것이 없다. 예전에는 6개 파일이
+    같은 `client` 라는 이름으로 이 최소 앱을 재정의해서, 테스트 본문만 보고는 어느 쪽인지
+    알 수 없었다.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    def _make(*routers, **kwargs):
+        app = FastAPI()
+        for router in routers:
+            app.include_router(router)
+        return TestClient(app, **kwargs)
+
+    return _make
+
+
+@pytest.fixture
 def client(monkeypatch):
     """server.app 전체를 얹은 TestClient. lifespan 의 warmup 백그라운드 태스크(외부 API)를
     no-op 으로 막는다. 세 파일이 이 픽스처를 글자 그대로 복제하고 있었다."""

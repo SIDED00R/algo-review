@@ -50,8 +50,8 @@ reviewBtn.addEventListener('click', async () => {
   if (!payload.code) { showError(result, '코드를 입력하세요.'); return; }
 
   setLoading(reviewBtn, true);
-  result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 코드를 분석 중입니다... (10~20초 소요)</div>';
   result.classList.remove('hidden');
+  result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 코드를 분석 중입니다... (10~20초 소요)</div>';
 
   try {
     const data = await fetchJsonOk('/api/review', {

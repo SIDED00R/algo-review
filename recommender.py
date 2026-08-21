@@ -1,5 +1,6 @@
 from datetime import datetime
-from clients import search_problems_by_tag, search_cf_problems_by_tag, get_tag_key_by_name, TIER_NAMES
+from clients import search_problems_by_tag, search_cf_problems_by_tag, get_tag_key_by_name
+from constants import TIER_NAMES
 import db
 
 TIER_RANGE_LOW       = 1
@@ -50,13 +51,13 @@ def get_weak_tags_scored(top_n: int = 5, platform: str | None = None) -> list[st
     return [d["tag"] for d in scored[:top_n]]
 
 
-def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exclude: set | None = None,
-                        weak_tags: list[str] | None = None) -> list[dict]:
-    # weak_tags 를 받으면 재계산하지 않는다 — 호출부가 이미 구했다면 태그 가중치 풀스캔을 한 번 아낀다.
+def get_recommendations(weak_tags: list[str], platform: str = "boj",
+                        extra_exclude: set | None = None) -> list[dict]:
+    """취약 태그별 추천 문제. weak_tags 는 호출부가 구해서 넘긴다 — 유일한 호출자
+    (routes/recommend.py)가 응답에도 그 목록을 실어야 해서 어차피 먼저 계산한다."""
     if platform == "codeforces":
-        return _get_cf_recommendations(top_weak_tags, extra_exclude=extra_exclude, weak_tags=weak_tags)
+        return _get_cf_recommendations(weak_tags, extra_exclude=extra_exclude)
 
-    weak_tags = weak_tags or get_weak_tags_scored(top_weak_tags, platform="boj")
     if not weak_tags:
         return []
 
@@ -94,9 +95,7 @@ def get_recommendations(top_weak_tags: int = 3, platform: str = "boj", extra_exc
     return recommendations
 
 
-def _get_cf_recommendations(top_weak_tags: int = 3, extra_exclude: set | None = None,
-                            weak_tags: list[str] | None = None) -> list[dict]:
-    weak_tags = weak_tags or get_weak_tags_scored(top_weak_tags, platform="codeforces")
+def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = None) -> list[dict]:
     if not weak_tags:
         return []
 
@@ -128,3 +127,10 @@ def tier_range_description(avg_tier: float) -> str:
     same_min = max(1,  int(avg_tier) - TIER_RANGE_LOW)
     hard_max = min(30, int(avg_tier) + TIER_RANGE_HARD_HIGH)
     return f"{TIER_NAMES.get(same_min, '?')} ~ {TIER_NAMES.get(hard_max, '?')}"
+
+
+def cf_rating_range_description(avg_rating: float) -> str:
+    """BOJ 의 tier_range_description 과 짝. 800/3500 클램프를 한 곳에만 둔다."""
+    same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
+    hard_max = min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)
+    return f"CF {same_min} ~ CF {hard_max}"

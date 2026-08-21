@@ -1,7 +1,7 @@
 import db
 from fastapi import APIRouter
 from routes.models import PushReviewRequest
-from routes.helpers import push_review_bundle, require_github_target
+from routes.helpers import push_review_bundle, require_github_target, require_language
 from demo_mode import IS_DEMO
 
 router = APIRouter()
@@ -12,6 +12,7 @@ def push_review_to_github(req: PushReviewRequest):
     if IS_DEMO:
         return {"pushed": True, "repo": "demo_user/algorithm-solutions",
                 "path": f"demo/{req.problem_ref}"}
+    require_language(req.language)
     github_repo, github_token = require_github_target()
 
     # 저장된 최신 리뷰를 README 에 함께 싣는다 — 리뷰 직후 push 이므로 방금 결과가 최신 행이다.

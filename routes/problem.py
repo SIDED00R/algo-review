@@ -26,7 +26,9 @@ def _cache_get(ref_key: str) -> dict | None:
 
 
 def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
-    if len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
+    # 이미 있는 키를 갱신할 때는 항목 수가 늘지 않는다 — 그때도 축출하면
+    # 번역 재시도(60초 TTL 만료 후)마다 무관한 문제 하나가 캐시에서 밀려났다.
+    if ref_key not in _PROBLEM_CACHE and len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
         _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
     _PROBLEM_CACHE[ref_key] = {
         "result": result,

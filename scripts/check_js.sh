@@ -30,6 +30,41 @@ if command -v node > /dev/null 2>&1; then
     fi
   done
   echo "  ${#files[@]}개 파일 검사 완료"
+
+  # 파일별 검사로는 **전역 스코프 충돌**을 볼 수 없다. 브라우저는 이 파일들을 하나의
+  # 전역 렉시컬 환경에서 평가하므로, 전부 이어 붙여 한 번 더 파싱하면 실제 실행 조건과
+  # 같아진다 — 아래 grep 검사가 놓치는 다중 선언자(`const a = 1, b = 2`)와 구조 분해
+  # (`const {a, b} = x`)까지 사양대로 잡힌다.
+  # 이어 붙여도 새로 생기는 오류는 없다(function 끼리·var 끼리 재선언은 합법).
+  # 확장자가 `.js` 여야 한다 — Node 22 는 확장자로 모듈 타입을 판정하고, mktemp 의
+  # 무확장자 파일에는 ERR_UNKNOWN_FILE_EXTENSION 을 던진다(게이트 자체가 실패한다).
+  # package.json 이 없으므로 `.js` 는 CommonJS 스크립트로 파싱된다 — 브라우저의
+  # <script> 와 같은 조건이다.
+  tmpdir=$(mktemp -d)
+  combined="$tmpdir/_all.js"
+  # 파일마다 개행을 덧붙인다 — 마지막 줄이 주석이면 다음 파일 첫 줄이 삼켜진다.
+  for f in "${files[@]}"; do cat "$f"; echo; done > "$combined"
+  if ! node --check "$combined" 2> "$combined.err"; then
+    echo "  전역 스코프에서 충돌합니다 (파일별로는 통과):"
+    sed 's/^/    /' "$combined.err"
+    # 오류 줄번호를 원래 파일로 되돌려 준다.
+    bad_line=$(grep -oE ":[0-9]+$" <<< "$(head -1 "$combined.err")" | tr -d ':')
+    if [ -n "$bad_line" ]; then
+      offset=0
+      for f in "${files[@]}"; do
+        n=$(( $(wc -l < "$f") + 1 ))
+        if [ "$bad_line" -le $(( offset + n )) ]; then
+          echo "    → $f 부근 (합본 ${bad_line}행)"
+          break
+        fi
+        offset=$(( offset + n ))
+      done
+    fi
+    status=1
+  else
+    echo "  전역 스코프 합본 파싱도 통과"
+  fi
+  rm -rf "$tmpdir"
 else
   # 아래 두 검사는 node 없이도 유효하므로 여기서 중단하지 않는다.
   # CI 는 actions/setup-node 로 node 를 설치하므로 이 분기를 타지 않는다.
@@ -49,12 +84,15 @@ echo "== 최상위 선언 충돌 검사 =="
 #   let/const/class  ×  function/var     → SyntaxError  (교차 충돌)
 #   function 끼리 / var 끼리             → 합법 (재할당일 뿐)
 # 예전에는 렉시컬끼리만 봐서 **교차 충돌을 전부 놓쳤다** — 전역 함수 73개 × 렉시컬 36개
-# 조합이 게이트 밖이었다.
+# 조합이 게이트 밖이었다. `var` 도 교차 충돌을 만들므로 함께 본다.
+#
+# 이 grep 검사는 위 합본 파싱보다 약하다(첫 선언자만 본다). 남겨 두는 이유는 두 가지다 —
+# node 가 없어도 돌고, 충돌한 **이름을 짚어 준다**.
 lexical=$(grep -hoE "^(const|let|class)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}"           | awk '{print $NF}' | sort)
-funcs=$(grep -hoE "^(async[[:space:]]+)?function[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}"         | awk '{print $NF}' | sort -u)
+vars=$(grep -hoE "^((async[[:space:]]+)?function|var)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}"         | awk '{print $NF}' | sort -u)
 
 lex_dupes=$(echo "$lexical" | uniq -d)
-cross=$(comm -12 <(echo "$lexical" | uniq) <(echo "$funcs"))
+cross=$(comm -12 <(echo "$lexical" | uniq) <(echo "$vars"))
 
 if [ -n "$lex_dupes" ]; then
   echo "  렉시컬 선언(let/const/class)이 중복됩니다 — 전체 스크립트가 SyntaxError 로 죽습니다:"
@@ -62,12 +100,12 @@ if [ -n "$lex_dupes" ]; then
   status=1
 fi
 if [ -n "$cross" ]; then
-  echo "  같은 이름이 렉시컬 선언과 function 선언 양쪽에 있습니다 — 이것도 SyntaxError 입니다:"
+  echo "  같은 이름이 렉시컬 선언과 function/var 선언 양쪽에 있습니다 — 이것도 SyntaxError 입니다:"
   echo "$cross" | sed 's/^/    /'
   status=1
 fi
 if [ -z "$lex_dupes" ] && [ -z "$cross" ]; then
-  echo "  충돌 없음 (렉시컬 $(echo "$lexical" | uniq | grep -c .) 개 · function $(echo "$funcs" | grep -c .) 개)"
+  echo "  충돌 없음 (렉시컬 $(echo "$lexical" | uniq | grep -c .) 개 · function/var $(echo "$vars" | grep -c .) 개)"
 fi
 
 echo "== index.html 로드 누락 검사 =="

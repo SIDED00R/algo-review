@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 import db
 import clients as api_client
+from routes.models import validate_platform
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -27,10 +28,40 @@ def push_solution(repo: str, token: str, folder: str, file_stem: str,
     return code_ok and readme_ok
 
 
+def require_platform(value: str) -> str:
+    """플랫폼 문자열을 검증해 400 으로 바꾼다.
+
+    validate_platform 은 pydantic 검증용이라 ValueError 를 던진다 — 라우터에서 그대로
+    쓰면 500 이 된다. 네 라우터가 같은 try/except 를 복제하고 있었고, 그중 solved.py 는
+    아예 검증하지 않았다.
+    """
+    try:
+        return validate_platform(value)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+def require_language(language: str) -> str:
+    """제출 언어를 강제한다. 세 엔드포인트(/api/review, /api/review/pending,
+    /api/push-review)가 공유하는 하류 제약이라 규칙을 한 곳에 둔다.
+
+    언어를 모르면 get_file_extension 이 `.txt` 를 주고, 저장소에 `1000.txt` 로 커밋된
+    풀이는 rereview 가 "저장된 언어 정보가 없어 파일명을 재현할 수 없습니다" 로 **영구
+    거부**한다. 프론트의 "자동 감지" 는 detectLanguage 가 미인식 코드에 '' 를 반환하므로
+    빈 값이 실제로 도달한다.
+    """
+    value = (language or "").strip()
+    if not value:
+        raise HTTPException(status_code=400,
+                            detail="언어를 선택해주세요. 파일 확장자를 정하는 데 필요합니다.")
+    return value
+
+
 def build_solution_target(platform: str, problem_ref, title: str, tier_name: str = "") -> tuple[str, str]:
     """플랫폼별 저장소 폴더명과 커밋 메시지를 조립해 (folder, msg) 반환."""
     if platform == "boj":
-        tier_cat = tier_name.split()[0] if tier_name else "Unrated"
+        # `" "` 는 truthy 지만 split() 이 [] 라 인덱싱이 IndexError 였다.
+        tier_cat = (tier_name.split() or ["Unrated"])[0]
         folder = f"백준/{tier_cat}/{problem_ref}번. {title}"
         msg = f"[BOJ] {problem_ref}번. {title}"
     else:
@@ -100,7 +131,7 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     description 을 직접 주면 input/output 은 호출자 책임이다. `【문제】/【입력】/【출력】`
     마커가 들어 있으면 build_readme 가 세 섹션으로 되쪼갠다.
     """
-    ext = api_client._get_file_extension(language)
+    ext = api_client.get_file_extension(language)
     url = url or api_client.get_problem_url(platform, problem_ref)
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 

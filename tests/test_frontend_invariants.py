@@ -101,7 +101,15 @@ def test_all_fill_review_form_entry_points_confirm_overwrite():
     for name, label in entry_points.items():
         src = (_JS_DIR / name).read_text(encoding="utf-8")
         assert "fillReviewForm(" in src, f"{name}({label}) 이 로더를 쓰지 않는다"
-        assert re.search(r"if\s*\(!confirmEditorOverwrite\(\)\)\s*return", src),             f"{name}({label}) 이 덮어쓰기 확인을 건너뛴다"
+        # 파일 어딘가에 각각 1회면 통과하던 검사였다 — 확인이 **호출보다 앞에** 있는지 본다.
+        guard = re.search(r"if\s*\(!confirmEditorOverwrite\(\)\)\s*return", src)
+        assert guard, f"{name}({label}) 이 덮어쓰기 확인을 건너뛴다"
+        # 정의(`function fillReviewForm(`)는 호출이 아니다 — load-submission.js 는
+        # 로더를 정의하면서 자기 버튼에서 호출도 한다.
+        call = re.search(r"(?<!function )\bfillReviewForm\(", src)
+        assert call, f"{name}({label}) 에 fillReviewForm 호출이 없다"
+        assert guard.start() < call.start(), (
+            f"{name}({label}) 에서 덮어쓰기 확인이 fillReviewForm 호출보다 뒤에 있다")
 
 
 def test_imported_review_updates_the_list_data_not_just_the_dom(js):
@@ -149,16 +157,26 @@ def test_markdown_rendering_falls_back_when_the_cdn_is_blocked(js):
 
 def test_outage_is_not_reported_as_empty_data(js):
     """res.ok 를 안 보면 503(온디맨드 DB 정지)이 '기록이 없습니다'로 표시된다."""
+    # 전 파일에서 원시 fetch 를 막고, utils.js 안의 fetchJsonOk 정의 한 곳만 예외로 둔다.
+    for name, src in js.items():
+        for line_no, line in enumerate(src.split("\n"), 1):
+            if not re.search(r"(?<![.\w])fetch\s*\(", line):
+                continue
+            assert name == "utils.js", (
+                f"{name}:{line_no} 이 원시 fetch 를 쓴다 — fetchJsonOk 를 써야 한다")
+    assert re.search(r"async function fetchJsonOk", js["utils.js"])
     for name in ("tier-chart.js", "import-history.js", "history.js"):
-        assert not re.search(r"await\s+fetch\(", js[name]), \
-            f"{name} 은 fetchJsonOk 를 써야 한다(res.ok 검사 포함)"
+        assert "fetchJsonOk(" in js[name], f"{name} 이 fetchJsonOk 를 쓰지 않는다"
 
 
 def test_code_view_caches_only_successful_loads(js):
     """404 에도 loaded 를 세우면 오류 상태가 영구 캐시돼 재시도가 막힌다."""
     src = js["import-history.js"]
-    # dataset.loaded 대입이 try 안의 성공 경로에만 있어야 한다 — catch 블록에는 없다.
-    catch_body = src.split("코드 불러오기 실패")[1].split("catch (e)")[1][:300]
+    body = _js_function_body(src, "async function toggleCodeView")
+    # 양성 단정을 함께 둔다 — 부정 단정만 있으면 대입을 통째로 지워도 통과했다.
+    assert re.search(r"dataset\.loaded\s*=", body), "성공 경로에 loaded 표시가 없다"
+    # catch 블록 안에는 없어야 한다(문자 수 윈도우 대신 중괄호 균형으로 자른다).
+    catch_body = _js_function_body(body[body.index("} catch"):], "catch")
     assert "dataset.loaded" not in catch_body
 
 
@@ -236,6 +254,21 @@ def test_chrome_does_not_consume_verdict_tokens(css):
             assert allowed, f"{name}:{line_no} 이 판정 토큰을 직접 쓴다 — {line.strip()[:70]}"
 
 
+def test_javascript_does_not_consume_verdict_tokens(js):
+    """CSS 만 훑으면 소비처의 절반을 못 본다 — 통계 바와 티어 차트 색은 JS 가 읽는다.
+
+    실제로 stats.js 와 tier-chart.js 가 --eff-* 를 직접 읽고 있었고, 위 CSS 전용 검사는
+    그것을 통과시켰다. 데이터 시각화는 --bar-*/--chart-line 을 쓴다(tokens.css 에서
+    --eff-* 를 별칭으로 두므로 색은 같다).
+    """
+    for name, src in js.items():
+        for line_no, line in enumerate(src.split("\n"), 1):
+            assert "--eff-" not in line, (
+                f"{name}:{line_no} 이 판정 토큰을 직접 읽는다 — {line.strip()[:70]}")
+    assert "--chart-line" in js["tier-chart.js"], "차트가 전용 토큰을 쓰지 않는다"
+    assert "--bar-high" in js["stats.js"], "통계 바가 전용 토큰을 쓰지 않는다"
+
+
 def test_cmdk_input_selector_beats_the_element_selector(css):
     """input[type="text"] 는 (0,1,1) 이라 .cmdk-input (0,1,0) 을 순서와 무관하게 이긴다.
 
@@ -290,14 +323,49 @@ def test_tabs_have_a_keyboard_pattern(js, html):
     assert re.search(r"e\.key\s*===\s*['\"]End['\"]", src)
     assert re.search(r"setAttribute\(['\"]tabindex['\"],\s*['\"]-1['\"]\)", src)
     # 마크업의 초기 상태도 맞아야 한다(JS 실행 전).
-    assert html.count('tabindex="-1"') == 6 and 'aria-selected="true" aria-controls="tab-review" tabindex="0"' in html
+    tab_buttons = re.findall(r'<button[^>]*\brole="tab"[^>]*>', html)
+    assert len(tab_buttons) == 7, f"탭 버튼 수: {len(tab_buttons)}"
+    selected = [b for b in tab_buttons if 'aria-selected="true"' in b]
+    assert len(selected) == 1 and 'tabindex="0"' in selected[0]
+    assert 'aria-controls="tab-review"' in selected[0]
+    # 나머지는 roving tabindex 규약상 전부 -1 이어야 한다(JS 실행 전 초기 상태).
+    assert all('tabindex="-1"' in b for b in tab_buttons if b not in selected)
 
 
-def test_every_form_control_has_an_accessible_name(html):
-    """<summary> 는 label 이 아니고 placeholder 도 접근 가능한 이름이 아니다."""
-    # 문제 설명 textarea 만 이름이 없었다.
+def _controls_without_names(markup: str) -> list[str]:
+    """이름 없는 <input>/<select>/<textarea> 태그를 모은다.
+
+    이름의 근거로 인정하는 것: aria-label · aria-labelledby · 같은 마크업 안의
+    `for="<id>"`. placeholder 는 접근 가능한 이름이 **아니다**(WCAG 4.1.2).
+    type=hidden 과 버튼류는 제외한다.
+    """
+    labelled_ids = set(re.findall(r'\bfor="([^"]+)"', markup))
+    bad = []
+    for tag in re.findall(r"<(?:input|select|textarea)\b[^>]*>", markup):
+        if re.search(r'type="(?:hidden|submit|button|checkbox|radio)"', tag):
+            continue
+        if "aria-label" in tag:
+            continue
+        tag_id = re.search(r'\bid="([^"]+)"', tag)
+        if tag_id and tag_id.group(1) in labelled_ids:
+            continue
+        bad.append(tag[:90])
+    return bad
+
+
+def test_every_form_control_has_an_accessible_name(html, js):
+    """<summary> 는 label 이 아니고 placeholder 도 접근 가능한 이름이 아니다.
+
+    예전에는 이름과 달리 #problem-statement **한 개**만 검사해서, JS 가 만드는 검색
+    입력 2개와 커스텀 예제 textarea 4개가 이름 없이 남아 있어도 초록이었다.
+    """
     block = html.split('id="problem-statement"')[1][:200]
     assert 'aria-label="문제 설명"' in block
+
+    bad = _controls_without_names(html)
+    for name, src in js.items():
+        bad += [f"{name}: {tag}" for tag in _controls_without_names(src)]
+    assert not bad, "접근 가능한 이름이 없는 폼 컨트롤:\n  " + "\n  ".join(bad)
 
 
 def test_hints_are_linked_to_their_controls(html):
@@ -309,7 +377,12 @@ def test_hints_are_linked_to_their_controls(html):
 
 
 def test_toggles_expose_pressed_state(html):
-    assert html.count("aria-pressed") >= 4
+    """개수 하한(>= 4)만 세면 하나를 지워도 통과한다 — 토글 그룹마다 짝을 확인한다."""
+    for attr in ("data-platform", "data-themes-platform", "data-report-platform"):
+        buttons = re.findall(rf"<button[^>]*\b{attr}=[^>]*>", html)
+        assert len(buttons) >= 2, f"{attr} 토글이 2개 미만이다"
+        for b in buttons:
+            assert "aria-pressed" in b, f"aria-pressed 가 없다: {b[:80]}"
 
 
 def test_modals_live_outside_the_tab_sections(html):

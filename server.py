@@ -33,9 +33,12 @@ async def lifespan(app: FastAPI):
     else:
         try:
             db.run_migrations()
-        except Exception as e:
+        except OperationalError as e:
             # 온디맨드 DB가 정지 상태여도 기동은 계속한다 — 배포·콜드스타트가 DB 상태에 묶이면 안 된다.
-            logger.warning("마이그레이션 실패로 건너뜀 (온디맨드 DB 정지 등 연결 문제일 수 있음): %s", e)
+            # **연결 실패만** 흘려보낸다. except Exception 으로 넓히면 잘못된 리비전·DDL 오류·
+            # 다중 인스턴스의 upgrade head 경합까지 warning 한 줄로 덮고, 새 컬럼이 없는
+            # 스키마로 서비스하다 나중에 원인 불명 500 이 난다.
+            logger.warning("DB 연결 실패로 마이그레이션 건너뜀 (온디맨드 정지 상태일 수 있음): %s", e)
     # 테마 캐시 예열은 기동을 막지 않게 백그라운드로 — 데모는 외부 API를 치지 않는다.
     warm_task = None if IS_DEMO else asyncio.create_task(warmup.warm_theme_caches())
     yield
@@ -58,7 +61,10 @@ async def _db_unavailable_handler(request: Request, exc: OperationalError):
 
 @app.exception_handler(Exception)
 async def _unhandled_handler(request: Request, exc: Exception):
-    logger.exception("처리되지 않은 예외")
+    # Starlette 의 ServerErrorMiddleware 가 응답 전송 후 예외를 항상 재-raise 하고,
+    # uvicorn 이 같은 로거로 트레이스백을 한 번 더 남긴다. 여기서 exception() 을 쓰면
+    # 미처리 예외 1건당 트레이스백이 2개가 되므로 요약만 남긴다.
+    logger.error("처리되지 않은 예외: %r", exc)
     return JSONResponse(status_code=500, content={"detail": "서버 내부 오류가 발생했습니다."})
 
 

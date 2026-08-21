@@ -1,10 +1,9 @@
 import db
-import clients as api_client
 import recommender
-from recommender import CF_RANGE_LOW, CF_RANGE_HARD_HIGH
+from clients import ProblemSearchError
 from fastapi import APIRouter, HTTPException, Query
 
-from constants import is_supported_platform, normalize_platform
+from constants import TIER_NAMES, is_supported_platform, normalize_platform
 from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
 
 router = APIRouter()
@@ -38,10 +37,10 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         avg_rating = db.get_average_cf_rating()
         avg_tier = 0
         tier_name = f"CF {int(avg_rating)}" if avg_rating != 1200.0 or db.get_solved_cf_refs() else "N/A"
-        tier_range = f"CF {max(800, int(avg_rating) - CF_RANGE_LOW)} ~ CF {min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)}"
+        tier_range = recommender.cf_rating_range_description(avg_rating)
     else:
         avg_tier = db.get_average_tier()
-        tier_name = api_client.TIER_NAMES.get(int(avg_tier), "N/A")
+        tier_name = TIER_NAMES.get(int(avg_tier), "N/A")
         tier_range = recommender.tier_range_description(avg_tier)
 
     weak_tags = recommender.get_weak_tags_scored(5, platform=platform)
@@ -50,8 +49,15 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         return {"avg_tier": avg_tier, "tier_name": tier_name,
                 "weak_tags": [], "recommendations": [], "platform": platform}
 
-    recs = recommender.get_recommendations(top_weak_tags=3, platform=platform, extra_exclude=extra_exclude,
-                                           weak_tags=weak_tags[:3])
+    # 검색 실패를 빈 추천으로 내려보내면 프론트가 "아직 추천 데이터가 없습니다. 먼저 코드
+    # 리뷰를 몇 개 진행해보세요." 로 **사용자를 탓한다** — 평균 티어와 취약 태그가 같은
+    # 응답에 채워져 있는데도. themes 응답이 이미 쓰는 error 필드 계약을 그대로 따른다. (#113)
+    error = ""
+    try:
+        recs = recommender.get_recommendations(weak_tags[:3], platform=platform,
+                                               extra_exclude=extra_exclude)
+    except ProblemSearchError as e:
+        recs, error = [], str(e)
 
     return {
         "avg_tier": avg_tier,
@@ -60,4 +66,5 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         "weak_tags": weak_tags,
         "recommendations": recs,
         "platform": platform,
+        "error": error,
     }

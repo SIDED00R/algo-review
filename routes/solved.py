@@ -3,6 +3,7 @@ import analyzer
 from fastapi import APIRouter, HTTPException
 from config import settings
 from demo_mode import IS_DEMO, demo_block
+from routes.helpers import require_platform
 from routes.problem_resolve import resolve_problem_info, resolve_statement
 from routes.review_response import save_and_build_response
 
@@ -13,6 +14,7 @@ router = APIRouter()
 def review_imported(platform: str, problem_ref: str):
     if IS_DEMO:
         demo_block("가져온 기록 AI 리뷰는 데모 버전에서 지원되지 않습니다.")
+    platform = require_platform(platform)
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 

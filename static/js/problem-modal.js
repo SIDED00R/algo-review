@@ -162,11 +162,11 @@ function addCustomCase() {
   el.innerHTML = `
     <div class="pm-custom-case-row">
       <div>
-        <label>입력</label>
+        <label for="pm-custom-input-${id}">입력</label>
         <textarea id="pm-custom-input-${id}" placeholder="입력값을 입력하세요"></textarea>
       </div>
       <div>
-        <label>기대 출력</label>
+        <label for="pm-custom-output-${id}">기대 출력</label>
         <textarea id="pm-custom-output-${id}" placeholder="기대 출력값을 입력하세요"></textarea>
       </div>
     </div>

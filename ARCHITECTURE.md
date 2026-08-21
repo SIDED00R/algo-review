@@ -55,16 +55,17 @@
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /health`, 전역 예외 핸들러 |
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/CORS 등 |
 | `constants.py` | 플랫폼 화이트리스트·티어 이름·`normalize_platform()` — 레이어 어디서나 참조하는 순수 값. 예전에는 `db/normalize.py` 가 `clients.solved_ac` 에서 `TIER_NAMES` 를 가져와, `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이었다. 플랫폼 화이트리스트도 세 곳에 흩어져 있었다 |
+| `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`cf_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 | `backfill_statements.py` | 기존 기록의 `problem_statement` 백필(일회성 CLI). BOJ 는 GitHub README, CF 는 codeforces.com 재수집. dry-run 기본, `--apply` 로만 기록 |
 
 ### 서비스 레이어
 | 파일 | 단일 책임 |
 |------|----------|
-| `analyzer.py` | LLM 코드 분석. 클라이언트는 모듈 레벨 싱글턴(호출마다 만들면 커넥션 풀과 TLS 핸드셰이크를 매번 버린다)이고 `max_retries` 를 명시한다 — timeout 만 줄이면 실효 상한이 3×timeout + 백오프가 된다 |
+| `analyzer.py` | LLM 코드 분석 + 응답 정규화(`normalize_review_result`). 클라이언트는 `llm_client` 를 쓴다 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
-| `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
+| `cf_translator.py` | Codeforces 문제 본문 한국어 번역. `llm_client` 를 쓴다 — 문제 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
 
 ### 데모 인프라
 | 파일 | 단일 책임 |
@@ -92,10 +93,10 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 ### 외부 클라이언트 레이어 (`clients/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 는 `constants.py` 가 정본이고 여기서 재수출한다(기존 import 경로 유지). `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
+| `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 는 `constants.py` 에서 직접 가져온다(재수출 shim 은 소비처 3곳을 정본으로 옮기면서 제거했다). `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
-| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑 |
+| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), `ProblemSearchError` — 문제 검색 **실패**를 빈 결과와 구분하는 신호 |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
 ### API 라우터 (`routes/`)
@@ -233,7 +234,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | BOJ README 경로 |  저장소 폴더명은 BaekjoonHub 규칙이라 공백이 `U+2005`, 특수문자가 전각(`A＋B`)이고 `번` 이 없다. 티어 폴더도 저장 당시 값이라 DB 와 다르다(acmicpc 종료 후 조회 실패로 `Unrated` 인 행이 많다) → 경로를 조립하면 거의 다 404 다 | `get_boj_readme_paths()` 로 트리를 한 번 받아 번호로 찾는다. 번호 경계를 느슨하게 보면 `2024 대회 후기` 를 2024번 문제로 오인한다 |
 | BOJ README 재푸시 | 수집 실패를 빈 섹션으로 오인하면 본문 없는 README 로 덮어써 **이미 올라간 문제 설명이 지워진다** | 두 겹으로 막는다 — ① `get_boj_problem_sections()` 가 `get_cf_problem_sections()` 와 같은 계약으로 실패 시 `None` 을 반환한다(200 인데 세 섹션이 다 빈 경우도 실패로 본다), ② `require_sections` 가드가 `None` 뿐 아니라 "모든 섹션이 빈 dict" 도 502 로 막는다. 여기에 `rereview`·`github_push` 가 저장된 `problem_statement` 를 `description` 으로 넘겨 스크래핑 자체를 건너뛴다. `tests/test_push_review_bundle_sections.py` 가 두 플랫폼 × 두 실패 표현을 고정 |
 | 재업로드 '제출 일자' | `db.save_review` 는 `datetime.now()` 를 **tz 없이** 저장하고 Cloud Run 컨테이너는 UTC 다. `_format_kst` 가 변환하지 않으면 최초 push(KST)와 재푸시(UTC)의 날짜가 9시간 어긋난다 | `_format_kst` 가 naive 값을 UTC 로 간주해 KST 로 변환한다. `tests/test_helpers_readme.py` 가 naive·UTC·KST 세 입력을 고정 |
-| 언어 ↔ 확장자 | `_get_file_extension` 이 만든 확장자를 `_ext_to_language` 가 모르면 그 언어로 push 한 풀이를 다시 가져올 때 `language` 가 빈 문자열이 되고, `rereview` 가 파일명을 재현할 수 없다며 재업로드를 거부한다. BOJ 는 `C99`, CF 는 `GNU G++17 7.3.0` 처럼 `c`/`c++` 부분문자열이 없는 표기를 쓴다 | 두 함수를 왕복으로 고정한다 — `tests/test_clients_utils.py` 가 실제 표기 30여 종과 "만들 수 있는 확장자 전체가 역매핑에 있다" 를 검사 |
+| 언어 ↔ 확장자 | `get_file_extension` 이 만든 확장자를 `_ext_to_language` 가 모르면 그 언어로 push 한 풀이를 다시 가져올 때 `language` 가 빈 문자열이 되고, `rereview` 가 파일명을 재현할 수 없다며 재업로드를 거부한다. BOJ 는 `C99`, CF 는 `GNU G++17 7.3.0` 처럼 `c`/`c++` 부분문자열이 없는 표기를 쓴다 | 두 함수를 왕복으로 고정한다 — `tests/test_clients_utils.py` 가 실제 표기 30여 종과 "만들 수 있는 확장자 전체가 역매핑에 있다" 를 검사 |
 | GitHub 트리 조회 | 항목 10 만 개 / 7MB 를 넘기면 GitHub 가 `truncated=true` 와 함께 트리를 자른다. 부분 결과를 성공으로 취급하면 가져오기·백필이 **조용히 일부 문제를 누락**한다 | `fetch_repo_tree()` 가 `truncated` 를 확인해 예외로 드러낸다 |
 | 성장 곡선 dedupe | `get_tier_history` 는 문제당 **모든 회차**를 준다. 문제당 한 점만 쓰려고 마지막 회차를 남기면, `tier` 는 회차가 아니라 문제의 속성이라 값은 그대로이고 **그 문제가 시계열에 놓이는 날짜만 이동**한다 → 예전 문제를 재제출하면 이미 지나간 구간의 레이팅이 소급 변한다 | 정순 1패스로 **첫 등장**을 남긴다(서버가 오름차순이므로 재정렬도 불필요). `tests/test_frontend_invariants.py` 가 `.reverse()` 부재를 고정 |
 | 뷰어 캐시 vs 붙여넣은 본문 | `closeProblemModal` 이 `_currentProblem` 을 지우지 않으므로, 뷰어를 닫은 뒤 같은 문제를 손으로 입력하면 옛 번역본이 남아 있다. 서버 `resolve_statement` 는 붙여넣은 본문을 우선하는데 프론트가 반대로 고르면 **LLM 리뷰와 GitHub README 의 문제 설명이 갈린다** | `description: pastedStatement \|\| cfSections?.statement` — 서버와 같은 우선순위. 뷰어에서 바로 넘어온 경우엔 `fillReviewForm` 이 textarea 를 비우므로 번역본이 그대로 쓰인다 |
@@ -264,6 +265,18 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 스냅샷 시점 | 테스트가 보는 값이 검증 대상 코드보다 **앞** 시점의 스냅샷이면 그 코드를 지워도 통과한다(`analyze_code` 호출 시점 dict 를 보면 그 뒤의 가드를 검증하지 못한다) | 응답 본문이나 DB 재조회로 확인한다 |
 | 필터를 겨냥한 픽스처 | 여러 필터가 순차로 걸리는 함수에서, 픽스처가 **앞선 필터**에 먼저 걸리면 뒤 필터를 지워도 결과가 같다(`4A. Watermelon` 은 루트 필터가 아니라 번호 경계에 걸렸다) | 각 필터마다 그 필터**만**이 이유가 되는 입력을 둔다 |
 | 문자 수 윈도우 정규식 | `[\s\S]{0,1200}` 로 함수 안을 찾으면 한두 줄만 추가돼도 "호출이 사라졌다" 는 틀린 메시지로 빨강이 난다(실측 여유 41자·137자) | 중괄호 균형으로 함수 본문을 잘라내고 그 안에서 찾는다(`_js_function_body`) |
+| 예외 메시지의 쿼리스트링 | Codeforces 서명 호출은 `apiKey`·`apiSig` 를 **쿼리스트링**에 넣는다. requests 계열 예외 메시지는 요청 URL 전문을 포함하므로, `raise_for_status()` 뿐 아니라 **`requests.get` 자체가 던지는** `ConnectTimeout`/`ConnectionError` 도 키를 싣는다(urllib3 `MaxRetryError` 를 감싼다). 그 예외가 `detail=f"...{e}"` 를 타면 인증 없는 공개 엔드포인트가 운영자 키를 익명 요청자에게 돌려준다 | `_codeforces_api_request` 가 **함수를 나가는 모든 예외**를 원문 없는 `ValueError` 로 치환하고, 라우터는 500 detail 에 타입명만 싣는다. `tests/test_codeforces_credentials.py` 가 전송 예외 4종을 고정 |
+| `json.dumps(None)` | 문자열 필드의 `None` 은 NOT NULL 컬럼에서 `IntegrityError` 로 **요란하게** 죽지만, 리스트 필드는 `json.dumps(None)` → `"null"` 이 되어 예외 없이 통과하고 읽을 때 `json.loads` → `None` 이 되어 API 가 `"strengths": null` 을 내보낸다 | 정규화를 생산자(`normalize_review_result`) 한 곳에서 끝내고 문자열·리스트를 함께 다룬다. 저장 함수 둘은 dict 를 직접 받는 공개 경로라 각자 한 번 더 막는다 |
+| 검색 실패 vs 빈 결과 | 외부 검색이 전면 실패했는데 빈 목록을 돌려주면 호출부가 "조건에 맞는 문제 없음" 과 구분할 수 없다. 운영에서 solved.ac 가 Cloud Run 을 403 으로 막는 동안 `/api/recommend` 는 빈 추천을 주고 UI 는 **사용자를 탓했다** — 같은 응답에 평균 티어와 취약 태그가 채워져 있는데도 | 검색기가 `ProblemSearchError` 를 던지고, 라우터가 `themes` 응답이 이미 쓰던 `error` 필드 계약으로 내려보낸다. 프론트는 `error` 가 있으면 그 이유를 보인다 |
+| 마이그레이션 실패 은닉 | "온디맨드 DB 정지 때도 기동은 계속한다" 는 의도로 `except Exception` 을 쓰면 잘못된 리비전·DDL 오류·다중 인스턴스 `upgrade head` 경합까지 warning 한 줄로 덮는다. 새 컬럼이 없는 스키마로 서비스하다 나중에 원인 불명 500 이 난다 | `except OperationalError` 로 좁힌다 — **연결 실패만** 흘려보낸다 |
+| 데이터 공백으로 분기 | "BOJ 태그 통계가 비면 CF" 같은 추론은 두 플랫폼을 함께 쓰는 사용자에게서 무너진다. BOJ 기록이 하나라도 있으면 CF 리포트를 영구히 볼 수 없었고 우회 경로도 없었다 | `stats` 와 같이 **명시 쿼리 파라미터**로 받는다. 형제 API 가 파라미터를 쓰는데 하나만 추론하고 있으면 그 자체가 신호다 |
+| 같은 제약, 다른 엔드포인트 | 빈 `language` 는 확장자를 `.txt` 로 만들어 rereview 가 **영구 거부**하는 파일을 저장소에 남긴다. 같은 하류 제약인데 세 엔드포인트 중 하나만 막고 있었다 | 규칙을 `require_language()` 한 곳에 두고 셋이 호출한다. `require_platform()` 도 같은 이유로 통합했다(라우터 4곳 중 하나는 아예 검증이 없었다) |
+| 브랜치 재추측 | GET 으로 main→master 폴백을 해서 기본 브랜치를 알아낸 뒤 PATCH 에서 다시 main 부터 추측하면, master 저장소에서 실패 PATCH 를 낭비하고 폴백 조건(422)에 없는 응답(404)이 오면 **tree·commit 을 이미 만든 상태에서** 예외가 난다 | 알아낸 브랜치를 변수로 잡아 끝까지 쓴다. `tests/test_github_push_branch.py` 가 두 저장소 형태를 고정 |
+| 차트 재진입 | `destroy()` 후 `await` 를 거쳐 `new Chart` 를 하면, 겹친 두 호출이 **둘 다** 진입 시점에 인스턴스를 `null` 로 보고 destroy 를 건너뛴다. 뒤늦은 `new Chart` 가 `Canvas is already in use` 를 던지고, 그 예외를 catch 가 안내문 자리에 그대로 표시해 **Chart.js 영문 메시지가 사용자 화면에 뜬다** | 세대 토큰을 둔다. 테마 토글은 재조회 대신 색만 갱신한다(`recolorTierChart`) — 재조회는 이 경쟁의 상시 발생원이었다 |
+| 마지막 응답이 이긴다 | 목록·토글에서 요청을 연달아 보내면 늦게 온 이전 응답이 새 화면을 덮는다. 칩은 B 가 활성인데 제목은 A 인 상태가 된다 | `problem-modal.js` 의 세대 토큰 규약을 `themes`·`stats`·`history`·`report` 에 같이 적용한다. `setLoading` 이 버튼을 `disabled` 로 만들면 **프로그래매틱 `click()` 은 명세상 이벤트를 발생시키지 않으므로**(재요청이 조용히 무시된다) 핸들러 함수를 직접 부른다 |
+| 판정 토큰의 JS 소비 | `--eff-*` 사용처를 CSS 만 훑어 검사하면 절반을 못 본다 — 통계 바와 티어 차트 색은 JS 가 `getComputedStyle` 로 읽는다 | 데이터 시각화용 `--bar-*`/`--chart-line` 을 `--eff-*` 별칭으로 분리하고(초기값 동일이라 화면 무변경), 불변식 테스트가 CSS 와 JS 를 **둘 다** 훑는다 |
+| 상속되는 font-weight | `.mono` 가 weight 를 지정하지 않으면 부모(`.summary-value` = 600)를 상속한다. 웹폰트는 400/500 만 로드하므로 브라우저가 **합성 볼드**를 그린다. 규칙 블록 단위로 검사하는 테스트는 두 선언이 다른 블록에 있으면 못 잡는다 | `.mono` 에 weight 를 못박는다. 상속으로 결합되는 문제는 블록 단위 정적 검사의 구조적 한계이므로 computed style 실측이 필요하다 |
+| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 20개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
 
 ---
 
