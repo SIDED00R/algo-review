@@ -45,6 +45,24 @@
   - 난이도는 사이트 네이티브 그대로 표시합니다 (CF: 레이팅 + 공식 색상 배지, 백준: solved.ac 실제 티어 배지). 이미 푼 문제는 목록에서 제외됩니다.
   - 백준 카드는 acmicpc 서비스 종료로 링크 없이 정보만 표시, CF 카드는 클릭 시 기존 인앱 뷰어 모달로 열립니다.
 
+## 기존 기록의 문제 설명 백필
+
+`problem_statement` 는 나중에 추가된 컬럼이라 그 전 기록은 비어 있다. 남아 있는 소스에서 되살린다.
+
+```bash
+python backfill_statements.py                    # 전체 dry-run (아무것도 쓰지 않음)
+python backfill_statements.py --platform boj      # BOJ 만
+python backfill_statements.py --apply             # 실제 기록
+```
+
+| 대상 | 소스 | 비고 |
+|------|------|------|
+| BOJ | GitHub 저장소 README | acmicpc.net 이 종료돼 재수집이 불가하다. GitHub 에 push 했던 문제만 복구된다 |
+| CF | codeforces.com 재수집 | 동작한다 |
+
+이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 사용자가 직접 붙여 넣었던
+원문은 저장된 적이 없어 복구할 수 없다 — 여기서 채우는 값은 "그 시절 스크래핑이 만들었을 본문"이다.
+
 ## 로컬 실행
 
 ### 1. 요구사항

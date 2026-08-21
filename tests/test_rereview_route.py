@@ -72,3 +72,26 @@ def test_pending_row_without_api_key_returns_400(client, monkeypatch):
     assert r.status_code == 400
     # 리뷰는 여전히 대기 상태로 남는다 — 나중에 다시 시도할 수 있다.
     assert db.get_reviews_by_problem("boj", "1000")[0]["efficiency"] == db.PENDING_EFFICIENCY
+
+
+def test_repush_passes_stored_statement_as_description(client, monkeypatch):
+    """저장된 본문을 넘기면 push_review_bundle 이 스크래핑을 건너뛴다.
+
+    BOJ 는 acmicpc.net 종료로 스크래핑이 빈 섹션을 돌려주고, 그대로 README 를 재생성하면
+    이미 올라가 있던 문제 설명을 지운다.
+    """
+    stored = "【문제】\n두 정수 A와 B를 입력받아 A+B를 출력한다."
+    _save("good", feedback="f", problem_statement=stored)
+    monkeypatch.setattr(rereview, "merged_github_target", lambda: ("me/solutions", "tok"))
+
+    seen = {}
+
+    def fake_push(repo, token, **kw):
+        seen.update(kw)
+        return "백준/Bronze/1000번. A+B"
+
+    monkeypatch.setattr(rereview, "push_review_bundle", fake_push)
+    body = client.post("/api/rereview/boj/1000").json()
+
+    assert body["pushed"] is True
+    assert seen["description"] == stored
