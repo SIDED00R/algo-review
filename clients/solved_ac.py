@@ -1,6 +1,9 @@
+import logging
 import time
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger("uvicorn.error")
 
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
 
@@ -50,7 +53,8 @@ def get_problems_bulk(problem_ids: list[int]) -> dict[int, dict]:
             )
             resp.raise_for_status()
             items = resp.json()
-        except Exception:
+        except Exception as e:
+            logger.warning("solved.ac 문제 배치 조회 실패 — 이 묶음은 건너뛴다: %s", e)
             continue
 
         for data in items:
@@ -121,16 +125,26 @@ def get_problem_statement(problem_id: int) -> str:
         return f"크롤링 실패: {e}"
 
 
-def get_boj_problem_sections(problem_id: int) -> dict:
+def get_boj_problem_sections(problem_id: int) -> dict | None:
+    """실패 시 None — get_cf_problem_sections 와 같은 계약이다. 호출부(push_review_bundle)가
+    빈 섹션으로 착각해 기존 README 본문을 지우지 않도록 구분해야 한다. 예전에는 실패에도
+    빈 문자열 dict 를 돌려줘서 `sections is None` 가드가 BOJ 에서 영원히 거짓이었고,
+    acmicpc.net 종료 이후 BOJ 재푸시가 이미 올라간 문제 설명을 지우고 있었다.
+
+    200 응답인데 세 섹션이 모두 없는 경우(페이지 구조 변경)도 실패로 본다."""
     try:
         sections = _fetch_boj_sections(problem_id)
-        return {
-            "description": sections["description"] or "",
-            "input": sections["input"] or "",
-            "output": sections["output"] or "",
-        }
-    except Exception:
-        return {"description": "", "input": "", "output": ""}
+    except Exception as e:
+        logger.warning("BOJ 문제 섹션 수집 실패 (problem_id=%s): %s", problem_id, e)
+        return None
+    if not any(sections.values()):
+        logger.warning("BOJ 문제 섹션이 비어 있음 — 페이지 구조 변경 가능 (problem_id=%s)", problem_id)
+        return None
+    return {
+        "description": sections["description"] or "",
+        "input": sections["input"] or "",
+        "output": sections["output"] or "",
+    }
 
 
 def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
@@ -153,7 +167,9 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
         resp.raise_for_status()
         data = resp.json()
         items = data.get("items", [])
-    except Exception:
+    except Exception as e:
+        # 전면 실패를 빈 목록으로 돌려주면 호출부가 "조건에 맞는 문제 없음"과 구분할 수 없다.
+        logger.warning("solved.ac 태그 검색 실패 — 추천/테마가 빈 결과가 된다: %s", e)
         return []
 
     results = []
@@ -189,14 +205,22 @@ def get_tag_key_by_name(tag_name: str) -> str:
             key = item.get("key", "")
             display_names = item.get("displayNames", [])
             for d in display_names:
-                _TAG_KEY_CACHE[d["name"].lower()] = key
+                # .get 으로 받는다 — KeyError 가 나면 except 가 삼켜 캐시가 절반만
+                # 채워진 상태로 남는다(_extract_tag_names 와 같은 방어 수준).
+                name = d.get("name")
+                if name:
+                    _TAG_KEY_CACHE[name.lower()] = key
             _TAG_KEY_CACHE[key.lower()] = key
         result = _TAG_KEY_CACHE.get(tag_name.lower())
         if result:
             return result
-    except Exception:
-        pass
-    return tag_name.lower().replace(" ", "_")
+    except Exception as e:
+        logger.warning("solved.ac 태그 목록 조회 실패 (%s): %s", tag_name, e)
+    # 폴백도 캐시한다 — 캐시하지 않으면 목록에 없는 태그가 호출마다 전체 태그 목록을
+    # 다시 내려받는다(취약 태그 순회에서 최악 3회 풀 페치).
+    fallback = tag_name.lower().replace(" ", "_")
+    _TAG_KEY_CACHE[tag_name.lower()] = fallback
+    return fallback
 
 
 class BojCrawlError(Exception):
@@ -300,8 +324,8 @@ def get_submission_code(submission_id: int, session_cookie: str) -> str | None:
             el = soup.select_one(sel)
             if el:
                 return el.get_text()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("BOJ 제출 코드 조회 실패 (submission_id=%s): %s", submission_id, e)
     return None
 
 

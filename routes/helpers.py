@@ -72,7 +72,7 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     description 이 비어 있으면 플랫폼별 문제 본문을 자동 수집한다 — LLM 이 아니라 스크래핑이라
     리뷰 없이 올리는 경로에서도 그대로 동작한다.
 
-    require_sections: 스크래핑 실패(None) 시 502로 막을지 여부. 기존 문서를 덮어쓰는 갱신
+    require_sections: 스크래핑 실패 시 502로 막을지 여부. 기존 문서를 덮어쓰는 갱신
     경로(재리뷰·재푸시)는 본문 없이 재생성하면 이미 올라간 문제 설명을 지우므로 True(기본값)로
     막는다. 아직 문서가 없는 최초 등록 경로(리뷰 없이 등록)는 지울 기존 문서가 없으므로
     False 로 넘겨 스크래핑 실패에도 등록이 진행되게 한다.
@@ -90,10 +90,12 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
             sections = api_client.get_boj_problem_sections(boj_problem_id)
         else:
             sections = api_client.get_cf_problem_sections(problem_ref)
-        if sections is None:
+        if not sections or not any(sections.values()):
             if require_sections:
-                # 스크래핑 실패(None)를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해
+                # 스크래핑 실패를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해
                 # 이미 잘 올라가 있던 문제 설명을 지워버린다 — push 자체를 중단해 유지한다.
+                # None 뿐 아니라 "200 인데 본문이 비었다"도 막는다(수집기가 실패를 어떻게
+                # 표현하든 결과가 같아야 한다).
                 raise HTTPException(status_code=502, detail="문제 본문을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
             # 최초 등록 경로: 지킬 기존 문서가 없으므로 본문 없이 진행한다.
             sections = {}
@@ -134,6 +136,12 @@ def _submitted_at_str(submitted_at: str) -> str:
 
 
 def _format_kst(moment: datetime) -> str:
+    """KST 로 변환해 표기한다. tz 가 없는 값은 UTC 로 간주한다 —
+    db.save_review 가 datetime.now().isoformat() 을 저장하고 Cloud Run 컨테이너는 UTC 라,
+    변환하지 않으면 최초 push(KST)와 재푸시(UTC)의 '제출 일자'가 9시간 어긋난다."""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    moment = moment.astimezone(KST)
     return f"{moment.year}년 {moment.month}월 {moment.day}일 {moment.strftime('%H:%M:%S')}"
 
 

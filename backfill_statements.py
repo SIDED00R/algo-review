@@ -26,12 +26,13 @@ from bs4 import BeautifulSoup
 
 import clients as api_client
 import db
+from config import Settings
 from routes.problem_resolve import is_scrape_failure
 
 # CF 는 공격적인 스크래핑을 차단한다 — 문제 사이에 쉰다.
 CF_DELAY_SEC = 1.5
 # 이보다 짧으면 본문으로 보지 않는다. 실패 문자열은 is_scrape_failure 가 먼저 걸러내고,
-# 이 길이 검사는 헤더만 남은 빈 README 같은 잔여 케이스를 막는다.
+# 이 길이 검사는 본문이 한두 줄뿐인 README 같은 잔여 케이스를 막는다.
 MIN_STATEMENT_LEN = 40
 
 _SECTION_TO_LABEL = {"문제 설명": "문제", "입력": "입력", "출력": "출력"}
@@ -119,7 +120,23 @@ def fetch_cf_statement(problem: dict) -> tuple[str, str]:
     return scraped, "codeforces.com"
 
 
+def db_target_label() -> str:
+    """접속 대상 DB 를 비밀 없이 한 줄로 표기한다."""
+    from sqlalchemy.engine import make_url
+    try:
+        return make_url(Settings().sqlalchemy_url).render_as_string(hide_password=True)
+    except Exception as e:
+        return "DB 대상 판별 실패: " + str(e)
+
+
 def main() -> int:
+    # 출력에 em dash 등 cp949 로 인코딩할 수 없는 문자가 있다 — Windows 콘솔 기본
+    # 코드페이지에서 UnicodeEncodeError 로 스크립트가 중간에 죽는다.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--platform", choices=["boj", "codeforces"],
@@ -129,8 +146,14 @@ def main() -> int:
     parser.add_argument("--limit", type=int, help="처리할 문제 수 상한(시험 실행용)")
     args = parser.parse_args()
 
+    mode = "APPLY" if args.apply else "DRY-RUN"
+    # 접속 대상을 가장 먼저 찍는다 — config 의 env_file 은 CWD 상대 경로라, 리포 루트가 아닌
+    # 곳에서 돌리면 조용히 로컬 SQLite 로 붙는다. 그 DB 가 비어 있으면 "대상 0건" + exit 0
+    # 이 되어 실패가 성공처럼 보이고, 쿼리가 터져도 어디에 붙었는지 알 수 없다.
+    print("[" + mode + "] " + db_target_label())
+
     problems = db.get_problems_missing_statement(args.platform)
-    if args.limit:
+    if args.limit is not None:
         problems = problems[:args.limit]
     if not problems:
         print("문제 설명이 빈 기록이 없습니다.")
@@ -165,19 +188,26 @@ def main() -> int:
         platform, ref = problem["platform"], problem["problem_ref"]
         label = platform + "/" + ref
 
-        if platform == "boj":
-            if not (repo and token and readme_paths):
-                statement, source = "", "GitHub 미연결 또는 트리 조회 실패"
+        # 문제 하나의 실패로 전체가 죽으면 요약이 출력되지 않는다 — ref 형식이 깨진 행이나
+        # DB 예외가 그대로 올라올 수 있다. 문제 단위로 잡아 SKIP 사유로 집계한다.
+        try:
+            if platform == "boj":
+                if not (repo and token):
+                    statement, source = "", "GitHub 미연결"
+                elif not readme_paths:
+                    statement, source = "", "저장소에 BOJ README 가 없다"
+                else:
+                    statement, source = fetch_boj_statement(problem, repo, token, readme_paths)
             else:
-                statement, source = fetch_boj_statement(problem, repo, token, readme_paths)
-        else:
-            statement, source = fetch_cf_statement(problem)
-            time.sleep(CF_DELAY_SEC)
+                statement, source = fetch_cf_statement(problem)
+                time.sleep(CF_DELAY_SEC)
+        except Exception as e:
+            statement, source = "", "처리 중 예외: " + type(e).__name__
 
         # 실패 문자열을 저장하면 resolve_statement 가 그걸 무조건 우선하므로 그 문제의
         # 리뷰가 영구히 오염된다. 저장 직전에 한 번 더 막는다.
         if statement and (is_scrape_failure(statement) or len(statement) < MIN_STATEMENT_LEN):
-            source = "본문이 너무 짧거나 실패 문자열(" + str(len(statement)) + "자)"
+            source = "본문이 너무 짧거나 실패 문자열 (" + str(len(statement)) + "자)"
             statement = ""
 
         if not statement:

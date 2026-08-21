@@ -146,7 +146,10 @@ BOJ_ROOT_NAMES = {"백준", "boj", "BOJ", "baekjoon", "Baekjoon"}
 
 
 def fetch_repo_tree(repo: str, token: str | None = None) -> list[dict]:
-    """저장소 전체 트리를 한 번에 받는다(재귀). BaekjoonHub import 와 백필이 공유한다."""
+    """저장소 트리를 한 번에 받는다(재귀). BaekjoonHub import 와 백필이 공유한다.
+
+    GitHub 는 항목 10 만 개 / 7MB 를 넘기면 truncated=true 와 함께 트리를 자른다. 부분 결과를
+    성공으로 취급하면 가져오기·백필이 조용히 일부 문제를 누락하므로 예외로 드러낸다."""
     headers = {"Accept": "application/vnd.github.v3+json"}
     if token:
         headers["Authorization"] = f"token {token}"
@@ -154,14 +157,20 @@ def fetch_repo_tree(repo: str, token: str | None = None) -> list[dict]:
     url = f"https://api.github.com/repos/{repo}/git/trees/HEAD?recursive=1"
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
-    return resp.json().get("tree", [])
+    payload = resp.json()
+    tree = payload.get("tree", [])
+    if payload.get("truncated"):
+        raise ValueError(
+            f"저장소 트리가 잘렸습니다({len(tree)}개까지만 받음) — GitHub 재귀 조회 한도를 "
+            "넘는 저장소입니다. 결과가 일부만 나오므로 중단합니다.")
+    return tree
 
 
 def _leading_problem_number(folder: str) -> int | None:
     """폴더명 앞의 문제 번호를 뗀다. `1000. A＋B` 와 `1000번. A+B` 를 모두 받는다.
 
-    숫자 뒤가 `.` 또는 `번` 이어야 한다 — 그냥 앞자리만 보면 `3142` 가 `31429` 를,
-    `1183` 이 `11834` 를 잡는다.
+    숫자 뒤에 `.` 이 와야 하고 그 앞의 `번` 은 있어도 된다 — 경계를 요구하지 않으면
+    `3142` 가 `31429` 를, `1183` 이 `11834` 를 잡고 `2024 대회 후기` 가 2024번이 된다.
     """
     m = re.match(r"(\d+)(번)?\s*\.", folder.strip())
     return int(m.group(1)) if m else None

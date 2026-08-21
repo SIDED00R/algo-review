@@ -7,13 +7,14 @@ README 파서는 두 형식을 되읽는다 — 이 앱의 `build_readme` 가 �
 import pytest
 
 import backfill_statements as backfill
+import clients.github as github_client
 import db
 from clients.github import _leading_problem_number
 from routes.helpers import build_readme
 from routes.problem_resolve import is_scrape_failure
 
 # BaekjoonHub 는 폴더명의 공백을 U+2005(four-per-em space)로 바꾼다.
-NBSP = " "
+FOUR_PER_EM = " "
 
 
 def _baekjoonhub_readme(title, number, description):
@@ -91,9 +92,9 @@ def test_parse_readme_takes_only_present_sections():
 
 def test_leading_problem_number_accepts_both_folder_formats():
     """BaekjoonHub 는 `1182. 제목`, 이 앱은 `1182번. 제목` 으로 쓴다 — 둘 다 받아야 한다."""
-    assert _leading_problem_number("1182." + NBSP + "부분수열의" + NBSP + "합") == 1182
+    assert _leading_problem_number("1182." + FOUR_PER_EM + "부분수열의" + FOUR_PER_EM + "합") == 1182
     assert _leading_problem_number("1182번. 부분수열의 합") == 1182
-    assert _leading_problem_number("31429." + NBSP + "SUAPC") == 31429
+    assert _leading_problem_number("31429." + FOUR_PER_EM + "SUAPC") == 31429
 
 
 def test_leading_problem_number_requires_a_number_boundary():
@@ -110,7 +111,7 @@ def test_fetch_boj_statement_uses_tree_path(monkeypatch):
     """경로를 조립하지 않는다 — BaekjoonHub 는 공백을 U+2005 로, 특수문자를 전각으로 바꾸고
     `번` 을 붙이지 않으며, 티어 폴더도 DB 값과 다를 수 있다."""
     asked = []
-    bh_path = "백준/Silver/1182." + NBSP + "부분수열의" + NBSP + "합/README.md"
+    bh_path = "백준/Silver/1182." + FOUR_PER_EM + "부분수열의" + FOUR_PER_EM + "합/README.md"
 
     def fake_get(repo, path, token=None):
         asked.append((repo, path, token))
@@ -128,7 +129,7 @@ def test_fetch_boj_statement_uses_tree_path(monkeypatch):
 def test_fetch_boj_statement_tries_next_candidate_when_first_has_no_body(monkeypatch):
     """같은 문제에 폴더가 둘 있을 수 있다(앱이 올린 것 + BaekjoonHub 것) — 본문이 나오는 것을 쓴다."""
     empty = "백준/Unrated/1182번. 부분수열의 합/README.md"
-    good = "백준/Silver/1182." + NBSP + "부분수열의" + NBSP + "합/README.md"
+    good = "백준/Silver/1182." + FOUR_PER_EM + "부분수열의" + FOUR_PER_EM + "합/README.md"
 
     def fake_get(repo, path, token=None):
         if path == empty:
@@ -263,3 +264,64 @@ def test_resolve_statement_prefers_stored_body_over_scraping(monkeypatch):
                         lambda pid: pytest.fail("저장된 본문이 있으면 스크래핑하지 않는다"))
     stored = "【문제】\n두 정수 A와 B를 입력받아 A+B를 출력한다."
     assert problem_resolve.resolve_statement("boj", {"problem_ref": "1000"}, stored) == stored
+
+
+# ── 저장소 트리 조회 (#100 의 핵심 함수 — 예전에는 커버리지 0 이었다) ──
+
+def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
+    """트리 → {문제번호: [README 경로]} 변환. BaekjoonHub 폴더명 규칙을 실제로 통과시킨다.
+
+    폴더명을 조립해 맞히려 하면 실패한다 — BaekjoonHub 는 공백을 U+2005 로, 특수문자를
+    전각으로 바꾸고 `번` 을 붙이지 않으며, 티어 폴더도 저장 당시 값이라 DB 와 다를 수 있다.
+    예전 테스트는 이 dict 를 리터럴로 주입해서, 이 함수가 {} 를 돌려줘도 전부 초록이었다.
+    """
+    tree = [
+        # BaekjoonHub: `번` 없음 + U+2005 공백 + 전각 문자
+        {"type": "blob", "path": "백준/Silver/1182." + FOUR_PER_EM + "부분수열의 합/README.md"},
+        {"type": "blob", "path": "백준/Silver/1182." + FOUR_PER_EM + "부분수열의 합/solution.py"},
+        # 이 앱이 올린 폴더: `번.` 형태. 같은 문제에 폴더가 둘일 수 있다
+        {"type": "blob", "path": "백준/Gold/1182번. 부분수열의 합/README.md"},
+        # 영문 루트도 받는다
+        {"type": "blob", "path": "boj/Bronze/1000. A＋B/README.md"},
+        # 번호 경계 — `.` 이 없으면 문제 폴더가 아니다
+        {"type": "blob", "path": "백준/Gold/2024 대회 후기/README.md"},
+        # 깊이가 4 가 아닌 항목은 제외
+        {"type": "blob", "path": "백준/Gold/9999. 제목/sub/README.md"},
+        {"type": "blob", "path": "백준/README.md"},
+        # BOJ 루트가 아닌 것은 제외
+        {"type": "blob", "path": "Codeforces/Div2/4A. Watermelon/README.md"},
+        # blob 이 아닌 항목은 제외
+        {"type": "tree", "path": "백준/Gold/8888. 제목/README.md"},
+    ]
+    monkeypatch.setattr(github_client, "fetch_repo_tree", lambda repo, token=None: tree)
+
+    paths = github_client.get_boj_readme_paths("me/solutions", "tok")
+
+    assert sorted(paths) == [1000, 1182]
+    assert len(paths[1182]) == 2  # 두 폴더 모두 후보로 돌려준다
+    assert all(p.endswith("README.md") for refs in paths.values() for p in refs)
+    assert 2024 not in paths   # `2024 대회 후기`
+    assert 9999 not in paths   # 깊이 5
+    assert 8888 not in paths   # tree
+    assert 4 not in paths      # Codeforces
+
+
+def test_truncated_tree_raises_instead_of_returning_partial_results():
+    """GitHub 가 트리를 자르면(truncated) 부분 결과를 성공으로 취급하면 안 된다 —
+    가져오기·백필이 조용히 일부 문제를 누락한다."""
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"tree": [{"type": "blob", "path": "백준/Gold/1000. A+B/README.md"}],
+                    "truncated": True}
+
+    import clients.github as gh
+    original = gh.requests.get
+    gh.requests.get = lambda *a, **k: _Resp()
+    try:
+        with pytest.raises(ValueError, match="잘렸"):
+            gh.fetch_repo_tree("me/solutions", "tok")
+    finally:
+        gh.requests.get = original

@@ -20,11 +20,32 @@ from db.connection import dispose_engine, session_scope
 _TABLES = ["reviews", "tag_stats", "solved_history", "github_settings", "api_cache"]
 _IS_POSTGRES = os.environ.get("DB_TYPE", "sqlite").lower() == "postgres"
 
+# IS_DEMO 는 모듈 import 시점에 한 번 결정된다 — 환경에 DEMO_MODE=true 가 있으면
+# 비-데모를 전제한 테스트들이 조기 반환에 걸려 원인 불명으로 깨진다(배포 워크플로가
+# 데모 서비스에 그 값을 넣으므로 로컬 .env 로 흘러들어올 수 있다).
+# 전제를 코드에 못박고, 데모 동작을 검증하는 테스트는 각자 True 로 되돌린다.
+_DEMO_AWARE_MODULES = [
+    "routes.auth", "routes.execute", "routes.github_push", "routes.import_boj",
+    "routes.import_codeforces", "routes.import_github", "routes.pending_review",
+    "routes.problem", "routes.recommend", "routes.report", "routes.rereview",
+    "routes.review", "routes.solved", "routes.themes",
+]
+
 
 def _truncate_all():
     with session_scope(commit=True) as session:
         for table in _TABLES:
             session.execute(text(f"DELETE FROM {table}"))
+
+
+@pytest.fixture(autouse=True)
+def not_demo(monkeypatch):
+    """모든 테스트는 비-데모를 전제한다. 데모 경로를 보는 테스트는 스스로 True 로 되돌린다."""
+    import importlib
+    for name in _DEMO_AWARE_MODULES:
+        module = importlib.import_module(name)
+        if hasattr(module, "IS_DEMO"):
+            monkeypatch.setattr(module, "IS_DEMO", False)
 
 
 @pytest.fixture(autouse=True)

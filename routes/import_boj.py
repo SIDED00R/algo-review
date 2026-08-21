@@ -58,10 +58,10 @@ def import_history(req: ImportRequest):
             if github_push_enabled and code:
                 ext = api_client._get_file_extension(sub.get("language", ""))
                 folder, msg = build_solution_target("boj", problem_id, info["title"], info.get("tier_name", ""))
-                boj_url = f"https://www.acmicpc.net/problem/{problem_id}"
                 readme = build_readme(str(problem_id), info["title"],
                                       info.get("tier_name", ""), info.get("tags", []),
-                                      sub.get("language", ""), boj_url)
+                                      sub.get("language", ""),
+                                      api_client.get_problem_url("boj", problem_id))
                 if push_solution(github_repo, github_token, folder,
                                  str(problem_id), ext, code, readme, msg):
                     github_pushed += 1
