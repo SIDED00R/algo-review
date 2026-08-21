@@ -249,6 +249,13 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | ARIA 선언 vs 동작 | `role="tablist"` 를 선언하면 보조기술 사용자는 화살표 키 이동을 기대한다. 선언만 있고 동작이 없으면 없는 것보다 나쁘다 | 화살표·Home·End + roving tabindex 를 `tabs.js` 에 둔다. 마크업의 초기 `tabindex` 도 맞춘다(JS 실행 전 상태) |
 | 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달 셋 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |
 | 문자열 수준 테스트 | 빌드 스텝이 없어 JS/CSS 배선은 문자열 검사가 유일한 방어선이다. 정확 문자열은 공백·인용부호에 깨지고, 느슨한 부분문자열은 `ArrowRightX` 같은 오타를 통과시킨다. **결함을 설명하는 주석에 그 결함의 코드 형태가 적혀 있어** 거짓 빨강도 난다 | 정규식으로 쓰고, 규칙을 찾는 검사는 주석을 제거한 사본을 본다(`tests/test_frontend_invariants.py`) |
+| CSS 형제 결합자 | 인접(`+`)은 DOM 구조 기준이라 `display:none` 형제도 인접을 끊는다 — 가져오기 목록은 행마다 코드 패널 div 를 형제로 끼워 넣어 그 탭에서만 구분선이 2px 로 겹쳤다 | 목록 행에는 일반 형제(`~`)를 쓴다. `.row:first-child` → `.row + .row` → `.row ~ .row` 로 **같은 결함을 두 번 겪었다** |
+| 오버레이 높이 | 모달 박스에 `max-height` 가 없으면 콘텐츠만큼 자라서 내부 `overflow-y:auto` 와 `overflow:hidden` 이 전부 무효가 되고(`scrollHeight == clientHeight`) 헤더가 화면 밖으로 나간다. 긴 CF 문제문에서 10,000px 이상 실측 | `.pm-box` 에 상한을 두고 자식은 `min-height:0` 만 갖는다. 자식에 상한을 나눠 주면 헤더 높이를 매직넘버로 빼야 한다 |
+| role="button" 안의 링크 | 행 전체를 버튼으로 만들면 `keydown` 의 `preventDefault` 가 자식 앵커의 기본 활성화까지 취소한다 — 마우스는 `stopPropagation` 으로 막혀 정상인데 **키보드만 링크가 죽는다**(WCAG 2.1.1) | `makeRowActivatable` 이 click·keydown 양쪽에서 `e.target.closest('a, button')` 을 걸러낸다 |
+| 늦은 응답 경쟁 | `/api/problem/cf/{ref}` 는 스크래핑 + 섹션 4개 번역이라 수 초~십수 초다. A 를 열고 닫은 뒤 B 를 열면 A 의 응답이 B 의 제목·본문·samples·sections 를 덮어, 예제 실행이 B 에 A 의 예제를 돌리고 push 가 B 의 ref 와 A 의 sections 를 함께 보낸다 | `await` 직후 `if (_currentProblem?.ref !== ref) return;`. 예제 실행은 같은 목적으로 세대 토큰(`_runToken`)을 쓴다 |
+| JS 구문 게이트 | `node --check static/js/*.js` 는 **첫 파일만** 검사한다 — Node 는 스크립트를 하나만 받고 나머지 위치 인자는 `argv` 가 된다. 20개 중 1개만 보호되고 있었다 | `scripts/check_js.sh` 가 파일별로 돌린다. 중복 선언 검사는 렉시컬 선언(`let`/`const`/`class`)만 본다 — `var`/`function` 재선언은 합법이라 게이트에 넣으면 거짓 빨강이 난다 |
+| 환경변수 필터 검증 | import 시점 상수로 두면 그 필터를 실효 검증할 수 없다 — 테스트가 센티넬을 심어도 이미 만들어진 dict 에는 반영되지 않아, 필터를 통째로 지워도 스위트가 초록이었다(변이로 확인) | `safe_env()` 가 호출 시점에 필터한다. 회귀 테스트가 실제 센티넬을 심어 5개 키를 각각 검증 |
+| 파이썬 테스트는 JS 를 파싱하지 않는다 | 스크립트로 JS 를 편집하다 개행 이스케이프가 실제 개행으로 치환되면 문자열이 끊겨 **그 파일 전체가 SyntaxError** 가 되고, 전역 스코프를 공유하므로 해당 기능이 통째로 사라진다. pytest 는 이걸 못 잡는다 | CI 의 node 게이트(`scripts/check_js.sh`) 또는 헤드리스 브라우저 실측이 유일한 방어선이다. 파이썬으로 JS 렉서를 흉내 내는 검사는 정규식 리터럴에 걸려 거짓 빨강이 난다 — 시도했다가 되돌렸다 |
 
 ---
 

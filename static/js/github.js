@@ -10,8 +10,10 @@ async function loadGithubStatus() {
   const statusBadge = document.getElementById('github-status-badge');
   const connectInner = document.getElementById('github-connect-inner');
   try {
-    const res = await fetch('/auth/github/status');
-    const data = await res.json();
+    // fetchJsonOk 를 쓴다 — res.ok 를 안 보면 503(온디맨드 DB 정지)의 {"detail":...} 에서
+    // data.connected 가 undefined 가 되어 "연결 해제" 로 보인다. 사용자는 연결이 끊긴 줄
+    // 알고 재연결을 시도한다.
+    const data = await fetchJsonOk('/auth/github/status', undefined, 'GitHub 상태 조회 실패');
     const usernameBadge = document.getElementById('github-username-badge');
     const repoSelect = document.getElementById('github-repo-select');
 
@@ -83,7 +85,13 @@ document.getElementById('github-connect-btn')?.addEventListener('click', () => {
 
 document.getElementById('github-disconnect-btn')?.addEventListener('click', async () => {
   if (!confirm('GitHub 연결을 해제하시겠습니까?')) return;
-  await fetch('/auth/github', { method: 'DELETE' });
+  try {
+    await fetchJsonOk('/auth/github', { method: 'DELETE' }, '연결 해제 실패');
+  } catch (e) {
+    const msg = document.getElementById('github-repo-msg');
+    if (msg) { msg.textContent = e.message; msg.className = 'action-msg bad'; }
+    return;   // 실패했는데 새로고침하면 해제된 것처럼 보인다
+  }
   location.reload();
 });
 

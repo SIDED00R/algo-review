@@ -7,7 +7,12 @@ CWD 상대 경로다). 운영은 .dockerignore + non-root 로 막히지만, 문�
 """
 import os
 
-from routes.execute import _BASE_ENV, _run_python
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from routes import execute as execute_route
+from routes.execute import _run_python, safe_env
 
 
 def test_submitted_code_cannot_import_project_modules():
@@ -25,14 +30,30 @@ def test_submitted_code_does_not_run_in_the_repo_directory():
     assert os.path.abspath(r["stdout"].strip()) != os.path.abspath(os.getcwd())
 
 
-def test_environment_is_filtered_to_safe_keys():
-    r = _run_python("import os; print(sorted(os.environ))", "", 5)
+@pytest.mark.parametrize("key", ["OPENAI_API_KEY", "DB_PASSWORD", "GITHUB_CLIENT_SECRET",
+                                 "CODEFORCES_API_SECRET", "CODEFORCES_PASSWORD"])
+def test_secret_environment_variables_do_not_reach_the_subprocess(monkeypatch, key):
+    """실제로 심은 센티넬이 새지 않는지 본다.
+
+    예전 버전은 "이 키들이 stdout 에 없다" 만 단정했는데, 로컬·CI 환경에 그 키가 애초에
+    없어서(pydantic-settings 는 .env 를 파일에서 읽고 os.environ 에 넣지 않는다) 필터를
+    통째로 지워도 통과했다 — 변이로 확인한 거짓 초록이다. 이제 센티넬을 심고,
+    safe_env() 가 호출 시점에 필터하므로 그 값이 실제로 반영된다.
+    """
+    monkeypatch.setenv(key, "sentinel-must-not-leak")
+
+    assert key not in safe_env()   # 필터 자체
+    r = _run_python(f"import os; print(os.environ.get({key!r}, ''))", "", 5)
 
     assert r["exit_code"] == 0
-    for leaked in ("OPENAI_API_KEY", "DB_PASSWORD", "GITHUB_CLIENT_SECRET",
-                   "CODEFORCES_API_SECRET"):
-        assert leaked not in r["stdout"]
-    assert "OPENAI_API_KEY" not in _BASE_ENV
+    assert "sentinel-must-not-leak" not in r["stdout"]
+
+
+def test_safe_keys_do_reach_the_subprocess(monkeypatch):
+    """필터가 과하면 정상 실행이 깨진다 — 허용 키는 통과해야 한다."""
+    monkeypatch.setenv("LANG", "ko_KR.UTF-8")
+
+    assert safe_env().get("LANG") == "ko_KR.UTF-8"
 
 
 def test_normal_code_still_runs():
@@ -51,12 +72,6 @@ def test_normal_code_still_runs():
 #   ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 액세스 토큰
 #   ② /proc/1/environ → 앱 프로세스의 환경변수 전체
 # 그래서 엔드포인트 자체를 기본 비활성으로 둔다.
-
-import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
-from routes import execute as execute_route
 
 _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
 
