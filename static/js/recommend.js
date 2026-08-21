@@ -37,22 +37,22 @@ function renderRecommend(container, data) {
     <div class="result-card">
       <div class="summary-grid">
         <div class="summary-item">
-          <div class="summary-label">현재 평균 레벨 <span style="font-size:.75rem;color:var(--text-muted)">(최근 30개)</span></div>
+          <div class="summary-label">현재 평균 레벨 (최근 30개)</div>
           <div class="summary-value">${tierBadgeHtml(tc, escapeHtml(data.tier_name))}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">추천 난이도 범위</div>
-          <div class="summary-value" style="font-size:.9rem">${escapeHtml(data.tier_range || '-')}</div>
+          <div class="summary-value summary-value-sm">${escapeHtml(data.tier_range || '-')}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">취약 태그</div>
-          <div class="summary-value" style="font-size:.82rem">${escapeHtml((data.weak_tags || []).join(', '))}</div>
+          <div class="summary-value summary-value-sm">${escapeHtml((data.weak_tags || []).join(', '))}</div>
         </div>
       </div>
   `;
 
   for (const rec of data.recommendations) {
-    html += `<div class="rec-tag-title">📌 ${escapeHtml(rec.tag)}</div><div class="rec-problems">`;
+    html += `<div class="rec-tag-title">${escapeHtml(rec.tag)}</div><div class="rec-problems">`;
     for (const p of rec.problems) {
       const ptc = tierClass(p.tier);
       const isCF = p.url && p.url.includes('codeforces');
@@ -76,8 +76,8 @@ function renderRecommend(container, data) {
     html += `</div>`;
   }
   html += `</div>
-    <div style="text-align:center;margin-top:1.2rem">
-      <button id="recommend-reset-btn" class="btn-secondary">🔄 다른 목록 추천받기</button>
+    <div class="action-row action-row-center">
+      <button id="recommend-reset-btn" class="btn-secondary">다른 목록 추천받기</button>
     </div>`;
   container.innerHTML = html;
 

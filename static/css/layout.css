@@ -1,0 +1,130 @@
+/* ── 레이아웃 ──
+   예전에는 탭 7개가 전부 `.card > h2 + p.desc + .form-row* + button` 이라는
+   같은 리듬이었다. 컨테이너 폭을 콘텐츠 성격별로 나누고, 작업 화면(코드 리뷰)과
+   조회 화면(기록·통계)에 서로 다른 구조를 준다. */
+
+/* ═══ 헤더 ═══ */
+header {
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0;
+  z-index: var(--z-header);
+}
+.header-inner {
+  max-width: var(--w-list); margin: 0 auto;
+  display: flex; align-items: center; gap: var(--s-4);
+  padding: 0 var(--s-5); height: 52px;
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: .12em;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+#main-nav {
+  display: flex; gap: var(--s-1); flex: 1;
+  overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+}
+#main-nav::-webkit-scrollbar { display: none; }
+
+/* 활성 탭은 배경 틴트가 아니라 2px 하단 룰로 표시한다 */
+.tab-btn {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--fg-dim); font-family: inherit;
+  padding: var(--s-2) var(--s-3); cursor: pointer;
+  font-size: var(--fs-sm); white-space: nowrap; flex-shrink: 0;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.tab-btn:hover { color: var(--fg); }
+.tab-btn.active { color: var(--fg); border-bottom-color: var(--fg); }
+
+.header-actions { display: flex; align-items: center; gap: var(--s-2);
+  flex-shrink: 0; margin-left: auto; }
+
+/* 햄버거 */
+.menu-btn {
+  display: none; flex-direction: column; justify-content: center; gap: 4px;
+  background: transparent; border: 1px solid var(--line);
+  border-radius: var(--r); padding: var(--s-2); cursor: pointer;
+  width: 32px; height: 32px; flex-shrink: 0;
+}
+.menu-btn span {
+  display: block; height: 1.5px; background: var(--fg-muted); border-radius: 2px;
+  transition: transform var(--dur-slow) var(--ease), opacity var(--dur-slow) var(--ease);
+}
+.menu-btn.open span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.menu-btn.open span:nth-child(2) { opacity: 0; }
+.menu-btn.open span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+
+/* ═══ 본문 컨테이너 — 콘텐츠 성격별 3종 ═══ */
+main { padding: var(--s-6) var(--s-5) var(--s-8); }
+.tab-content { display: none; margin: 0 auto; }
+.tab-content.active { display: block; }
+
+.measure-work  { max-width: var(--w-work); }
+.measure-list  { max-width: var(--w-list); }
+.measure-prose { max-width: var(--w-prose); }
+
+/* ═══ 코드 리뷰 탭 — 작업 화면 ═══
+   카드 래퍼를 벗긴다. 탭 자체가 작업 표면이다. 예전에는 form-row 4개가
+   세로로 쌓여 에디터가 화면 아래로 밀려 있었다. */
+.work-head { margin-bottom: var(--s-5); }
+/* 작업 화면 제목은 조회 화면(.list-head h2)보다 한 단 크게 — 탭마다 같은 무게로
+   두면 "카드 7개가 같은 리듬" 문제가 그대로 남는다. */
+.work-head h2 { font-size: var(--fs-xl); margin-bottom: var(--s-1); }
+
+/* 문제 설명은 선택 입력이고 대부분 비어 있다 — 접어 둔다 */
+.statement-toggle { border: 1px solid var(--line); border-radius: var(--r);
+  padding: var(--s-3); margin-bottom: var(--s-4); }
+.statement-toggle > summary { font-size: var(--fs-sm); color: var(--fg-muted); }
+.statement-toggle[open] > summary { margin-bottom: var(--s-3); }
+
+/* ═══ 조회형 탭 ═══ */
+.list-head { display: flex; align-items: baseline; gap: var(--s-3);
+  flex-wrap: wrap; margin-bottom: var(--s-4); }
+.list-head:not(:first-child) { margin-top: var(--s-6); }
+.list-head h2 { margin: 0; }
+.list-head .desc { margin: 0; }
+
+.row-main { flex: 1; min-width: 0; }
+.row-title { font-weight: 500; font-size: var(--fs-md); margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-title a { text-decoration: none; }
+.row-meta { font-size: var(--fs-xs); color: var(--fg-dim); }
+.row-side { display: flex; align-items: center; gap: var(--s-3);
+  white-space: nowrap; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
+.row-dim { color: var(--fg-dim); }
+@media (max-width: 640px) {
+  .row { flex-wrap: wrap; gap: var(--s-2); }
+  .row-side { width: 100%; }
+}
+
+/* ═══ 모바일 ═══ */
+@media (max-width: 860px) {
+  .header-inner {
+    flex-wrap: wrap; height: auto;
+    padding: var(--s-2) var(--s-4); gap: var(--s-2);
+  }
+  .logo { flex: 1; }
+  .header-actions { margin-left: 0; }
+  .menu-btn { display: flex; }
+  #main-nav {
+    display: none; flex-direction: column; gap: 0;
+    width: 100%; order: 3; flex: none;
+    padding: var(--s-2) 0; border-top: 1px solid var(--line);
+  }
+  #main-nav.open { display: flex; }
+  .tab-btn {
+    text-align: left; padding: var(--s-3) var(--s-2);
+    font-size: var(--fs-md);
+    border-bottom: none; border-left: 2px solid transparent;
+  }
+  .tab-btn.active { border-bottom-color: transparent; border-left-color: var(--fg); }
+  main { padding: var(--s-5) var(--s-4) var(--s-7); }
+  .card, .result-card { padding: var(--s-4); }
+}

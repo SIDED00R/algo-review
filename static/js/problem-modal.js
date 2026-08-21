@@ -52,7 +52,7 @@ async function openProblemModal(ref, title, tierName) {
   _customCaseCount = 0;
   const _rb = document.getElementById('pm-review-btn');
   _rb.classList.add('hidden');
-  _rb.textContent = '코드 리뷰 진행 →';
+  _rb.textContent = '코드 리뷰 진행';
   _rb.title = '';
   window.setEditorValue('pm-code', '');
 
@@ -148,7 +148,7 @@ function addCustomCase() {
       </div>
     </div>
     <div class="pm-custom-case-footer">
-      <button class="pm-custom-delete-btn" onclick="removeCustomCase(${id})">삭제</button>
+      <button class="pm-custom-delete-btn" data-remove-case="${id}">삭제</button>
     </div>`;
   document.getElementById('pm-custom-cases').appendChild(el);
 }
@@ -201,7 +201,7 @@ async function runSamples() {
     const sample = allCases[i];
     const tcId = `tc-${i}`;
     const label = sample.isCustom ? `커스텀 ${i - builtinSamples.length + 1}` : `테스트 ${i + 1}`;
-    resultsEl.innerHTML += `<div class="test-case pending" id="${tcId}"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span> ${label} 실행 중...</div>`;
+    resultsEl.innerHTML += `<div class="test-case pending" id="${tcId}"><span class="spinner spinner-sm"></span> ${label} 실행 중...</div>`;
 
     try {
       const res = await fetch('/api/execute', {
@@ -225,27 +225,27 @@ async function runSamples() {
 
       document.getElementById(tcId).outerHTML = `
         <div class="test-case ${passed ? 'pass' : 'fail'}">
-          <span class="tc-badge">${passed ? '✅ 통과' : '❌ 실패'}</span>${label}
-          <span style="color:var(--text-muted);font-size:.78rem;margin-left:8px">${result.time_ms}ms</span>
+          <span class="tc-badge">${passed ? '통과' : '실패'}</span>${label}
+          <span class="tc-time">${result.time_ms}ms</span>
           ${detailHtml}
         </div>`;
     } catch (e) {
       allPassed = false;
       document.getElementById(tcId).outerHTML =
-        `<div class="test-case fail"><span class="tc-badge">❌</span>${label} — 오류: ${escapeHtml(e.message)}</div>`;
+        `<div class="test-case fail"><span class="tc-badge">실패</span>${label} — 오류: ${escapeHtml(e.message)}</div>`;
     }
   }
 
   btn.disabled = false;
-  btn.textContent = '▶ 예제 실행';
+  btn.textContent = '예제 실행';
 
   const reviewBtn = document.getElementById('pm-review-btn');
   reviewBtn.classList.remove('hidden');
   if (allPassed) {
-    reviewBtn.textContent = '코드 리뷰 진행 →';
+    reviewBtn.textContent = '코드 리뷰 진행';
     reviewBtn.title = '';
   } else {
-    reviewBtn.textContent = '⚠️ 예제 실패 — 그래도 리뷰 진행';
+    reviewBtn.textContent = '예제 실패 — 그래도 리뷰 진행';
     reviewBtn.title = '일부 예제가 통과되지 않았습니다. 다중 정답 문제라면 진행해도 됩니다.';
   }
 }
@@ -275,3 +275,24 @@ function proceedToReview() {
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// ── 이벤트 배선 ──
+// 예전에는 index.html 에 onclick="runSamples()" 같은 인라인 핸들러가 남아 있었다.
+document.getElementById('pm-close-btn').addEventListener('click', closeProblemModal);
+document.getElementById('pm-run-btn').addEventListener('click', runSamples);
+document.getElementById('pm-review-btn').addEventListener('click', proceedToReview);
+document.getElementById('pm-custom-add-btn').addEventListener('click', addCustomCase);
+
+// 커스텀 예제는 동적으로 늘어나므로 컨테이너에서 위임한다.
+document.getElementById('pm-custom-cases').addEventListener('click', e => {
+  const id = e.target.dataset?.removeCase;
+  if (id) removeCustomCase(id);
+});
+
+const problemModalEl = document.getElementById('problem-modal');
+problemModalEl.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeProblemModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !problemModalEl.classList.contains('hidden')) closeProblemModal();
+});

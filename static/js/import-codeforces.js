@@ -30,16 +30,16 @@ cfImportBtn.addEventListener('click', async () => {
     }, '가져오기 실패');
 
     const sourceMsg = data.has_source
-      ? '<br><span style="color:var(--text-muted);font-size:.82rem">소스 코드 포함 항목이 있어 AI 리뷰까지 바로 이어갈 수 있습니다.</span>'
-      : '<br><span style="color:var(--text-muted);font-size:.82rem">현재는 코드 없이 기록만 가져왔습니다. API Key/Secret을 넣으면 본인 계정 소스 코드도 함께 가져올 수 있습니다.</span>';
+      ? '<br><span class="hint">소스 코드 포함 항목이 있어 AI 리뷰까지 바로 이어갈 수 있습니다.</span>'
+      : '<br><span class="hint">현재는 코드 없이 기록만 가져왔습니다. API Key/Secret을 넣으면 본인 계정 소스 코드도 함께 가져올 수 있습니다.</span>';
 
     const githubMsg = (data.github_pushed > 0)
-      ? `<br><span style="color:var(--green);font-size:.82rem">🐙 GitHub <b>${escapeHtml(data.github_repo)}</b>에 <b>${data.github_pushed}</b>개 push 완료 (Codeforces/ 폴더)</span>`
+      ? `<br><span class="hint-ok">GitHub <b>${escapeHtml(data.github_repo)}</b>에 <b>${data.github_pushed}</b>개 push 완료 (Codeforces/ 폴더)</span>`
       : '';
 
     result.innerHTML = `
-      <div class="alert alert-info" style="color:var(--green)">
-        ✅ 완료! <b>${escapeHtml(data.handle)}</b>의 Codeforces 기록 <b>${data.total_found}</b>개 확인 →
+      <div class="alert alert-ok">
+        완료! <b>${escapeHtml(data.handle)}</b>의 Codeforces 기록 <b>${data.total_found}</b>개 확인 →
         <b>${data.imported}</b>개 새로 저장, <b>${data.skipped}</b>개 이미 있음
         ${sourceMsg}${githubMsg}
       </div>`;

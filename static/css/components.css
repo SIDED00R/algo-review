@@ -1,0 +1,427 @@
+/* ── 컴포넌트 ──
+   예전에 없던 사이즈·의미 변형(작은 primary 버튼, 작은 스피너, 성공 알림,
+   JS 생성 폼 컨트롤)을 여기서 정식화한다. 그것들이 없어서 인라인 style 이
+   117건까지 늘어났다. */
+
+/* ═══ 버튼 ═══ */
+.btn-primary, .btn-secondary, .btn-sm, .btn-toggle, .theme-chip, .page-btn,
+.pm-custom-add-btn, .pm-custom-delete-btn, .github-disconnect-btn {
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+}
+
+/* primary = 잉크 반전. 색이 아니라 대비로 서므로 두 테마에서 AA 를 넘긴다. */
+.btn-primary {
+  background: var(--ink);
+  color: var(--ink-fg);
+  border: 1px solid var(--ink);
+  padding: var(--s-2) var(--s-5);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) { background: var(--fg-muted); border-color: var(--fg-muted); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  padding: var(--s-2) var(--s-4);
+  font-size: var(--fs-sm);
+}
+.btn-secondary:hover:not(:disabled) { border-color: var(--fg); background: var(--surface-2); }
+
+/* 작은 변형 — 예전에는 이 조합을 인라인 style 로 매번 손으로 만들었다 */
+.btn-sm { padding: var(--s-1) var(--s-3); font-size: var(--fs-sm); border: 1px solid transparent; }
+.btn-primary.btn-sm { padding: var(--s-1) var(--s-3); font-size: var(--fs-sm); }
+.btn-code { background: var(--surface-2); color: var(--fg); border-color: var(--line); }
+.btn-code:hover:not(:disabled) { border-color: var(--fg); }
+/* 목록 행마다 반복되므로 잉크로 채우지 않는다 — 테두리 강조로만 무게를 준다 */
+.btn-ai { background: transparent; color: var(--fg); border-color: var(--line-strong); }
+.btn-ai:hover:not(:disabled) { border-color: var(--fg); background: var(--surface-2); }
+.btn-review { background: var(--ink); color: var(--ink-fg); border-color: var(--ink); }
+.btn-review:hover:not(:disabled) { background: var(--fg-muted); border-color: var(--fg-muted); }
+
+/* 비활성 — opacity 로 흐리면 대비가 1.5~2:1 로 붕괴한다. 토큰으로 표현한다. */
+.btn-primary:disabled, .btn-secondary:disabled, .btn-sm:disabled,
+.page-btn[disabled] {
+  background: var(--surface-2);
+  color: var(--fg-dim);
+  border-color: var(--line);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* 아이콘 버튼 — 예전에는 36/38/32px 세 크기가 섞여 있었다 */
+.github-icon-btn, .theme-btn, .modal-close, .pm-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: transparent; color: var(--fg-muted);
+  border: 1px solid var(--line); border-radius: var(--r);
+  cursor: pointer; padding: 0;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.github-icon-btn:hover, .theme-btn:hover,
+.modal-close:hover, .pm-close:hover { color: var(--fg); border-color: var(--line-strong); }
+.github-icon-btn svg, .theme-btn svg,
+.modal-close svg, .pm-close svg { width: 16px; height: 16px; display: block; }
+.github-icon-btn.connected { border-color: var(--eff-good-fg); }
+
+/* 칩 — 예전 .btn-toggle 과 .theme-chip 은 padding 만 다른 중복이었다 */
+.btn-toggle, .theme-chip {
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--fs-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-muted);
+  border-radius: var(--r-pill);
+}
+.btn-toggle:hover:not(.active), .theme-chip:hover:not(.active) {
+  color: var(--fg); border-color: var(--line-strong);
+}
+.btn-toggle.active, .theme-chip.active {
+  background: var(--ink); color: var(--ink-fg); border-color: var(--ink);
+}
+
+/* 페이지네이션 */
+.page-btn {
+  padding: var(--s-1) var(--s-2); font-size: var(--fs-xs);
+  border: 1px solid var(--line); background: transparent; color: var(--fg-muted);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.page-btn:hover:not([disabled]):not(.active) { color: var(--fg); border-color: var(--line-strong); }
+.page-btn.active { background: var(--ink); color: var(--ink-fg); border-color: var(--ink); }
+.page-ellipsis { color: var(--fg-dim); font-size: var(--fs-xs); line-height: 2; }
+
+/* ═══ 폼 ═══ */
+.form-row { margin-bottom: var(--s-4); }
+.form-row label, label.label { display: block; font-size: var(--fs-label); font-weight: 600;
+  letter-spacing: .02em; color: var(--fg-dim); margin-bottom: var(--s-1); }
+
+/* 라벨 줄에 액션을 함께 두는 머리 행 */
+.field-head { display: flex; align-items: center; gap: var(--s-2);
+  flex-wrap: wrap; margin-bottom: var(--s-1); }
+.field-head > label, .field-head > .label { margin-bottom: 0; }
+
+/* 한 줄 다중 필드 */
+.field-row { display: grid; gap: var(--s-3); margin-bottom: var(--s-4); }
+@media (min-width: 720px) {
+  .field-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .field-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 요소 선택자와 클래스를 둘 다 준다 — JS 가 만드는 컨트롤은 클래스를 붙여
+   인라인으로 스타일을 재구현하지 않아도 되게 한다(예전 history.js 는 같은
+   선언을 네 번 복붙했다). */
+input[type="text"], input[type="password"], textarea, select, .input, .select {
+  width: 100%;
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  color: var(--fg);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-md);
+  font-family: inherit;
+  transition: border-color var(--dur) var(--ease);
+}
+input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:focus,
+.input:focus, .select:focus { border-color: var(--fg); }
+select, .select { cursor: pointer; }
+textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-sm); }
+::placeholder { color: var(--fg-dim); }
+
+/* ═══ 표면 ═══ */
+/* 예전 .card 와 .result-card 는 선언이 완전히 같은 중복이었다. 그림자는 없앴다 —
+   경계선과 표면 단계로만 구분한다. */
+.card, .result-card {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s-5);
+  margin-bottom: var(--s-4);
+}
+.card > h2, .result-card > h2 { margin-bottom: var(--s-1); }
+.card .desc { margin-bottom: var(--s-4); }
+
+/* 목록 행 — 조회형 탭의 밀도를 올린다. 개별 박스 대신 헤어라인 구분. */
+.row {
+  display: flex; align-items: center; gap: var(--s-4);
+  padding: var(--s-3) var(--s-2);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.row:hover { background: var(--surface-2); }
+.row:first-child { border-top: 1px solid var(--line); }
+
+.toolbar { display: flex; gap: var(--s-2); flex-wrap: wrap;
+  align-items: center; margin-bottom: var(--s-3); }
+/* 툴바 안의 필터 컨트롤 — 예전에는 JS 가 같은 인라인 선언을 네 번 복붙했다 */
+.toolbar .filter-grow { flex: 1; min-width: 160px; width: auto; }
+.toolbar .filter-fixed { flex: 0 0 auto; width: auto; font-size: var(--fs-sm); }
+
+/* ═══ 제출 원장 ═══
+   이 앱의 고유 자산은 회차 이력이다. 모노 원장 한 줄로 표현하고
+   기록 모달·불러오기·팔레트가 같은 컴포넌트를 쓴다. */
+.ledger { display: flex; flex-direction: column; margin-bottom: var(--s-4); }
+.ledger-row {
+  display: grid;
+  grid-template-columns: 3.5rem 5rem 1fr auto;
+  gap: var(--s-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.ledger-row:hover { background: var(--surface-2); color: var(--fg); }
+.ledger-row.active {
+  background: var(--surface-2);
+  color: var(--fg);
+  border-color: var(--line-strong);
+  border-radius: var(--r);
+}
+.ledger-seq { color: var(--fg); font-weight: 500; }
+.ledger-meta { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .ledger-row { grid-template-columns: 3rem 1fr auto; }
+  .ledger-row .ledger-meta { display: none; }
+}
+
+/* ═══ 배지 ═══
+   .tier-* / .cf-* / .eff-* 는 데이터 색 변수만 참조한다. 예전처럼 다크 기준
+   rgba 를 박고 라이트에서 color 만 덮는 방식이 아니다. */
+.tier-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  padding: 1px var(--s-2);
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.tier-bronze   { color: var(--tier-bronze-fg);   background: var(--tier-bronze-bg);   border-color: var(--tier-bronze-line); }
+.tier-silver   { color: var(--tier-silver-fg);   background: var(--tier-silver-bg);   border-color: var(--tier-silver-line); }
+.tier-gold     { color: var(--tier-gold-fg);     background: var(--tier-gold-bg);     border-color: var(--tier-gold-line); }
+.tier-platinum { color: var(--tier-platinum-fg); background: var(--tier-platinum-bg); border-color: var(--tier-platinum-line); }
+.tier-diamond  { color: var(--tier-diamond-fg);  background: var(--tier-diamond-bg);  border-color: var(--tier-diamond-line); }
+.tier-ruby     { color: var(--tier-ruby-fg);     background: var(--tier-ruby-bg);     border-color: var(--tier-ruby-line); }
+
+.cf-newbie           { color: var(--cf-newbie-fg);           background: var(--cf-newbie-bg);           border-color: var(--cf-newbie-line); }
+.cf-pupil            { color: var(--cf-pupil-fg);            background: var(--cf-pupil-bg);            border-color: var(--cf-pupil-line); }
+.cf-specialist       { color: var(--cf-specialist-fg);       background: var(--cf-specialist-bg);       border-color: var(--cf-specialist-line); }
+.cf-expert           { color: var(--cf-expert-fg);           background: var(--cf-expert-bg);           border-color: var(--cf-expert-line); }
+.cf-candidate-master { color: var(--cf-candidate-master-fg); background: var(--cf-candidate-master-bg); border-color: var(--cf-candidate-master-line); }
+.cf-master           { color: var(--cf-master-fg);           background: var(--cf-master-bg);           border-color: var(--cf-master-line); }
+.cf-grandmaster      { color: var(--cf-grandmaster-fg);      background: var(--cf-grandmaster-bg);      border-color: var(--cf-grandmaster-line); }
+
+/* 효율 판정은 텍스트에 얹히므로 전경색만 쓴다 */
+.eff-good    { color: var(--eff-good-fg); }
+.eff-ok      { color: var(--eff-ok-fg); }
+.eff-poor    { color: var(--eff-poor-fg); }
+.eff-pending { color: var(--fg-dim); }
+
+.tag-list { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-bottom: var(--s-4); }
+.tag {
+  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r);
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--fg-muted);
+}
+
+/* 소제목 — 예전에는 h3 마다 인라인으로 크기·색을 지정했다 */
+.section-title { font-size: var(--fs-sm); color: var(--fg-dim);
+  font-weight: 600; margin-bottom: var(--s-3); }
+.section-title-gap { margin-top: var(--s-5); }
+.section-title-flush { margin: 0; white-space: nowrap; }
+
+.hint-ok { font-size: var(--fs-xs); color: var(--eff-good-fg); }
+.hint-bad { font-size: var(--fs-xs); color: var(--eff-poor-fg); }
+.pad-y { padding: var(--s-2) 0; }
+.td-dim { color: var(--fg-dim); font-size: var(--fs-xs);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.pager { display: flex; gap: var(--s-1); justify-content: center;
+  flex-wrap: wrap; margin-top: var(--s-3); }
+.code-inline-view { margin: 0 0 var(--s-2); }
+.btn-danger { border-color: var(--eff-poor-line); color: var(--eff-poor-fg); }
+.btn-danger:hover:not(:disabled) { border-color: var(--eff-poor-fg);
+  background: var(--eff-poor-bg); color: var(--eff-poor-fg); }
+
+/* ═══ 알림 ═══ */
+.alert {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--s-4);
+}
+.alert-info  { border-color: var(--line-strong); color: var(--fg); }
+.alert-error { border-color: var(--eff-poor-line); background: var(--eff-poor-bg); color: var(--eff-poor-fg); }
+.alert-ok    { border-color: var(--eff-good-line); background: var(--eff-good-bg); color: var(--eff-good-fg); }
+
+/* ═══ 스피너 ═══ */
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--line-strong); border-top-color: currentColor;
+  border-radius: 50%; animation: spin .6s linear infinite;
+  vertical-align: -2px; margin-right: var(--s-2);
+}
+.spinner-sm { width: 11px; height: 11px; border-width: 1.5px; margin-right: var(--s-1); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══ 코드 ═══
+   예전에는 .code-block / .pm-pre / .tc-detail pre / .markdown-body pre 가
+   서로 다른 네 가지 스타일이었다. */
+.code-block, .pm-pre, .markdown-body pre, .tc-detail pre {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s-3);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  white-space: pre;
+  margin: 0;
+}
+.code-block { max-height: 420px; overflow-y: auto; }
+.code-section { margin-top: var(--s-4); }
+.tc-detail pre { white-space: pre-wrap; word-break: break-all; font-size: var(--fs-xs);
+  padding: var(--s-2); margin: 2px 0 var(--s-2); }
+
+/* ═══ 요약·강약점·피드백 ═══ */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s-3); margin-bottom: var(--s-4); }
+.summary-item { background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r); padding: var(--s-3); }
+.summary-label { font-size: var(--fs-label); color: var(--fg-dim);
+  font-weight: 600; letter-spacing: .02em; margin-bottom: 2px; }
+.summary-value { font-size: var(--fs-md); font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+.summary-value-sm { font-size: var(--fs-sm); font-weight: 500; }
+
+.points-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); margin-bottom: var(--s-4); }
+@media (max-width: 640px) { .points-grid { grid-template-columns: 1fr; } }
+.points-box { background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r); padding: var(--s-4); }
+.points-box h4 { margin-bottom: var(--s-2); }
+.points-box ul { padding-left: var(--s-4); }
+.points-box li { font-size: var(--fs-sm); margin-bottom: var(--s-1); color: var(--fg-muted); }
+.points-box.good h4 { color: var(--eff-good-fg); }
+.points-box.bad h4 { color: var(--eff-ok-fg); }
+
+.feedback-box { background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r); padding: var(--s-4); }
+.feedback-box h4 { color: var(--fg-dim); margin-bottom: var(--s-3);
+  font-size: var(--fs-label); letter-spacing: .02em; }
+
+.markdown-body { font-size: var(--fs-md); line-height: 1.7; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: var(--s-4) 0 var(--s-2); }
+.markdown-body p { margin-bottom: var(--s-2); }
+.markdown-body ul, .markdown-body ol { padding-left: var(--s-5); margin-bottom: var(--s-2); }
+.markdown-body li { margin-bottom: var(--s-1); }
+.markdown-body code { background: var(--surface-1); border: 1px solid var(--line);
+  padding: 0 var(--s-1); border-radius: var(--r); font-size: .9em; font-family: var(--font-mono); }
+.markdown-body pre { margin: var(--s-2) 0; background: var(--surface-1); }
+.markdown-body pre code { background: none; border: none; padding: 0; }
+.markdown-body strong { color: var(--fg); font-weight: 600; }
+
+/* ═══ 통계 ═══ */
+.stat-bar-row { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-2); }
+.stat-tag-name { width: 140px; font-size: var(--fs-sm); color: var(--fg-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-bar-wrap { flex: 1; background: var(--surface-2); border-radius: var(--r-pill);
+  height: 6px; overflow: hidden; }
+.stat-bar { height: 100%; border-radius: var(--r-pill); transition: width var(--dur-slow) var(--ease); }
+.stat-counts { font-size: var(--fs-xs); color: var(--fg-dim); white-space: nowrap;
+  min-width: 80px; text-align: right; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .stat-tag-name { width: 88px; } }
+
+.chart-frame { position: relative; height: 280px; }
+.empty-note { text-align: center; color: var(--fg-dim); padding: var(--s-7) 0; font-size: var(--fs-sm); }
+
+.history-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.history-table th { text-align: left; padding: var(--s-2); color: var(--fg-dim);
+  font-weight: 600; font-size: var(--fs-label); letter-spacing: .02em;
+  border-bottom: 1px solid var(--line); }
+.history-table td { padding: var(--s-2); border-bottom: 1px solid var(--line); }
+.history-table tr:last-child td { border-bottom: none; }
+.history-table a { color: var(--fg); text-decoration: underline;
+  text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.history-table a:hover { text-decoration-color: var(--fg); }
+
+/* ═══ 추천 ═══ */
+.rec-tag-title { font-size: var(--fs-label); font-weight: 600; color: var(--fg-dim);
+  letter-spacing: .02em; margin: var(--s-5) 0 var(--s-2); }
+.rec-tag-title-flush { margin: 0; }
+.rec-problems { display: grid; gap: var(--s-2); }
+.rec-problem-card {
+  background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--r);
+  padding: var(--s-3) var(--s-4);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+}
+.rec-problem-card a { text-decoration: none; font-weight: 500; font-size: var(--fs-md); }
+.rec-problem-card.cf-clickable { cursor: pointer; transition: border-color var(--dur) var(--ease); }
+.rec-problem-card.cf-clickable:hover { border-color: var(--line-strong); }
+
+/* ═══ 테마 칩 목록 · 문제 헤더 ═══ */
+.theme-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.themes-list-header { display: flex; justify-content: space-between;
+  align-items: center; margin: var(--s-1) 0 var(--s-3); }
+.platform-toggle { display: flex; gap: var(--s-2); margin-bottom: var(--s-3); }
+
+.problem-header { display: flex; align-items: center; gap: var(--s-3);
+  margin-bottom: var(--s-4); flex-wrap: wrap; }
+.problem-title { font-size: var(--fs-lg); font-weight: 600; letter-spacing: -.01em; }
+.problem-title a { text-decoration: none; }
+.push-right { margin-left: auto; }
+
+/* ═══ 테스트 케이스 ═══ */
+.test-case { border-radius: var(--r); padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-2); border: 1px solid var(--line); font-size: var(--fs-sm); }
+.test-case.pass    { border-color: var(--eff-good-line); background: var(--eff-good-bg); }
+.test-case.fail    { border-color: var(--eff-poor-line); background: var(--eff-poor-bg); }
+.test-case.pending { background: var(--surface-2); color: var(--fg-dim); }
+.tc-badge { font-weight: 600; margin-right: var(--s-2); font-family: var(--font-mono); }
+.tc-detail { margin-top: var(--s-2); font-size: var(--fs-xs); }
+.tc-time { color: var(--fg-dim); font-size: var(--fs-xs); margin-left: var(--s-2);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ═══ 아코디언 ═══ */
+details summary::-webkit-details-marker { display: none; }
+details > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: var(--s-2);
+}
+details > summary h2 { margin: 0; font-size: var(--fs-md); }
+/* summary 바로 뒤 첫 요소에만 간격을 준다 — 예전에는 style="margin-top:12px" 였다 */
+details > summary + * { margin-top: var(--s-3); }
+details.nested-toggle { margin-top: var(--s-4); }
+.toggle-arrow { display: inline-flex; color: var(--fg-dim);
+  transition: transform var(--dur) var(--ease); }
+.toggle-arrow svg { width: 12px; height: 12px; }
+details[open] > summary .toggle-arrow { transform: rotate(90deg); }
+
+/* ═══ 액션 줄 ═══ */
+.action-row { display: flex; align-items: center; gap: var(--s-3);
+  flex-wrap: wrap; margin-top: var(--s-4); }
+.action-row-center { justify-content: center; }
+.action-msg { font-size: var(--fs-sm); }
+.action-msg.ok { color: var(--eff-good-fg); }
+.action-msg.bad { color: var(--eff-poor-fg); }

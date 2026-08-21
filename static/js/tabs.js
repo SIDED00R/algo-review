@@ -1,11 +1,15 @@
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
     document.querySelectorAll('.tab-content').forEach(s => {
       s.classList.remove('active');
       s.classList.add('hidden');
     });
     btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
     const tab = document.getElementById(`tab-${btn.dataset.tab}`);
     tab.classList.remove('hidden');
     tab.classList.add('active');

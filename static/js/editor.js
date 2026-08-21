@@ -53,13 +53,14 @@
     'Python 3': 'python', 'PyPy3': 'python',
     'Java': 'text/x-java', 'Kotlin': 'text/x-kotlin',
     'JavaScript': 'javascript', 'TypeScript': 'application/typescript',
-    'Rust': 'rust', '': 'python',
+    'Rust': 'rust', 'Go': 'go', 'Swift': 'swift', 'Ruby': 'ruby',
+    '': 'python',
   };
   const PM_LANG_MAP = { python3: 'python', cpp: 'text/x-c++src' };
 
   window.cmEditors = {};
 
-  function isDark() { return !document.body.classList.contains('light'); }
+  function isDark() { return document.documentElement.getAttribute('data-theme') !== 'light'; }
 
   function createEditor(id, mode) {
     const container = document.getElementById(id);
@@ -124,7 +125,7 @@
   new MutationObserver(() => {
     const theme = isDark() ? 'dracula' : 'default';
     Object.values(window.cmEditors).forEach(cm => cm.setOption('theme', theme));
-  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   const modal = document.getElementById('problem-modal');
   if (modal) {

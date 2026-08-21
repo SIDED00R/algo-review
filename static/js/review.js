@@ -6,7 +6,7 @@ function syncProblemInputUI() {
   const platform = platformSelect.value || 'boj';
   if (platform === 'codeforces') {
     problemIdInput.placeholder = '예) 4A 또는 4/A';
-    problemIdHelp.textContent = 'Codeforces: contestId + index 형식으로 입력하세요. 예) 4A, 4/A';
+    problemIdHelp.textContent = 'Codeforces: contestId + index 형식. 예) 4A, 4/A';
   } else {
     problemIdInput.placeholder = '예) 1000';
     problemIdHelp.textContent = '백준: 숫자만 입력하세요. 예) 1000';
@@ -72,27 +72,27 @@ function renderPendingPushFallback(container) {
   const box = document.createElement('div');
   box.className = 'result-card';
   box.innerHTML = `
-    <h4 style="font-size:.9rem;margin-bottom:6px">리뷰 없이 먼저 올리기</h4>
-    <p class="desc" style="font-size:.82rem;margin-bottom:12px">
+    <h4>리뷰 없이 먼저 올리기</h4>
+    <p class="desc">
       AI 리뷰 없이 코드와 문제 정보만 GitHub에 올립니다. 위 입력값을 그대로 사용하므로
       문제 번호나 코드를 고쳤다면 고친 값으로 올라갑니다.
       나중에 '리뷰 기록' 탭에서 AI 리뷰를 실행하면 리뷰 기록과 README가 함께 갱신됩니다.
     </p>
-    <div style="display:flex;align-items:center;gap:10px">
-      <button id="pending-push-btn" class="btn-primary" style="font-size:.85rem;padding:7px 16px">
-        ⏳ 리뷰 없이 GitHub에 올리기
+    <div class="action-row">
+      <button id="pending-push-btn" class="btn-primary btn-sm"
+        data-label="리뷰 없이 GitHub에 올리기" data-loading-label="올리는 중...">
+        리뷰 없이 GitHub에 올리기
       </button>
-      <span id="pending-push-msg" style="font-size:.82rem"></span>
+      <span id="pending-push-msg" class="action-msg"></span>
     </div>`;
   container.appendChild(box);
 
   document.getElementById('pending-push-btn').addEventListener('click', async () => {
     const btn = document.getElementById('pending-push-btn');
     const msg = document.getElementById('pending-push-msg');
-    btn.disabled = true;
-    btn.textContent = '올리는 중...';
+    setLoading(btn, true);
     msg.textContent = '';
-    msg.style.color = '';
+    msg.className = 'action-msg';
     try {
       // 입력값은 클릭 시점에 다시 읽는다 — 리뷰 실패 후 문제 번호나 코드를 고쳤을 수 있다.
       const data = await fetchJsonOk('/api/review/pending', {
@@ -100,13 +100,14 @@ function renderPendingPushFallback(container) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(currentReviewPayload()),
       }, 'push 실패');
-      btn.textContent = '✓ 완료';
-      msg.innerHTML = `<span style="color:var(--green)">🐙 <b>${escapeHtml(data.repo || '')}</b>에 push 완료 (리뷰 대기)</span>`;
+      btn.disabled = true;
+      btn.textContent = '완료';
+      msg.textContent = `${data.repo || ''}에 push 완료 (리뷰 대기)`;
+      msg.classList.add('ok');
     } catch (e) {
-      btn.textContent = '⏳ 리뷰 없이 GitHub에 올리기';
-      btn.disabled = false;
+      setLoading(btn, false);
       msg.textContent = e.message;
-      msg.style.color = 'var(--red)';
+      msg.classList.add('bad');
     }
   });
 }
@@ -121,14 +122,14 @@ function renderReview(container, d) {
   const title = escapeHtml(d.title);
   const tierName = escapeHtml(d.tier_name);
   const betterAlgo = d.better_algorithm
-    ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.85rem;color:var(--yellow)">${escapeHtml(d.better_algorithm)}</div></div>`
+    ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value summary-value-sm">${escapeHtml(d.better_algorithm)}</div></div>`
     : '';
 
   container.innerHTML = `
     <div class="result-card">
       <div class="problem-header">
         <span class="problem-title">
-          <a href="${escapeHtml(problemUrl(d))}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">
+          <a href="${escapeHtml(problemUrl(d))}" target="_blank" rel="noopener noreferrer">
             ${label}. ${title}
           </a>
         </span>
@@ -147,18 +148,19 @@ function renderReview(container, d) {
         ${betterAlgo}
       </div>
       <div class="points-grid">
-        <div class="points-box good"><h4>✓ 잘한 점</h4><ul>${strengthsHtml}</ul></div>
-        <div class="points-box bad"><h4>✗ 개선할 점</h4><ul>${weaknessesHtml}</ul></div>
+        <div class="points-box good"><h4>잘한 점</h4><ul>${strengthsHtml}</ul></div>
+        <div class="points-box bad"><h4>개선할 점</h4><ul>${weaknessesHtml}</ul></div>
       </div>
       <div class="feedback-box">
         <h4>상세 피드백</h4>
         <div class="markdown-body">${feedbackHtml}</div>
       </div>
-      <div style="margin-top:16px;display:flex;align-items:center;gap:10px">
-        <button id="push-github-btn" class="btn-primary" style="font-size:.85rem;padding:7px 16px">
-          🐙 GitHub에 올리기
+      <div class="action-row">
+        <button id="push-github-btn" class="btn-primary btn-sm"
+          data-label="GitHub에 올리기" data-loading-label="올리는 중...">
+          GitHub에 올리기
         </button>
-        <span id="push-github-msg" style="font-size:.82rem"></span>
+        <span id="push-github-msg" class="action-msg"></span>
       </div>
     </div>
   `;
@@ -167,10 +169,9 @@ function renderReview(container, d) {
     const btn = document.getElementById('push-github-btn');
     const msg = document.getElementById('push-github-msg');
     const { code, language } = currentCodeAndLanguage();
-    btn.disabled = true;
-    btn.textContent = '올리는 중...';
+    setLoading(btn, true);
     msg.textContent = '';
-    msg.style.color = '';
+    msg.className = 'action-msg';
     try {
       const cfSections = _currentProblem?.ref === d.problem_ref ? _currentProblem.sections : null;
       const pastedStatement = document.getElementById('problem-statement')?.value?.trim() || '';
@@ -193,13 +194,14 @@ function renderReview(container, d) {
           } : {}),
         }),
       }, 'push 실패');
-      btn.textContent = '✓ 완료';
-      msg.innerHTML = `<span style="color:var(--green)">🐙 <b>${escapeHtml(data.repo || '')}</b>에 push 완료</span>`;
+      btn.disabled = true;
+      btn.textContent = '완료';
+      msg.textContent = `${data.repo || ''}에 push 완료`;
+      msg.classList.add('ok');
     } catch (e) {
-      btn.textContent = '🐙 GitHub에 올리기';
-      btn.disabled = false;
+      setLoading(btn, false);
       msg.textContent = e.message;
-      msg.style.color = 'var(--red)';
+      msg.classList.add('bad');
     }
   });
 }

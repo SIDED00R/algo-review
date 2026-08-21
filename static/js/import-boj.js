@@ -21,14 +21,14 @@ importBtn.addEventListener('click', async () => {
     }, '가져오기 실패');
 
     const failMsg = data.failed && data.failed.length > 0
-      ? `<br><span style="color:var(--text-muted);font-size:.82rem">정보 조회 실패: ${escapeHtml(data.failed.join(', '))}</span>`
+      ? `<br><span class="hint">정보 조회 실패: ${escapeHtml(data.failed.join(', '))}</span>`
       : '';
     const bojGithubMsg = (data.github_pushed > 0)
-      ? `<br><span style="color:var(--green);font-size:.82rem">🐙 GitHub <b>${escapeHtml(data.github_repo)}</b>에 <b>${data.github_pushed}</b>개 push 완료 (백준/{티어}/{번호}번. {제목} 폴더)</span>`
+      ? `<br><span class="hint-ok">GitHub <b>${escapeHtml(data.github_repo)}</b>에 <b>${data.github_pushed}</b>개 push 완료 (백준/{티어}/{번호}번. {제목} 폴더)</span>`
       : '';
     result.innerHTML = `
-      <div class="alert alert-info" style="color:var(--green)">
-        ✅ 완료! 총 <b>${data.total_found}</b>개 발견 →
+      <div class="alert alert-ok">
+        완료! 총 <b>${data.total_found}</b>개 발견 →
         <b>${data.imported}</b>개 새로 저장, <b>${data.skipped}</b>개 이미 있음${failMsg}${bojGithubMsg}
       </div>`;
     loadImportedHistory();

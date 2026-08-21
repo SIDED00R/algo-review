@@ -11,24 +11,23 @@ async function loadImportedHistory() {
   }
 
   if (!res.ok || !data.problems || data.problems.length === 0) {
-    list.innerHTML = '<div class="alert alert-info" style="margin-top:16px">가져온 기록이 없습니다.</div>';
+    list.innerHTML = '<div class="alert alert-info">가져온 기록이 없습니다.</div>';
     return;
   }
   const allProblems = data.problems;
   list.innerHTML = `
-    <div class="card" style="margin-top:16px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-        <h3 style="font-size:.95rem;color:var(--text-muted);margin:0;white-space:nowrap">
+    <div class="card">
+      <div class="toolbar">
+        <h3 class="section-title section-title-flush">
           가져온 풀이 기록 (<span id="import-count">${allProblems.length}</span>개)
         </h3>
-        <input id="import-search" type="text" placeholder="문제번호 또는 제목 검색..."
-          style="flex:2;min-width:150px;padding:6px 10px;font-size:.85rem" />
-        <select id="import-platform-filter" style="flex:1;min-width:110px;padding:6px 8px;font-size:.85rem">
+        <input id="import-search" class="input filter-grow" type="text" placeholder="문제번호 또는 제목 검색..." />
+        <select id="import-platform-filter" class="select filter-fixed" aria-label="플랫폼 필터">
           <option value="">전체 플랫폼</option>
           <option value="boj">BOJ</option>
           <option value="codeforces">Codeforces</option>
         </select>
-        <select id="import-tier-filter" style="flex:1;min-width:110px;padding:6px 8px;font-size:.85rem">
+        <select id="import-tier-filter" class="select filter-fixed" aria-label="난이도 필터">
           <option value="">전체 난이도</option>
           <option value="bronze">Bronze</option>
           <option value="silver">Silver</option>
@@ -38,12 +37,12 @@ async function loadImportedHistory() {
           <option value="ruby">Ruby</option>
           <option value="unrated">Unrated</option>
         </select>
-        <select id="import-per-page" style="min-width:75px;padding:6px 8px;font-size:.85rem">
+        <select id="import-per-page" class="select filter-fixed" aria-label="페이지당 개수">
           <option value="10">10개</option>
           <option value="20" selected>20개</option>
           <option value="50">50개</option>
         </select>
-        <select id="import-sort" style="flex:1;min-width:110px;padding:6px 8px;font-size:.85rem">
+        <select id="import-sort" class="select filter-fixed" aria-label="정렬">
           <option value="date-desc">최근 가져온 순</option>
           <option value="id-asc">번호 오름차순</option>
           <option value="id-desc">번호 내림차순</option>
@@ -52,7 +51,7 @@ async function loadImportedHistory() {
         </select>
       </div>
       <div id="import-cards"></div>
-      <div id="import-pager" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-top:12px"></div>
+      <div id="import-pager" class="pager"></div>
     </div>`;
 
   let importPage = 1;
@@ -112,7 +111,7 @@ async function loadImportedHistory() {
     document.getElementById('import-count').textContent = filtered.length;
 
     if (!filtered.length) {
-      container.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:8px 0">검색 결과가 없습니다.</div>';
+      container.innerHTML = '<div class="hint pad-y">검색 결과가 없습니다.</div>';
       renderPagination(0);
       return;
     }
@@ -128,21 +127,21 @@ async function loadImportedHistory() {
       const actionBtns = p.has_code
         ? `<button class="btn-sm btn-code btn-view-code" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}" data-box-key="${escapeHtml(cardKey)}">코드 보기</button>
            <button class="btn-sm btn-ai btn-review-imported" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">AI 리뷰</button>`
-        : `<span style="font-size:.75rem;color:var(--text-muted)">코드 없음</span>`;
+        : `<span class="hint">코드 없음</span>`;
       return `
-        <div class="history-card" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">
-          <div class="history-card-info">
-            <div class="history-card-title">
-              <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">
+        <div class="row" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">
+          <div class="row-main">
+            <div class="row-title">
+              <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer">
                 ${escapeHtml(problemLabel(p))}. ${escapeHtml(p.title)}
               </a>
             </div>
-            <div class="history-card-meta">${escapeHtml(platformBadge)}${p.language ? ` · ${escapeHtml(p.language)}` : ''}</div>
+            <div class="row-meta">${escapeHtml(platformBadge)}${p.language ? ` · ${escapeHtml(p.language)}` : ''}</div>
           </div>
-          <div class="history-card-right">
-            ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''), 'font-size:.75rem')}
+          <div class="row-side">
+            ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''))}
             ${actionBtns}
-            <span style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(String(p.imported_at || '').slice(0, 10))}</span>
+            <span class="row-dim">${escapeHtml(String(p.imported_at || '').slice(0, 10))}</span>
           </div>
         </div>
         <div id="code-view-${escapeHtml(cardKey)}" class="hidden"></div>`;
@@ -170,7 +169,7 @@ async function loadImportedHistory() {
     btn.textContent = '닫기';
     if (box.dataset.loaded) { box.classList.remove('hidden'); return; }
 
-    box.innerHTML = '<div style="padding:8px;color:var(--text-muted)"><span class="spinner"></span> 불러오는 중...</div>';
+    box.innerHTML = '<div class="hint pad-y"><span class="spinner"></span> 불러오는 중...</div>';
     box.classList.remove('hidden');
 
     try {
@@ -179,10 +178,10 @@ async function loadImportedHistory() {
       const code = data.code || '';
       box.dataset.loaded = '1';
       box.innerHTML = code
-        ? `<pre class="code-block" style="margin:0 0 8px">${escapeHtml(code)}</pre>`
-        : `<div style="padding:8px;color:var(--text-muted);font-size:.85rem">저장된 코드가 없습니다.</div>`;
+        ? `<pre class="code-block code-inline-view">${escapeHtml(code)}</pre>`
+        : `<div class="hint pad-y">저장된 코드가 없습니다.</div>`;
     } catch (e) {
-      box.innerHTML = `<div style="padding:8px;color:var(--red);font-size:.85rem">불러오기 실패</div>`;
+      box.innerHTML = `<div class="hint hint-bad pad-y">불러오기 실패</div>`;
     }
   }
 
@@ -206,15 +205,14 @@ async function loadImportedHistory() {
 async function requestImportedReview(btn) {
   const platform = btn.dataset.platform;
   const problemRef = btn.dataset.problemRef;
-  const card = btn.closest('.history-card');
+  const card = btn.closest('.row');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
 
   try {
     const data = await fetchJsonOk(`/api/review-imported/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, { method: 'POST' }, '실패');
-    card.nextElementSibling?.remove();
+    card.nextElementSibling?.remove();  // 코드 보기 패널
     card.remove();
-    btn.textContent = '✓ 완료';
   } catch (e) {
     btn.textContent = 'AI 리뷰';
     btn.disabled = false;

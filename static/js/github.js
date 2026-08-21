@@ -1,8 +1,8 @@
 function showDisconnectedGithubUI(iconBtn, statusBadge, connectInner) {
   iconBtn.classList.remove('connected');
-  iconBtn.title = 'GitHub 연결';
-  statusBadge.style.display = 'none';
-  connectInner.style.display = 'block';
+  iconBtn.setAttribute('aria-label', 'GitHub 연결');
+  statusBadge.classList.add('hidden');
+  connectInner.classList.remove('hidden');
 }
 
 async function loadGithubStatus() {
@@ -17,9 +17,9 @@ async function loadGithubStatus() {
 
     if (data.connected) {
       iconBtn.classList.add('connected');
-      iconBtn.title = `GitHub: @${data.username}`;
-      statusBadge.style.display = 'block';
-      connectInner.style.display = 'none';
+      iconBtn.setAttribute('aria-label', `GitHub: @${data.username}`);
+      statusBadge.classList.remove('hidden');
+      connectInner.classList.add('hidden');
       usernameBadge.textContent = `@${data.username}`;
 
       try {
@@ -27,7 +27,7 @@ async function loadGithubStatus() {
         const repoData = await repoRes.json();
         repoSelect.innerHTML = '<option value="">저장소 선택...</option>' +
           (repoData.repos || []).map(r =>
-            `<option value="${r.full_name}" ${r.full_name === data.target_repo ? 'selected' : ''}>${r.full_name}${r.private ? ' 🔒' : ''}</option>`
+            `<option value="${r.full_name}" ${r.full_name === data.target_repo ? 'selected' : ''}>${r.full_name}${r.private ? ' (비공개)' : ''}</option>`
           ).join('');
       } catch {}
 
@@ -48,17 +48,20 @@ async function loadGithubStatus() {
   }
 }
 
+function setGithubDropdown(open) {
+  document.getElementById('github-dropdown')?.classList.toggle('hidden', !open);
+  document.getElementById('github-icon-btn')?.setAttribute('aria-expanded', String(open));
+}
+
 document.getElementById('github-icon-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   const dropdown = document.getElementById('github-dropdown');
-  dropdown.classList.toggle('hidden');
+  setGithubDropdown(dropdown.classList.contains('hidden'));
 });
 
 document.addEventListener('click', (e) => {
   const wrap = document.querySelector('.github-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('github-dropdown')?.classList.add('hidden');
-  }
+  if (wrap && !wrap.contains(e.target)) setGithubDropdown(false);
 });
 
 document.getElementById('github-connect-btn')?.addEventListener('click', () => {
