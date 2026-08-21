@@ -4,13 +4,12 @@ import threading
 import time
 import random
 import hashlib
-from functools import lru_cache
 from itertools import zip_longest
 from urllib.parse import urlencode, urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from clients.utils import ProblemSearchError
+from clients.utils import ProblemSearchError, UpstreamUnavailable
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -39,24 +38,19 @@ def cf_rating_label(rating) -> str:
     return f"Codeforces {rating}" if rating else "Codeforces Unrated"
 
 
-# miss 마다 강제 갱신하면 오타 한 번에 problemset 전체(수 MB, timeout 30s)를 재다운로드하고
-# 프로세스 전역 스냅샷을 비워 다른 요청까지 재다운로드를 유발한다 — 프로세스당 쿨다운으로 막는다.
+# problemset 전체는 수 MB · timeout 30s 다. 오타 한 번에 이걸 다시 받으면 안 되므로
+# 강제 갱신에는 프로세스당 쿨다운을 둔다.
 _FORCE_REFRESH_COOLDOWN = 600  # 10분에 1회만 강제 갱신
 _last_force_refresh = 0.0
-# 쿨다운 판정은 read-modify-write 다 — 락이 없으면 동시 miss 두 건이 **둘 다** 통과해
-# 위 주석이 막겠다던 전체 재다운로드가 그대로 2회 일어난다(스레드풀에서 실행된다).
-_force_refresh_lock = threading.Lock()
 
-
-def _claim_force_refresh() -> bool:
-    """쿨다운을 소비하고 True. 이미 다른 스레드가 가져갔으면 False."""
-    global _last_force_refresh
-    now = time.time()
-    with _force_refresh_lock:
-        if now - _last_force_refresh < _FORCE_REFRESH_COOLDOWN:
-            return False
-        _last_force_refresh = now
-        return True
+# 스냅샷은 직접 관리한다. lru_cache 를 쓰면 두 가지를 못 한다 —
+#  ① `cache_clear()` 는 **먼저 버리고 나중에 받는다**. 재다운로드가 실패하면
+#     정상 스냅샷까지 잃고, 그 뒤 CF 기능 전부가 요청마다 전체 다운로드를 재시도한다.
+#  ② lru_cache 는 사용자 함수 실행 중 락을 잡지 않아 **동시 miss 를 합치지 못한다** —
+#     스레드풀의 요청들이 각자 수 MB 를 내려받는다.
+_snapshot_lock = threading.RLock()
+_snapshot: tuple[list[dict], dict] | None = None
+_lookup: dict[tuple[int, str], dict] | None = None
 
 
 def get_codeforces_problem_info(problem_ref: str) -> dict:
@@ -67,9 +61,7 @@ def get_codeforces_problem_info(problem_ref: str) -> dict:
         # 스냅샷은 프로세스 기동 시점에 한 번 고정된다 — 그 뒤 새로 열린 대회의 문제는
         # miss가 난다. 주기적 TTL 대신 실제 miss가 났을 때만 강제 갱신 후 재조회하되,
         # 쿨다운 중이면 곧바로 miss 처리한다(오타 반복이 매번 전체 재다운로드로 번지지 않도록).
-        if _claim_force_refresh():
-            _get_cf_problemset_snapshot.cache_clear()
-            _get_codeforces_problem_lookup.cache_clear()
+        if _try_refresh_snapshot():
             problem = _get_codeforces_problem_lookup().get((contest_id, index))
     if not problem:
         raise ValueError(f"Codeforces 문제를 찾을 수 없습니다: {contest_id}{index}")
@@ -350,7 +342,8 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
             timeout=30,
         )
     except requests.RequestException as e:
-        raise ValueError(f"Codeforces API 연결 실패 ({type(e).__name__})") from None
+        # UpstreamUnavailable 이다 — 상류 장애를 400(입력 오류)으로 보고하면 안 된다.
+        raise UpstreamUnavailable(f"Codeforces API 연결 실패 ({type(e).__name__})") from None
     try:
         payload = resp.json()
     except ValueError:
@@ -366,10 +359,9 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
     return payload["result"]
 
 
-@lru_cache(maxsize=1)
-def _get_cf_problemset_snapshot() -> tuple[list[dict], dict]:
-    """problemset.problems 전체를 프로세스당 1회만 받아온다 — (문제 목록, solvedCount 맵).
-    빈 응답은 raise 해서 실패가 lru_cache에 박제되지 않게 한다."""
+def _fetch_cf_problemset() -> tuple[list[dict], dict]:
+    """problemset.problems 전체 다운로드 — (문제 목록, solvedCount 맵).
+    빈 응답은 raise 한다. 호출부가 성공했을 때만 스냅샷을 교체하므로 실패가 박제되지 않는다."""
     result = _codeforces_api_request("problemset.problems")
     problems = result.get("problems", [])
     if not problems:
@@ -384,16 +376,60 @@ def _get_cf_problemset_snapshot() -> tuple[list[dict], dict]:
     return problems, stats_map
 
 
-@lru_cache(maxsize=1)
-def _get_codeforces_problem_lookup() -> dict[tuple[int, str], dict]:
+def _build_lookup(problems: list[dict]) -> dict[tuple[int, str], dict]:
     lookup = {}
-    problems, _ = _get_cf_problemset_snapshot()
     for problem in problems:
         contest_id = problem.get("contestId")
         index = str(problem.get("index", "")).upper()
         if contest_id and index:
             lookup[(contest_id, index)] = problem
     return lookup
+
+
+def _install_snapshot(fresh: tuple[list[dict], dict]) -> None:
+    """락을 잡은 상태에서만 부른다."""
+    global _snapshot, _lookup
+    _snapshot = fresh
+    _lookup = _build_lookup(fresh[0])
+
+
+def _get_cf_problemset_snapshot() -> tuple[list[dict], dict]:
+    """프로세스당 1회 받아 재사용한다. 성공 후에는 락 없는 빠른 경로다."""
+    if _snapshot is not None:
+        return _snapshot
+    with _snapshot_lock:
+        # 이중 확인 — 기다리는 동안 다른 스레드가 이미 채웠으면 그대로 쓴다.
+        if _snapshot is None:
+            _install_snapshot(_fetch_cf_problemset())
+    return _snapshot
+
+
+def _get_codeforces_problem_lookup() -> dict[tuple[int, str], dict]:
+    _get_cf_problemset_snapshot()
+    return _lookup
+
+
+def _try_refresh_snapshot() -> bool:
+    """쿨다운을 소비하고 스냅샷을 새로 받는다. **성공했을 때만** 교체한다.
+
+    스냅샷은 프로세스 기동 시점에 고정되므로 그 뒤 새로 열린 대회의 문제는 miss 가 난다.
+    주기적 TTL 대신 실제 miss 에서만 갱신하되, 쿨다운 중이면 곧바로 miss 로 둔다
+    (오타 반복이 매번 전체 재다운로드로 번지지 않도록).
+    """
+    global _last_force_refresh
+    now = time.time()
+    with _snapshot_lock:
+        if now - _last_force_refresh < _FORCE_REFRESH_COOLDOWN:
+            return False
+        _last_force_refresh = now
+        try:
+            fresh = _fetch_cf_problemset()
+        except Exception as e:
+            # 기존 스냅샷을 그대로 둔다 — 여기서 비우면 CF 기능 전부가 열화된다.
+            logger.warning("CF 스냅샷 갱신 실패 — 기존 스냅샷을 유지한다: %s", e)
+            return False
+        _install_snapshot(fresh)
+        return True
 
 
 def get_codeforces_user_info(handle: str) -> dict:

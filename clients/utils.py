@@ -1,6 +1,16 @@
 import re
 
 
+class UpstreamUnavailable(ValueError):
+    """외부 서비스에 **도달하지 못했다** — 요청자 입력 문제가 아니다.
+
+    `ValueError` 를 상속해 기존 `except ValueError` 핸들러의 동작을 깨지 않으면서,
+    라우터가 먼저 잡아 502 로 매핑할 수 있게 한다. 예전에는 연결 실패도 입력 형식
+    오류와 같은 `ValueError` 라 400 이 나갔고, 사용자는 "Codeforces API 연결 실패
+    (ConnectTimeout)" 를 400 과 함께 보고 자기 입력을 고치려 했다.
+    """
+
+
 class ProblemSearchError(RuntimeError):
     """문제 검색이 **실패**했다(빈 결과가 아니다).
 

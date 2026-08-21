@@ -2,6 +2,9 @@ const reportBtn = document.getElementById('report-btn');
 reportBtn.dataset.label = '리포트 생성';
 reportBtn.dataset.loadingLabel = '리포트 생성 중...';
 
+// 요청 세대 토큰 — 플랫폼을 바꿔 연속 생성하면 늦게 온 이전 플랫폼 응답이 새 결과를 덮는다.
+let _reportToken = 0;
+
 let selectedReportPlatform = 'boj';
 document.querySelectorAll('[data-report-platform]').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -12,11 +15,16 @@ document.querySelectorAll('[data-report-platform]').forEach(btn => {
       b.classList.toggle('active', on);
       b.setAttribute('aria-pressed', String(on));
     });
+    // 이전 플랫폼 리포트를 지운다 — stats 처럼 자동 재요청하지는 않는다(LLM 10~20초).
+    // 남겨 두면 "토글=CF, 화면=BOJ 리포트" 라는 조용한 불일치가 된다.
+    const result = document.getElementById('report-result');
+    if (result.innerHTML.trim()) {
+      _reportToken++;   // 진행 중인 이전 플랫폼 요청도 무효화한다
+      result.innerHTML =
+        '<div class="alert alert-info">플랫폼을 바꿨습니다. \'리포트 생성\'을 눌러주세요.</div>';
+    }
   });
 });
-
-// 요청 세대 토큰 — 플랫폼을 바꿔 연속 생성하면 늦게 온 이전 플랫폼 응답이 새 결과를 덮는다.
-let _reportToken = 0;
 
 reportBtn.addEventListener('click', async () => {
   const result = document.getElementById('report-result');

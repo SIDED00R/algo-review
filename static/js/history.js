@@ -5,20 +5,29 @@ historyBtn.addEventListener('click', loadHistory);
 
 let allReviewProblems = [];
 
+// 세대 토큰 — "버튼이 disabled 라 단일 호출" 이 성립하지 않는다. 호출처가 셋이고
+// (버튼 · activateTab('history') · 재리뷰 성공 후) 그중 탭 전환은 버튼 상태와 무관하다.
+// 없으면 늦게 끝난 A 가 finally 로 버튼을 되살리고, 이어서 B 의 renderHistoryControls 가
+// 그 사이 사용자가 입력한 검색어·필터를 지운다.
+let _historyToken = 0;
+
 async function loadHistory() {
   const list = document.getElementById('history-list');
+  const token = ++_historyToken;
   setLoading(historyBtn, true);
   list.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
 
   try {
     const data = await fetchJsonOk('/api/reviews/grouped', undefined, '기록 로딩 실패');
+    if (token !== _historyToken) return;
     allReviewProblems = data.problems || [];
     renderHistoryControls(list);
     renderProblemList(list, getFilteredReviews());
   } catch (e) {
+    if (token !== _historyToken) return;
     showError(list, e.message);
   } finally {
-    setLoading(historyBtn, false);
+    if (token === _historyToken) setLoading(historyBtn, false);
   }
 }
 
@@ -63,7 +72,7 @@ function getFilteredReviews() {
 
   let list = allReviewProblems.filter(p => {
     if (!matchesProblemQuery(p, q)) return false;
-    if (tier && !tierInGroup(p.tier, tier)) return false;
+    if (tier && !tierInGroup(p.tier, tier, p.platform)) return false;
     if (eff) {
       const lastEff = p.last_efficiency;
       if (lastEff !== eff) return false;
@@ -267,7 +276,11 @@ async function runRereview(e) {
       alert(`${data.detail || 'GitHub 갱신에 실패했습니다.'}\n\n` +
             "최신 회차의 'GitHub 문서 다시 올리기' 버튼으로 업로드만 재시도할 수 있습니다 (리뷰는 다시 돌리지 않습니다).");
     }
-    await openReviewModal(platform, problemRef);  // 갱신된 리뷰로 모달 재렌더
+    // 열려 있을 때만 재렌더한다 — 재리뷰는 10~20초라 그 사이 사용자가 닫을 수 있고,
+    // openReviewModal 은 hidden 을 무조건 벗기므로 닫은 모달이 다시 튀어 오른다.
+    if (!document.getElementById('review-modal').classList.contains('hidden')) {
+      await openReviewModal(platform, problemRef);
+    }  // 갱신된 리뷰로 모달 재렌더
     loadHistory();
   } catch (err) {
     setLoading(btn, false);

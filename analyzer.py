@@ -1,7 +1,7 @@
 import json
 
 from config import settings
-from llm_client import get_client, require_choice
+from llm_client import choice_text, get_client, require_choice
 
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
@@ -106,7 +106,7 @@ efficiency 기준:
             "코드가 너무 길 수 있습니다."
         )
 
-    raw = (response.choices[0].message.content or "").strip()
+    raw = choice_text(response)
     if not raw:
         raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
     result = json.loads(raw)
@@ -164,4 +164,4 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
             "데이터가 너무 많을 수 있습니다."
         )
 
-    return (response.choices[0].message.content or "").strip()
+    return choice_text(response)

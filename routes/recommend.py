@@ -1,9 +1,10 @@
 import db
 import recommender
 from clients import ProblemSearchError
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
-from constants import TIER_NAMES, is_supported_platform, normalize_platform
+from constants import TIER_NAMES
+from routes.helpers import require_platform
 from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
 
 router = APIRouter()
@@ -11,9 +12,9 @@ router = APIRouter()
 
 @router.get("/api/recommend")
 def get_recommendations(platform: str = Query("codeforces"), exclude: str = Query("")):
-    platform = normalize_platform(platform, default="codeforces")
-    if not is_supported_platform(platform):
-        raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
+    # 기본값이 codeforces 라 빈 값만 먼저 채우고 검증은 공용 헬퍼에 맡긴다 —
+    # 검증 진입점이 갈리면 케이스 정규화·오류 문구가 라우터마다 달라진다.
+    platform = require_platform(platform or "codeforces")
 
     if IS_DEMO:
         demo = DEMO_RECOMMENDATIONS_BOJ if platform == "boj" else DEMO_RECOMMENDATIONS
@@ -46,8 +47,10 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     weak_tags = recommender.get_weak_tags_scored(5, platform=platform)
 
     if not weak_tags:
-        return {"avg_tier": avg_tier, "tier_name": tier_name,
-                "weak_tags": [], "recommendations": [], "platform": platform}
+        # 키 집합을 정상 반환과 같게 유지한다 — 분기마다 다르면 프론트가 방어 코드로
+        # 메꾸게 되고, 나중에 키 하나를 지워도 아무 데서도 드러나지 않는다.
+        return {"avg_tier": avg_tier, "tier_name": tier_name, "tier_range": tier_range,
+                "weak_tags": [], "recommendations": [], "platform": platform, "error": ""}
 
     # 검색 실패를 빈 추천으로 내려보내면 프론트가 "아직 추천 데이터가 없습니다. 먼저 코드
     # 리뷰를 몇 개 진행해보세요." 로 **사용자를 탓한다** — 평균 티어와 취약 태그가 같은

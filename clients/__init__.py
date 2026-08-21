@@ -32,6 +32,7 @@ from clients.github import (
 )
 from clients.utils import (
     ProblemSearchError,
+    UpstreamUnavailable,
     get_problem_url,
     get_file_extension,
 )
@@ -49,5 +50,5 @@ __all__ = [
     "exchange_github_code", "get_github_user", "get_github_user_repos",
     "get_github_file_sha", "push_file_to_github", "push_files_to_github",
     "get_baekjoonhub_problems", "get_boj_readme_paths", "get_raw_github_content",
-    "ProblemSearchError", "get_problem_url", "get_file_extension",
+    "ProblemSearchError", "UpstreamUnavailable", "get_problem_url", "get_file_extension",
 ]

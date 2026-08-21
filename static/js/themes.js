@@ -13,6 +13,9 @@ function _lsGet(key, ttlMs) {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const { savedAt, data } = JSON.parse(raw);
+    // savedAt 이 없으면 `Date.now() - undefined` 가 NaN 이고 `NaN > ttl` 은 false 라
+    // 손상된 항목이 영원히 신선으로 판정된다.
+    if (typeof savedAt !== 'number') return null;
     return (Date.now() - savedAt > ttlMs) ? null : data;
   } catch { return null; }
 }

@@ -10,7 +10,11 @@ const TIER_GROUP_LABELS = {
   platinum: 'Platinum', diamond: 'Diamond', ruby: 'Ruby', unrated: 'Unrated',
 };
 
-function tierInGroup(tier, key) {
+/** 난이도 그룹 판정. **BOJ 전용**이다 — 그룹 경계가 solved.ac 티어 1~30 체계다.
+ *  CF 행은 tier 가 항상 0 이라(레이팅은 tier_name 에만 있다) 걸러 두지 않으면
+ *  "Unrated" 선택에 CF 문제가 전량 딸려 온다. */
+function tierInGroup(tier, key, platform) {
+  if (platform && platform !== 'boj') return false;
   const r = TIER_GROUPS[key];
   return tier >= r[0] && tier <= r[1];
 }

@@ -12,8 +12,10 @@ from pathlib import Path
 import pytest
 
 _JS_DIR = Path(__file__).resolve().parent.parent / "static" / "js"
-_FILES = ("problem-modal.js", "import-history.js", "tier-chart.js", "review.js",
-          "utils.js", "history.js", "report.js", "stats.js", "github.js", "tabs.js")
+# 전 파일을 읽는다. 예전에는 10개만 고정해 두고 "전 파일에서 원시 fetch 를 막는다" 같은
+# 검사가 그 목록만 순회했다 — 나머지 10개(command-palette·themes·load-submission 등)는
+# 무엇을 넣어도 초록이었다.
+_MIN_JS_FILES = 20
 
 
 def _js_function_body(src, signature):
@@ -23,7 +25,19 @@ def _js_function_body(src, signature):
     빨강이 난다(실측 여유가 41자·137자밖에 없었다). 이 파일 docstring 이 경계하는 패턴이다.
     """
     start = src.index(signature)
-    brace = src.index("{", start)
+    # 매개변수 목록 안의 중괄호(구조 분해 기본값 `({ force = false } = {})`)를 본문으로
+    # 착각하면 안 된다 — 괄호 깊이 0 에서 처음 만나는 `{` 가 본문이다.
+    depth = 0
+    brace = None
+    for i in range(start, len(src)):
+        if src[i] == "(":
+            depth += 1
+        elif src[i] == ")":
+            depth -= 1
+        elif src[i] == "{" and depth == 0:
+            brace = i
+            break
+    assert brace is not None, f"{signature} 의 본문 시작을 찾지 못했다"
     depth = 0
     for i in range(brace, len(src)):
         if src[i] == "{":
@@ -42,11 +56,9 @@ def js():
     HTTP 가 아니라 디스크에서 읽는다 — 여기서 고정하는 것은 서빙 여부가 아니라 내용이고,
     자산이 실제로 서빙되는지는 test_index_assets·test_load_submission_wiring 이 본다.
     """
-    out = {}
-    for name in _FILES:
-        path = _JS_DIR / name
-        assert path.exists(), name
-        out[name] = path.read_text(encoding="utf-8")
+    out = {p.name: p.read_text(encoding="utf-8") for p in sorted(_JS_DIR.glob("*.js"))}
+    # 개수 하한을 함께 둔다 — 경로가 틀리면 빈 dict 로 모든 루프 검사가 조용히 통과한다.
+    assert len(out) >= _MIN_JS_FILES, f"JS 파일이 {len(out)}개뿐이다 — 경로를 확인하라"
     return out
 
 
@@ -435,3 +447,71 @@ def test_row_activation_does_not_swallow_child_control_keys(js):
     assert body.count("fromChildControl(e)") >= 2, "click·keydown 양쪽에 가드가 필요하다"
     # 인라인 핸들러로 우회하던 방식은 남아 있으면 안 된다.
     assert "onclick=" not in js["history.js"], "인라인 onclick 이 돌아왔다"
+
+
+def test_every_async_render_path_checks_its_generation_token(js):
+    """세대 토큰은 성공·실패 **양쪽** 경로에 있어야 한다.
+
+    problem-modal.js 는 성공 경로만 막고 catch 에는 가드가 없어, A 를 닫고 B 를 연 뒤
+    A 의 요청이 실패하면 B 의 스피너 자리에 A 의 오류가 그려졌다. 형제 모듈은 처음부터
+    catch 에도 가드가 있었다 — 한 곳만 비대칭이면 규약이 아니다.
+
+    토큰을 쓰는 함수만 본다. 경쟁이 없는 다른 async 함수까지 요구하면 거짓 빨강이 난다
+    (테마 목록 로딩처럼 선택 상태에 묶이지 않는 경로가 있다).
+    """
+    guarded = [
+        ("problem-modal.js", "async function openProblemModal", r"_currentProblem\?\.ref !== ref"),
+        ("tier-chart.js", "async function loadTierChart", r"token !== _chartToken"),
+        ("themes.js", "async function loadThemeProblems", r"token !== _themeToken"),
+        ("stats.js", "async function loadStats", r"token !== _statsToken"),
+        ("history.js", "async function loadHistory", r"token !== _historyToken"),
+        ("history.js", "async function openReviewModal", r"token !== _modalToken"),
+        ("command-palette.js", "async function showProblems", r"token !== _paletteToken"),
+        ("command-palette.js", "async function showLedger", r"token !== _paletteToken"),
+    ]
+    for name, signature, pattern in guarded:
+        body = _js_function_body(js[name], signature)
+        assert re.search(pattern, body), f"{name}:{signature} 에 세대 가드가 없다"
+        # catch 블록 안에도 있어야 한다 — 늦은 **실패**가 새 화면을 덮는 경로다.
+        catch_body = _js_function_body(body[body.index("catch"):], "catch")
+        assert re.search(pattern, catch_body), (
+            f"{name}:{signature} 의 catch 에 세대 가드가 없다 — 늦은 실패가 새 화면을 덮는다")
+
+    # report.js 는 화살표 함수 핸들러라 시그니처로 자를 수 없다 — 파일 단위로 확인한다.
+    assert js["report.js"].count("token !== _reportToken") >= 2,         "report.js 의 성공·실패 경로 중 한쪽에 세대 가드가 없다"
+
+
+def test_history_load_is_not_assumed_to_be_single_flight(js):
+    """`loadHistory` 는 버튼 외에 탭 전환·재리뷰 완료에서도 불린다 — 버튼 disabled 를
+    단일 호출의 근거로 삼을 수 없다."""
+    src = js["history.js"]
+    body = _js_function_body(src, "async function loadHistory")
+    assert re.search(r"const token = \+\+_historyToken", body)
+    # finally 가 무조건 복원하면 무효화된 옛 실행이 진행 중 실행의 버튼을 되살린다.
+    finally_block = body.split("finally", 1)[1]
+    assert re.search(r"token === _historyToken", finally_block)
+    # 호출처가 셋이라는 사실 자체를 고정한다.
+    assert "loadHistory()" in js["tabs.js"], "탭 전환 호출이 사라지면 이 규약의 근거가 바뀐다"
+
+
+def test_modal_recovers_focus_that_escapes_to_the_body(js):
+    """포커스를 가진 요소가 disabled 되거나 사라지면 브라우저가 포커스를 <body> 로 옮긴다.
+
+    모달 안에서 그러면 keydown 리스너가 root 에 걸려 있어 Esc·Tab 트랩이 함께 죽는다
+    (setLoading 이 10~20초짜리 작업에서 실제로 그렇게 만든다).
+    """
+    src = js["modal-a11y.js"]
+    assert re.search(r"addEventListener\(['\"]focusout['\"]", src), "포커스 이탈 감시가 없다"
+    # root 가 마지막 수단으로 포커스를 받으려면 tabindex 가 있어야 한다.
+    assert re.search(r"root\.tabIndex\s*=\s*-1", src), \
+        "tabindex 없이 root.focus() 는 조용히 무효다"
+
+
+def test_tier_filter_is_boj_only(js):
+    """난이도 그룹 경계는 solved.ac 티어 1~30 체계다. CF 행은 tier 가 항상 0 이라
+    플랫폼을 보지 않으면 'Unrated' 선택에 CF 문제가 전량 딸려 온다."""
+    assert re.search(r"function tierInGroup\(tier, key, platform\)", js["utils.js"])
+    assert re.search(r"platform !== ['\"]boj['\"]", js["utils.js"])
+    for name in ("history.js", "import-history.js"):
+        assert re.search(r"tierInGroup\([^)]*p\.platform\)", js[name]), \
+            f"{name} 이 플랫폼을 넘기지 않는다"

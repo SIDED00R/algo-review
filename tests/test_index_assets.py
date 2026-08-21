@@ -1,9 +1,6 @@
 """index.html 자산 캐시 버전 치환 — `?v=` 를 손으로 고치던 방식의 갱신 누락 재발 방지."""
 import re
 
-
-
-
 def test_asset_urls_share_one_version(client):
     html = client.get("/").text
     assert "__V__" not in html, "자산 버전 플레이스홀더가 치환되지 않았다"

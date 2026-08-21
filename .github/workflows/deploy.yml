@@ -15,6 +15,11 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# 잡 대부분은 PR 코드를 읽고 실행하기만 한다 — 기본 토큰 권한을 읽기로 좁히고,
+# 쓰기가 필요한 deploy 잡만 자기 permissions 로 올린다(레포 기본값이 read-write 여도 안전).
+permissions:
+  contents: read
+
 env:
   PROJECT_ID: boj-code-review-2024
   REGION: asia-northeast3
@@ -107,6 +112,8 @@ jobs:
           - service: algo-review-demo      # 데모: mock 모드
             # DB_PATH: 데모는 컨테이너 임시 SQLite 를 쓰는데 컨테이너가 non-root 라
             # 기본 경로(/app)에 쓸 수 없다. /tmp 는 쓰기 가능하고 어차피 기동마다 초기화된다.
+            # --set-env-vars 는 **치환**이다 — 여기 적힌 둘 외에 콘솔에서 추가한 env 는
+            # 다음 배포에서 사라진다. 데모 서비스의 설정 정본이 이 줄이라는 뜻이다.
             extra_args: "--set-env-vars DEMO_MODE=true,DB_PATH=/tmp/demo.db"
     steps:
       - name: Checkout

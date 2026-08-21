@@ -6,9 +6,6 @@
 """
 import re
 
-
-
-
 def _asset(client, path):
     res = client.get(path)
     assert res.status_code == 200, f"{path} 가 서빙되지 않는다"

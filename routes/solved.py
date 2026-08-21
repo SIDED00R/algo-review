@@ -3,7 +3,7 @@ import analyzer
 from fastapi import APIRouter, HTTPException
 from config import settings
 from demo_mode import IS_DEMO, demo_block
-from routes.helpers import require_platform
+from routes.helpers import require_platform, upstream_failure
 from routes.problem_resolve import resolve_problem_info, resolve_statement
 from routes.review_response import save_and_build_response
 
@@ -46,8 +46,10 @@ def review_imported(platform: str, problem_ref: str):
 
     try:
         result = analyzer.analyze_code(problem_info, statement, problem["code"])
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"코드 분석 실패: {e}")
+        raise upstream_failure("코드 분석 실패", e)
 
     # solved 기록의 제목/태그/식별자를 응답·저장 기준으로 사용한다. 단 빈 값으로 덮지
     # 않는다 — CF 는 제목·태그를 문제 조회에서 받아오므로 solved 행이 비어 있으면

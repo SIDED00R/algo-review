@@ -151,7 +151,6 @@ async function loadTierChart() {
     }
 
     const ctx = document.getElementById('tier-chart').getContext('2d');
-    if (token !== _chartToken) return;
     tierChartInstance = new Chart(ctx, {
       type: 'line',
       data: {

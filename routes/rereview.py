@@ -5,8 +5,8 @@ import analyzer
 import db
 from config import settings
 from fastapi import APIRouter, HTTPException
-from routes.helpers import merged_github_target, push_review_bundle
-from routes.models import validate_platform
+from routes.helpers import (merged_github_target, push_review_bundle,
+                            require_platform, upstream_failure)
 from routes.problem_resolve import resolve_statement
 from demo_mode import IS_DEMO, DEMO_REVIEW_RESULT
 
@@ -19,7 +19,8 @@ def _run_review(platform: str, review: dict) -> dict:
     if IS_DEMO:
         return DEMO_REVIEW_RESULT
     if not settings.openai_api_key:
-        raise HTTPException(status_code=400,
+        # 설정 누락은 서버 문제다 — review/report/solved 와 같은 500 으로 맞춘다.
+        raise HTTPException(status_code=500,
                             detail="OPENAI_API_KEY가 설정되지 않았습니다. LLM을 쓸 수 있을 때 다시 시도해주세요.")
 
     problem_info = {
@@ -33,8 +34,11 @@ def _run_review(platform: str, review: dict) -> dict:
     statement = resolve_statement(platform, problem_info, review.get("problem_statement"))
     try:
         return analyzer.analyze_code(problem_info, statement, review["code"])
+    except ValueError as e:
+        # analyzer 가 직접 만든 사용자용 안내는 그대로 보여준다.
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"코드 분석 실패: {e}")
+        raise upstream_failure("코드 분석 실패", e)
 
 
 def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool, str | None]:
@@ -77,10 +81,7 @@ def rereview_problem(platform: str, problem_ref: str):
     이미 리뷰된 행이면 LLM 을 호출하지 않는다 — push 만 실패했을 때 프론트의
     'GitHub 문서 다시 올리기' 버튼이 이 경로로 토큰 없이 업로드만 재시도한다.
     """
-    try:
-        platform = validate_platform(platform)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    platform = require_platform(platform)
 
     reviews = db.get_reviews_by_problem(platform, problem_ref)
     if not reviews:

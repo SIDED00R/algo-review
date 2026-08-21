@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     openai_max_tokens: int | None = None
     openai_report_max_tokens: int = 1024
     openai_temperature: float = 0.3
+    # 재시도는 타임아웃과 곱해져 실효 상한을 만든다 — 둘을 함께 조절할 수 있어야 한다.
+    openai_max_retries: int = 1
     openai_timeout: int = 15
 
     # --- GitHub OAuth ---

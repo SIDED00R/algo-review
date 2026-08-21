@@ -1,7 +1,7 @@
 import themes as theme_service
 from fastapi import APIRouter, HTTPException, Response
+from routes.helpers import require_platform
 from demo_mode import IS_DEMO, DEMO_THEME_LIST, DEMO_THEME_PROBLEMS
-from constants import PLATFORMS
 
 router = APIRouter()
 
@@ -18,8 +18,7 @@ def get_themes(response: Response):
 def get_theme_problems(theme_id: str, response: Response, platform: str = "codeforces"):
     # 푼 문제 제외 결과라 사용자 상태에 의존 — 브라우저 캐시 금지(클라이언트 캐싱은 localStorage 계층이 담당).
     response.headers["Cache-Control"] = "no-store"
-    if platform not in PLATFORMS:
-        raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
+    platform = require_platform(platform)
 
     if IS_DEMO:
         data = DEMO_THEME_PROBLEMS.get((platform, theme_id))

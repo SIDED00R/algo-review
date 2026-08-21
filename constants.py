@@ -4,7 +4,7 @@
 ARCHITECTURE.md 의 레이어 다이어그램에서 DB 레이어와 외부 클라이언트는 형제인데,
 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 역의존이었다.
 
-플랫폼 화이트리스트도 세 곳(`routes/models.py`·`routes/recommend.py`·`themes.py`)에
+플랫폼 화이트리스트도 세 곳(`routes/models.py`·`routes/recommend.py`·`routes/themes.py`)에
 따로 있었다 — 새 플랫폼을 붙일 때 한 곳만 고치면 조용히 어긋난다.
 """
 

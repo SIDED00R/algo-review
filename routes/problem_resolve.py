@@ -11,10 +11,14 @@ def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str
             raise HTTPException(status_code=400, detail="Codeforces 문제 번호를 입력하세요. 예: 4A 또는 4/A")
         try:
             return api_client.get_codeforces_problem_info(problem_ref.strip())
+        except api_client.UpstreamUnavailable as e:
+            # 상류 장애다 — 400 으로 주면 사용자가 자기 입력을 고치려 한다.
+            raise HTTPException(status_code=502, detail=str(e))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Codeforces 문제 조회 실패: {e}")
+            raise HTTPException(status_code=502,
+                                detail=f"Codeforces 문제 조회 실패 ({type(e).__name__})") from None
 
     if problem_id is None:
         raise HTTPException(status_code=400, detail="백준 문제 번호를 입력하세요.")

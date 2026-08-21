@@ -60,12 +60,14 @@ def test_pending_row_is_filled_by_review(minimal_client, monkeypatch):
     assert saved[0]["complexity"] == "O(N)"
 
 
-def test_pending_row_without_api_key_returns_400(minimal_client, monkeypatch):
+def test_pending_row_without_api_key_returns_500(minimal_client, monkeypatch):
+    """설정 누락은 서버 문제다 — review·report·solved 와 같은 500 으로 맞췄다.
+    (예전에는 여기만 400 이라 같은 조건에 상태코드가 둘이었다.)"""
     _save(db.PENDING_EFFICIENCY)
     monkeypatch.setattr(rereview.settings, "openai_api_key", "")
 
     r = minimal_client.post("/api/rereview/boj/1000")
-    assert r.status_code == 400
+    assert r.status_code == 500
     # 리뷰는 여전히 대기 상태로 남는다 — 나중에 다시 시도할 수 있다.
     assert db.get_reviews_by_problem("boj", "1000")[0]["efficiency"] == db.PENDING_EFFICIENCY
 

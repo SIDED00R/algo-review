@@ -20,6 +20,13 @@ const reviewBtn = document.getElementById('review-btn');
 reviewBtn.dataset.label = '분석 시작';
 reviewBtn.dataset.loadingLabel = '분석 중...';
 
+// '자동 감지' 는 실패할 수 있다 — detectLanguage 는 드롭다운에 있는 언어 중에도
+// PyPy3·TypeScript·Swift·Ruby 패턴이 없어 '' 를 돌려준다. 서버는 빈 언어를 400 으로
+// 막는데(확장자가 .txt 로 떨어지면 재리뷰가 파일명을 재현하지 못해 영구 거부한다),
+// 그 메시지가 "언어를 선택해주세요" 라 방금 '자동 감지' 를 고른 사용자에게는 말이 안 된다.
+// 왕복 전에 정확한 이유로 안내한다.
+const LANGUAGE_UNKNOWN_MSG = '코드에서 언어를 알아내지 못했습니다. 언어를 직접 선택해주세요.';
+
 // 코드 에디터 + 언어 선택 값 — 리뷰 요청과 GitHub push 가 함께 쓴다.
 function currentCodeAndLanguage() {
   const code = window.getEditorValue('code-input').trim();
@@ -48,6 +55,7 @@ reviewBtn.addEventListener('click', async () => {
 
   if (!problemId) { showError(result, '문제 번호를 입력하세요.'); return; }
   if (!payload.code) { showError(result, '코드를 입력하세요.'); return; }
+  if (!payload.language) { showError(result, LANGUAGE_UNKNOWN_MSG); return; }
 
   setLoading(reviewBtn, true);
   result.classList.remove('hidden');
@@ -94,12 +102,19 @@ function renderPendingPushFallback(container) {
     setLoading(btn, true);
     msg.textContent = '';
     msg.className = 'action-msg';
+    // 입력값은 클릭 시점에 다시 읽는다 — 리뷰 실패 후 문제 번호나 코드를 고쳤을 수 있다.
+    const pendingPayload = currentReviewPayload();
+    if (!pendingPayload.language) {
+      setLoading(btn, false);
+      msg.textContent = LANGUAGE_UNKNOWN_MSG;
+      msg.classList.add('bad');
+      return;
+    }
     try {
-      // 입력값은 클릭 시점에 다시 읽는다 — 리뷰 실패 후 문제 번호나 코드를 고쳤을 수 있다.
       const data = await fetchJsonOk('/api/review/pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentReviewPayload()),
+        body: JSON.stringify(pendingPayload),
       }, 'push 실패');
       btn.disabled = true;
       btn.textContent = '완료';
