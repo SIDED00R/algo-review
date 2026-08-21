@@ -56,11 +56,10 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
                         extra_exclude: set | None = None) -> list[dict]:
     """취약 태그별 추천 문제. weak_tags 는 호출부가 구해서 넘긴다 — 유일한 호출자
     (routes/recommend.py)가 응답에도 그 목록을 실어야 해서 어차피 먼저 계산한다."""
-    if platform == "codeforces":
-        return _get_cf_recommendations(weak_tags, extra_exclude=extra_exclude)
-
     if not weak_tags:
         return []
+    if platform == "codeforces":
+        return _get_cf_recommendations(weak_tags, extra_exclude=extra_exclude)
 
     avg_tier = db.get_average_tier()
     same_min = max(1,  int(avg_tier) - TIER_RANGE_LOW)
@@ -75,8 +74,8 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
     for tag_name in weak_tags:
         tag_key = get_tag_key_by_name(tag_name)
 
-        # 태그별로 실패를 격리한다 — 예전에는 첫 실패에서 던져 이미 성공한 태그의 결과까지
-        # 버렸다(themes.py 는 밴드별로 부분 성공을 살린다). 전부 실패했을 때만 실패로 본다.
+        # 태그마다 별도 HTTP 호출이라 실패를 태그 단위로 격리한다. 하나가 실패해도
+        # 나머지 태그의 결과는 살리고, 전부 실패했을 때만 실패로 본다.
         try:
             same_problems = search_problems_by_tag(
                 tag_key=tag_key, min_tier=same_min, max_tier=same_max, exclude_ids=solved_ids,
@@ -105,9 +104,6 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
 
 
 def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = None) -> list[dict]:
-    if not weak_tags:
-        return []
-
     avg_rating = db.get_average_cf_rating()
     cf_same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
     cf_same_max = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
@@ -119,6 +115,10 @@ def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = No
     exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
 
     recommendations = []
+    # CF 는 BOJ 와 달리 태그별 실패 격리를 **하지 않는다**. search_cf_problems_by_tag 의
+    # 유일한 실패 조건은 프로세스 전역 스냅샷 1개의 실패라 태그와 무관하고, 격리하면
+    # 같은 수 MB 다운로드를 태그·밴드 수만큼(최대 6회 × timeout 30s) 직렬 반복한다.
+    # BOJ 는 태그마다 별도 HTTP 호출이라 격리가 의미를 갖는다.
     for tag in weak_tags:
         same_problems = search_cf_problems_by_tag(tag, cf_same_min, cf_same_max, exclude_refs)[:SAME_PER_TAG]
         hard_problems = search_cf_problems_by_tag(tag, cf_hard_min, cf_hard_max, exclude_refs)[:HARD_PER_TAG]

@@ -267,8 +267,8 @@ async function runSamples() {
       }
 
       if (runToken !== _runToken) return;
-      // 노드가 사라졌을 수 있다 — 예전에는 catch 안에서도 같은 null 을 다시 참조해
-      // 예외가 함수를 탈출하고, 아래 버튼 복원에 도달하지 못해 버튼이 영구 고착됐다.
+      // 노드가 사라졌을 수 있다. 확인 없이 쓰면 TypeError 가 함수를 탈출해
+      // 아래 버튼 복원에 도달하지 못하고 버튼이 진행 중 상태로 고착된다.
       const cell = document.getElementById(tcId);
       if (cell) cell.outerHTML = html;
     }
@@ -291,9 +291,9 @@ async function runSamples() {
   }
 }
 
-// 뷰어에서 작성한 코드를 리뷰 폼으로 넘긴다. 폼 채우기·탭 전환은 fillReviewForm 이
-// 담당한다 — 예전에는 여기서 탭 클래스를 직접 토글해 tabs.js 와 중복이었고,
-// #code-language 에 change 를 발생시키지 않아 CodeMirror 모드가 파이썬으로 남았다.
+// 뷰어에서 작성한 코드를 리뷰 폼으로 넘긴다. 폼 채우기·탭 전환·#code-language 의
+// change 발생은 전부 fillReviewForm 이 담당한다 — 여기서 직접 하면 탭 토글이
+// tabs.js 와 중복되고, change 를 빠뜨리면 CodeMirror 모드가 갱신되지 않는다.
 function proceedToReview() {
   if (!_currentProblem) return;
   // fillReviewForm 진입점 넷이 같은 규약을 따른다 — 여기만 확인을 건너뛰어
@@ -308,8 +308,7 @@ function proceedToReview() {
   });
 }
 
-// ── 이벤트 배선 ──
-// 예전에는 index.html 에 onclick="runSamples()" 같은 인라인 핸들러가 남아 있었다.
+// ── 이벤트 배선 ── 마크업에 인라인 onclick 을 두지 않고 여기서 모아 건다.
 document.getElementById('pm-close-btn').addEventListener('click', closeProblemModal);
 document.getElementById('pm-run-btn').addEventListener('click', runSamples);
 document.getElementById('pm-review-btn').addEventListener('click', proceedToReview);
@@ -325,6 +324,7 @@ const problemModalEl = document.getElementById('problem-modal');
 problemModalEl.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeProblemModal();
 });
-// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. 예전에는 Esc 가 document 레벨에
-// 있어, 문제 모달 위에 ⌘K 팔레트를 열고 Esc 를 누르면 둘이 함께 닫혔다.
+// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. Esc 리스너는 모달 루트에 걸려
+// 있어야 한다 — document 레벨에 두면 이 모달 위에 ⌘K 팔레트를 열고 Esc 를 눌렀을 때
+// 둘이 함께 닫힌다.
 registerModal('problem-modal', closeProblemModal, { initial: '#pm-close-btn' });

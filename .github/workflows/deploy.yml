@@ -82,6 +82,11 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+          # 기본 해시 대상은 requirements.txt 뿐이라, 개발 의존(pytest/ruff 핀)만 올리면
+          # 캐시 키가 그대로다.
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - name: Run tests
         env:

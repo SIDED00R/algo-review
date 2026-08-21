@@ -1,4 +1,4 @@
-"""프론트엔드 불변식 (회귀).
+"""프론트엔드 불변식.
 
 빌드 스텝이 없어 JS 배선 끊김을 잡는 자동 방어선이 문자열 수준 검사뿐이다. 정확 문자열 대신
 **정규식**으로 쓴다 — 공백·인용부호·줄바꿈이 바뀌면 거짓 빨강이 나고, 그 때문에 검사를
@@ -12,9 +12,8 @@ from pathlib import Path
 import pytest
 
 _JS_DIR = Path(__file__).resolve().parent.parent / "static" / "js"
-# 전 파일을 읽는다. 예전에는 10개만 고정해 두고 "전 파일에서 원시 fetch 를 막는다" 같은
-# 검사가 그 목록만 순회했다 — 나머지 10개(command-palette·themes·load-submission 등)는
-# 무엇을 넣어도 초록이었다.
+# 전 파일을 읽는다. 목록을 고정하면 "전 파일에서 원시 fetch 를 막는다" 같은 검사가
+# 그 목록만 순회해, 밖의 파일에는 무엇을 넣어도 통과한다.
 _MIN_JS_FILES = 20
 
 
@@ -22,7 +21,7 @@ def _js_function_body(src, signature):
     """`signature` 로 시작하는 함수의 본문을 중괄호 균형으로 잘라낸다.
 
     문자 수 윈도우로 찾으면 함수에 한두 줄만 추가돼도 "호출이 사라졌다"는 틀린 메시지로
-    빨강이 난다(실측 여유가 41자·137자밖에 없었다). 이 파일 docstring 이 경계하는 패턴이다.
+    빨강이 난다. 이 파일 docstring 이 경계하는 패턴이다.
     """
     start = src.index(signature)
     # 매개변수 목록 안의 중괄호(구조 분해 기본값 `({ force = false } = {})`)를 본문으로
@@ -65,8 +64,8 @@ def js():
 def test_run_samples_restores_the_button_in_a_finally_block(js):
     """예제 실행 루프가 어떻게 끝나든 버튼을 되돌려야 한다.
 
-    예전에는 결과 노드가 사라졌을 때 catch 안에서 같은 null 을 다시 참조해 예외가 함수를
-    탈출하고, 버튼이 disabled + '실행 중...' 으로 영구 고착됐다(새로고침 외 복구 불가).
+    결과 노드가 사라진 뒤 catch 안에서 그 노드를 다시 참조하면 예외가 함수를 탈출해
+    버튼이 disabled + '실행 중...' 으로 고착된다(새로고침 외 복구 불가).
     """
     src = js["problem-modal.js"]
     assert re.search(r"function\s+resetRunButton\s*\(", src)
@@ -91,7 +90,7 @@ def test_run_samples_restores_the_button_in_a_finally_block(js):
 
 
 def test_run_samples_guards_the_result_node_before_writing(js):
-    """사라진 노드에 쓰면 안 된다 — outerHTML 직접 대입이 남아 있으면 회귀다."""
+    """사라진 노드에 쓰면 안 된다 — 노드 확인 없이 outerHTML 에 대입하면 TypeError 다."""
     src = js["problem-modal.js"]
     assert not re.search(r"document\.getElementById\(tcId\)\.outerHTML", src), \
         "노드 존재 확인 없이 outerHTML 에 대입하면 안 된다"
@@ -101,8 +100,8 @@ def test_run_samples_guards_the_result_node_before_writing(js):
 def test_all_fill_review_form_entry_points_confirm_overwrite():
     """진입점 넷이 같은 규약을 따라야 한다.
 
-    예전에는 이름만 "넷" 이고 뷰어 경로 하나만 검사해서, 나머지 세 곳에서 확인 호출을
-    지워도 초록이었다(편집 중 코드를 경고 없이 덮어쓰는 회귀).
+    한 곳만 검사하면 나머지에서 확인 호출을 지워도 통과한다 — 편집 중인 코드를 경고 없이
+    덮어쓰게 된다. 네 진입점을 모두 순회한다.
     """
     entry_points = {
         "problem-modal.js": "proceedToReview",
@@ -113,7 +112,8 @@ def test_all_fill_review_form_entry_points_confirm_overwrite():
     for name, label in entry_points.items():
         src = (_JS_DIR / name).read_text(encoding="utf-8")
         assert "fillReviewForm(" in src, f"{name}({label}) 이 로더를 쓰지 않는다"
-        # 파일 어딘가에 각각 1회면 통과하던 검사였다 — 확인이 **호출보다 앞에** 있는지 본다.
+        # 두 문자열이 파일 어딘가에 각각 1회 있는 것으로는 부족하다 — 확인이 **호출보다
+        # 앞에** 있는지 본다.
         guard = re.search(r"if\s*\(!confirmEditorOverwrite\(\)\)\s*return", src)
         assert guard, f"{name}({label}) 이 덮어쓰기 확인을 건너뛴다"
         # 정의(`function fillReviewForm(`)는 호출이 아니다 — load-submission.js 는
@@ -127,8 +127,8 @@ def test_all_fill_review_form_entry_points_confirm_overwrite():
 def test_imported_review_updates_the_list_data_not_just_the_dom(js):
     """서버가 행을 실제로 삭제하므로 목록 데이터에서도 빼야 한다.
 
-    예전에는 함수가 톱레벨에 있어 allProblems 에 접근할 수 없었고, 필터를 한 번 만지면
-    삭제된 항목이 되살아났다(재클릭 시 404).
+    이 함수가 톱레벨에 있으면 allProblems 클로저에 접근할 수 없어 DOM 만 지우게 되고,
+    필터를 한 번 만지면 삭제된 항목이 되살아난다(재클릭 시 404).
     """
     src = js["import-history.js"]
     assert not re.search(r"^async function requestImportedReview", src, re.M), \
@@ -239,8 +239,8 @@ def html():
 def test_control_borders_use_the_dedicated_token(css):
     """폼·버튼·칩의 경계선은 WCAG 1.4.11(비텍스트 3:1) 대상이다.
 
-    --line/--line-strong 은 1.15~1.68:1 로 미달이었다. 배경이 지면과 1.03~1.06:1 이라
-    테두리가 유일한 식별 수단인 컨트롤에만 전용 토큰을 쓴다.
+    --line/--line-strong 은 1.15~1.68:1 이라 이 기준에 못 미친다. 배경이 지면과
+    1.03~1.06:1 이라 테두리가 유일한 식별 수단인 컨트롤에만 전용 토큰을 쓴다.
     """
     tokens = css["tokens.css"]
     assert re.search(r"--line-control:\s*#646B73", tokens), "다크 값"
@@ -284,7 +284,7 @@ def test_javascript_does_not_consume_verdict_tokens(js):
 def test_cmdk_input_selector_beats_the_element_selector(css):
     """input[type="text"] 는 (0,1,1) 이라 .cmdk-input (0,1,0) 을 순서와 무관하게 이긴다.
 
-    예전에는 이 블록의 선언 6개가 전부 무효였다.
+    요소 선택자를 함께 붙이지 않으면 이 블록의 선언이 전부 무효가 된다.
     """
     assert re.search(r"input\.cmdk-input\s*\{", css["surfaces.css"])
     assert not re.search(r"^\.cmdk-input\s*\{", css["surfaces.css"], re.M)
@@ -368,8 +368,8 @@ def _controls_without_names(markup: str) -> list[str]:
 def test_every_form_control_has_an_accessible_name(html, js):
     """<summary> 는 label 이 아니고 placeholder 도 접근 가능한 이름이 아니다.
 
-    예전에는 이름과 달리 #problem-statement **한 개**만 검사해서, JS 가 만드는 검색
-    입력 2개와 커스텀 예제 textarea 4개가 이름 없이 남아 있어도 초록이었다.
+    마크업 한 곳만 검사하면 JS 가 만드는 컨트롤이 이름 없이 남아 있어도 통과한다 —
+    HTML 과 JS 를 모두 훑는다.
     """
     block = html.split('id="problem-statement"')[1][:200]
     assert 'aria-label="문제 설명"' in block
@@ -452,9 +452,8 @@ def test_row_activation_does_not_swallow_child_control_keys(js):
 def test_every_async_render_path_checks_its_generation_token(js):
     """세대 토큰은 성공·실패 **양쪽** 경로에 있어야 한다.
 
-    problem-modal.js 는 성공 경로만 막고 catch 에는 가드가 없어, A 를 닫고 B 를 연 뒤
-    A 의 요청이 실패하면 B 의 스피너 자리에 A 의 오류가 그려졌다. 형제 모듈은 처음부터
-    catch 에도 가드가 있었다 — 한 곳만 비대칭이면 규약이 아니다.
+    성공 경로만 막고 catch 에 가드가 없으면, A 를 닫고 B 를 연 뒤 A 의 요청이 실패했을 때
+    B 의 스피너 자리에 A 의 오류가 그려진다. 한 곳만 비대칭이면 규약이 아니다.
 
     토큰을 쓰는 함수만 본다. 경쟁이 없는 다른 async 함수까지 요구하면 거짓 빨강이 난다
     (테마 목록 로딩처럼 선택 상태에 묶이지 않는 경로가 있다).
@@ -515,3 +514,81 @@ def test_tier_filter_is_boj_only(js):
     for name in ("history.js", "import-history.js"):
         assert re.search(r"tierInGroup\([^)]*p\.platform\)", js[name]), \
             f"{name} 이 플랫폼을 넘기지 않는다"
+
+
+def _global_function_owners() -> dict[str, str]:
+    """전역에서 호출 가능한 함수 이름 → 정의한 파일.
+
+    최상위 `function` 선언과 `window.NAME = ` 노출을 모두 센다 — modal-a11y 처럼 IIFE 안에서
+    정의하고 window 로 내보내는 파일이 있다.
+    """
+    owners = {}
+    for path in sorted(_JS_DIR.glob("*.js")):
+        src = path.read_text(encoding="utf-8")
+        for m in re.finditer(r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)", src, re.M):
+            owners[m.group(1)] = path.name
+        for m in re.finditer(r"window\.([A-Za-z_$][\w$]*)\s*=", src):
+            owners[m.group(1)] = path.name
+    return owners
+
+
+def _top_level_calls(src: str) -> set[str]:
+    """로드 시점에 실행되는 줄에서 호출하는 함수 이름.
+
+    중괄호 깊이 0 이면서 선언·주석이 아닌 줄만 본다. 이벤트 핸들러 안의 호출은 로드
+    순서와 무관하므로 제외된다.
+    """
+    depth = 0
+    calls = set()
+    for line in src.split("\n"):
+        stripped = line.strip()
+        executable = (depth == 0 and line and not line[0].isspace()
+                      and not stripped.startswith(("//", "/*", "*", "}", ")",
+                                                   "function", "async function",
+                                                   "const", "let", "var", "class")))
+        if executable:
+            calls.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", stripped))
+        depth += line.count("{") - line.count("}")
+    return calls
+
+
+def test_script_load_order_satisfies_load_time_dependencies(html):
+    """소비자보다 정의가 먼저 실려야 한다 — **로드 시점에 실행되는 호출**에 한해서.
+
+    빌드 스텝이 없어 index.html 의 `<script>` 순서가 곧 평가 순서다. 순서가 뒤집히면
+    소비 시점에 ReferenceError 가 나고, 그 스크립트의 **그 줄 이후만** 조용히 배선되지
+    않는다(앞부분은 이미 실행돼 있어 화면상 정상으로 보인다).
+
+    이벤트 핸들러 안의 호출은 이 계약과 무관하다 — 그때는 모든 스크립트가 이미 평가됐다.
+    """
+    order = {name: i for i, name in
+             enumerate(re.findall(r"js/([a-z0-9-]+\.js)\?v=", html))}
+    owners = _global_function_owners()
+
+    violations = []
+    for path in sorted(_JS_DIR.glob("*.js")):
+        consumer = path.name
+        for name in _top_level_calls(path.read_text(encoding="utf-8")):
+            provider = owners.get(name)
+            if not provider or provider == consumer:
+                continue
+            assert provider in order, f"{provider} 가 index.html 에 없다"
+            assert consumer in order, f"{consumer} 가 index.html 에 없다"
+            if order[provider] > order[consumer]:
+                violations.append(
+                    f"{consumer} 가 로드 시점에 {name}() 를 부르는데 "
+                    f"정의 파일 {provider} 이 뒤에 실린다")
+    assert not violations, "스크립트 로드 순서:\n  " + "\n  ".join(violations)
+
+
+def test_the_load_order_check_sees_a_real_dependency(html):
+    """위 검사가 빈 집합을 훑고 통과하지 않는지 — 실제 의존이 한 건 이상 잡혀야 한다."""
+    owners = _global_function_owners()
+    assert owners.get("registerModal") == "modal-a11y.js"
+    cross = [
+        (p.name, name)
+        for p in sorted(_JS_DIR.glob("*.js"))
+        for name in _top_level_calls(p.read_text(encoding="utf-8"))
+        if owners.get(name) and owners[name] != p.name
+    ]
+    assert cross, "로드 시점 크로스파일 호출을 하나도 찾지 못했다 — 검사가 헛돈다"

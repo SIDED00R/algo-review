@@ -1,7 +1,7 @@
 """ExecuteRequest 의 입력 상한 — ARCHITECTURE.md 가 보안 조치 #6 으로 문서화한 통제.
 
-문서에 적혀 있는데 테스트가 0건이었다. 특히 timeout 은 **거부가 아니라 clamp** 라
-999 를 보내면 조용히 10 이 된다 — 그 동작 자체가 어디에도 고정되어 있지 않았다.
+timeout 은 **거부가 아니라 clamp** 다 — 999 를 보내면 조용히 10 이 된다. 조용한 동작일수록
+고정해 두지 않으면 바뀌어도 드러나지 않는다.
 """
 import pytest
 from pydantic import ValidationError

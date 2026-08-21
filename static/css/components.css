@@ -1,7 +1,6 @@
 /* ── 컴포넌트 ──
-   예전에 없던 사이즈·의미 변형(작은 primary 버튼, 작은 스피너, 성공 알림,
-   JS 생성 폼 컨트롤)을 여기서 정식화한다. 그것들이 없어서 인라인 style 이
-   117건까지 늘어났다. */
+   사이즈·의미 변형(작은 primary 버튼, 작은 스피너, 성공 알림, JS 생성 폼 컨트롤)을
+   여기서 정식화한다. 변형이 없으면 그 조합을 인라인 style 로 손수 만들게 된다. */
 
 /* ═══ 버튼 ═══ */
 .btn-primary, .btn-secondary, .btn-sm, .btn-toggle, .theme-chip, .page-btn,
@@ -34,7 +33,7 @@
 }
 .btn-secondary:hover:not(:disabled) { border-color: var(--fg); background: var(--surface-2); }
 
-/* 작은 변형 — 예전에는 이 조합을 인라인 style 로 매번 손으로 만들었다 */
+/* 작은 변형 — 인라인 style 로 매번 만들지 않도록 클래스로 둔다 */
 /* 크기만 정하는 수식자다 — 반드시 색 변형(.btn-primary/.btn-code/.btn-ai)과 함께 쓴다.
    단독으로 쓰면 브라우저 기본 버튼(buttonface)이 나온다. */
 .btn-sm { padding: var(--s-1) var(--s-3); font-size: var(--fs-sm); border: 1px solid transparent; }
@@ -81,7 +80,7 @@
 .modal-close svg, .pm-close svg { width: 16px; height: 16px; display: block; }
 .github-icon-btn.connected { border-color: var(--status-ok-fg); }
 
-/* 칩 — 예전 .btn-toggle 과 .theme-chip 은 padding 만 다른 중복이었다 */
+/* 칩 — .btn-toggle 과 .theme-chip 은 padding 만 다르므로 한 규칙으로 묶는다 */
 .btn-toggle, .theme-chip {
   padding: var(--s-1) var(--s-3);
   font-size: var(--fs-sm);
@@ -125,8 +124,7 @@
 }
 
 /* 요소 선택자와 클래스를 둘 다 준다 — JS 가 만드는 컨트롤은 클래스를 붙여
-   인라인으로 스타일을 재구현하지 않아도 되게 한다(예전 history.js 는 같은
-   선언을 네 번 복붙했다). */
+   인라인으로 스타일을 재구현하지 않아도 되게 한다. */
 input[type="text"], input[type="password"], textarea, select, .input, .select {
   width: 100%;
   background: var(--surface-1);
@@ -152,7 +150,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 ::placeholder { color: var(--fg-dim); }
 
 /* ═══ 표면 ═══ */
-/* 예전 .card 와 .result-card 는 선언이 완전히 같은 중복이었다. 그림자는 없앴다 —
+/* .card 와 .result-card 는 같은 표면이다. 그림자는 두지 않는다 —
    경계선과 표면 단계로만 구분한다. */
 .card, .result-card {
   background: var(--surface-1);
@@ -166,7 +164,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 
 /* 목록 행 — 조회형 탭의 밀도를 올린다. 개별 박스 대신 헤어라인 구분.
 
-   위·아래 선을 스스로 갖고 앞에 행이 있으면 위 선을 뺀다. 예전에는 상단선을
+   위·아래 선을 스스로 갖고 앞에 행이 있으면 위 선을 뺀다. 상단선을
    `.row:first-child` 로 줬는데, #history-list 의 첫 자식은 항상 .toolbar 라
    리뷰 기록 탭에서는 영원히 매칭되지 않았다.
 
@@ -188,7 +186,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 
 .toolbar { display: flex; gap: var(--s-2); flex-wrap: wrap;
   align-items: center; margin-bottom: var(--s-3); }
-/* 툴바 안의 필터 컨트롤 — 예전에는 JS 가 같은 인라인 선언을 네 번 복붙했다 */
+/* 툴바 안의 필터 컨트롤 — JS 가 같은 인라인 선언을 반복하지 않도록 클래스로 둔다 */
 .toolbar .filter-grow { flex: 1; min-width: 160px; width: auto; }
 .toolbar .filter-fixed { flex: 0 0 auto; width: auto; font-size: var(--fs-sm); }
 
@@ -271,7 +269,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
   background: var(--surface-2); border: 1px solid var(--line); color: var(--fg-muted);
 }
 
-/* 소제목 — 예전에는 h3 마다 인라인으로 크기·색을 지정했다 */
+/* 소제목 — h3 마다 인라인으로 크기·색을 지정하지 않도록 클래스로 둔다 */
 .section-title { font-size: var(--fs-sm); color: var(--fg-dim);
   font-weight: 600; margin-bottom: var(--s-3); }
 .section-title-gap { margin-top: var(--s-5); }
@@ -314,9 +312,9 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═══ 코드 ═══
-   네 계통(.code-block / .pm-pre / .tc-detail pre / .markdown-body pre)이 서로 다른
-   스타일이었다 — 테두리·radius·패딩·서체를 공통으로 묶는다. 산문 안의 코드 블록만
-   배경과 세로 여백이 다르므로 아래에서 그 둘만 덮는다. */
+   네 계통(.code-block / .pm-pre / .tc-detail pre / .markdown-body pre)의 테두리·radius·
+   패딩·서체를 공통으로 묶는다. 산문 안의 코드 블록만 배경과 세로 여백이 다르므로
+   아래에서 그 둘만 덮는다. */
 .code-block, .pm-pre, .markdown-body pre, .tc-detail pre {
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -441,7 +439,7 @@ details > summary {
   display: flex; align-items: center; gap: var(--s-2);
 }
 details > summary h2 { margin: 0; font-size: var(--fs-md); }
-/* summary 바로 뒤 첫 요소에만 간격을 준다 — 예전에는 style="margin-top:12px" 였다 */
+/* summary 바로 뒤 첫 요소에만 간격을 준다 */
 details > summary + * { margin-top: var(--s-3); }
 details.nested-toggle { margin-top: var(--s-4); }
 .toggle-arrow { display: inline-flex; color: var(--fg-dim);

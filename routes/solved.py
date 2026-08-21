@@ -40,8 +40,8 @@ def review_imported(platform: str, problem_ref: str):
         }
 
     # 수집 함수는 예외 대신 실패 문자열을 반환한다 — 직접 부르면 그 값이 프롬프트의
-    # 문제 설명 자리에 그대로 박힌다(acmicpc.net 종료 이후 BOJ 가 상시 이 상태였다).
-    # 리뷰·재리뷰와 같은 해석기를 써서 실패를 빈 본문으로 바꾼다.
+    # 문제 설명 자리에 그대로 박힌다. 리뷰·재리뷰와 같은 해석기를 써서 실패를 빈 본문으로
+    # 바꾼다.
     statement = resolve_statement(platform, problem_info)
 
     try:
@@ -77,6 +77,7 @@ def clear_solved_history():
 
 @router.get("/api/solved-history/{platform}/{problem_ref}")
 def get_solved_history_detail(platform: str, problem_ref: str):
+    platform = require_platform(platform)
     p = db.get_solved_problem(platform, problem_ref)
     if not p:
         raise HTTPException(status_code=404, detail="없음")

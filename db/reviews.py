@@ -1,11 +1,15 @@
 import json
+import logging
 from datetime import datetime
 
 from sqlalchemy import distinct, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
 from db.normalize import normalize_common_row
+
+logger = logging.getLogger("uvicorn.error")
 
 
 PENDING_EFFICIENCY = "pending"
@@ -132,31 +136,75 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         return True
 
 
+def _first_submission_tag_counts(session) -> dict:
+    """BOJ 리뷰에서 **문제당 첫 제출**만 세어 태그별 good/poor 를 만든다.
+
+    `_bump_tag_stats` 와 같은 기준이다 — 다른 기준으로 복원하면 두 경로가 뒤집힐 때
+    숫자가 튄다. `created_at` 오름차순으로 훑어 (platform, problem_ref) 첫 행만 쓴다.
+    """
+    rows = session.execute(
+        select(Review.problem_ref, Review.tags, Review.efficiency)
+        .where(Review.platform == "boj")
+        .order_by(Review.created_at.asc())
+    ).mappings().all()
+
+    seen = set()
+    firsts = []
+    for row in rows:
+        if row["problem_ref"] in seen:
+            continue
+        seen.add(row["problem_ref"])
+        firsts.append(dict(row))
+    return _tally_tag_efficiency(firsts)
+
+
+def _rebuild_tag_stats() -> None:
+    """비어 있는 tag_stats 를 reviews 에서 **한 번** 복원한다.
+
+    읽기 경로에서 매번 폴백을 계산하면 스위치가 all-or-nothing 이라 통계가 튄다 —
+    백필로 들어온 BOJ 리뷰 500건 + 빈 tag_stats 상태에서 새 리뷰 **1건**을 저장하면
+    `_bump_tag_stats` 가 행 1개를 만들고, 다음 조회부터 폴백을 건너뛰어 `math: 120` 이
+    `math: 1` 로 붕괴한다. 상태를 수렴시켜 스위치 자체를 없앤다.
+    """
+    with session_scope(commit=True) as session:
+        if session.scalar(select(func.count()).select_from(TagStat)):
+            return   # 다른 인스턴스가 먼저 채웠다
+        for tag, counts in _first_submission_tag_counts(session).items():
+            session.add(TagStat(tag=tag, good_count=counts["good_count"],
+                                poor_count=counts["poor_count"],
+                                total_count=counts["total_count"]))
+
+
 def get_tag_stats() -> list:
-    """BOJ 태그별 good/poor 집계. tag_stats 가 비어 있으면 reviews 를 직접 집계한다.
+    """BOJ 태그별 good/poor 집계.
 
     tag_stats 는 `_bump_tag_stats` 가 **BOJ 첫 제출에서만** 채우는 비정규화 테이블이라,
     그 경로를 타지 않고 들어온 행(마이그레이션·백필·직접 INSERT)만 있으면 비어 있다.
-    폴백이 없으면 BOJ 리뷰가 아무리 많아도 `/api/report` 가 "아직 저장된 기록이 없습니다"
-    (400)를 낸다. get_tag_weakness_data 는 이미 같은 폴백을 갖고 있었다.
+    그러면 BOJ 리뷰가 아무리 많아도 `/api/report` 가 "아직 저장된 기록이 없습니다"(400)를
+    내고 `/api/stats` 의 태그 통계도 빈다.
 
-    두 경로의 셈이 정확히 같지는 않다 — tag_stats 는 **첫 제출만** 세고 폴백은 모든 회차를
-    센다. 폴백이 도는 상황은 애초에 그 집계가 없던 데이터라 복원할 "첫 제출" 기준이 없다.
+    비어 있으면 **읽을 때마다 폴백을 계산하는 대신 테이블을 한 번 복원**한다. 폴백 방식은
+    스위치가 all-or-nothing 이라, 복원 전 상태에서 새 리뷰 1건이 들어오는 순간 통계가
+    붕괴한다(위 `_rebuild_tag_stats` docstring 참조).
     """
-    with session_scope() as session:
-        rows = session.scalars(select(TagStat).order_by(TagStat.total_count.desc())).all()
-        if rows:
+    def _read():
+        with session_scope() as session:
             return [
                 {"tag": r.tag, "good_count": r.good_count,
                  "poor_count": r.poor_count, "total_count": r.total_count}
-                for r in rows
+                for r in session.scalars(
+                    select(TagStat).order_by(TagStat.total_count.desc())).all()
             ]
-        review_rows = session.execute(
-            select(Review.tags, Review.efficiency).where(Review.platform == "boj")
-        ).mappings().all()
 
-    counts = _tally_tag_efficiency([dict(r) for r in review_rows])
-    return sorted(counts.values(), key=lambda c: c["total_count"], reverse=True)
+    rows = _read()
+    if rows:
+        return rows
+    try:
+        _rebuild_tag_stats()
+    except IntegrityError:
+        # 두 인스턴스가 동시에 복원하면 한쪽이 진다 — 상대가 넣은 값을 읽으면 된다.
+        logger.info("tag_stats 복원 경합 — 다른 인스턴스가 먼저 채웠다")
+    return _read()
 
 
 def get_total_review_count(platform: str | None = None) -> int:

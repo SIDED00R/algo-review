@@ -32,11 +32,11 @@ def test_cache_get_stale_missing_returns_none():
     assert db.cache_get_stale("nope") is None
 
 
-# ── 자가 복구 (회귀) ──
+# ── 자가 복구 ──
 #
 # cache_get 의 두 try/except 는 주석에서 "여기서 예외가 나가면 호출부가 cache_set 에
 # 도달하지 못해 그 키가 영구히 자가 복구 불능이 된다" 고 위험도를 명시한다. 그런데
-# 정상 경로만 테스트가 있어, 두 가드를 제거해도 스위트가 초록이었다.
+# 정상 경로만 검사하면 두 가드를 제거해도 통과한다 — 손상된 입력을 직접 넣는다.
 
 def _write_raw(key, payload, updated_at):
     """정상 경로로는 만들 수 없는 손상 행을 직접 넣는다(수동 편집·부분 쓰기 재현)."""

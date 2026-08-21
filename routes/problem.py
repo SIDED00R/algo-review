@@ -2,6 +2,7 @@ import time
 import asyncio
 import clients as api_client
 from fastapi import APIRouter, HTTPException
+from routes.helpers import upstream_failure
 from demo_mode import IS_DEMO, DEMO_CF_PROBLEM
 from cf_translator import translate_cf_text
 
@@ -52,7 +53,7 @@ async def get_cf_problem(problem_ref: str):
     except ValueError:
         raise HTTPException(400, "잘못된 문제 번호 형식 (예: 4A, 1234B)")
     except Exception as e:
-        raise HTTPException(502, f"CF 페이지 로딩 실패: {e}")
+        raise upstream_failure("CF 페이지 로딩 실패", e)
 
     title = raw["title"]
 

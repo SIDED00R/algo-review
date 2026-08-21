@@ -20,11 +20,11 @@ def normalize_review_result(result: dict) -> dict:
     LLM 이 `"complexity": null` 을 주면 그 None 이 NOT NULL 컬럼으로 흘러가 저장이
     IntegrityError 로 죽고, 이미 과금된 응답과 tag_stats 첫 집계가 롤백으로 함께 사라진다.
     저장 경로가 둘이라(save_review / update_pending_review) 소비처마다 막으면 한쪽이
-    빠진다 — 실제로 update_pending_review 만 빠져 있었다.
+    빠진다. 그래서 생산자인 여기 한 곳에서 끝낸다.
 
     리스트 필드는 실패 양상이 다르다. `json.dumps(None)` 은 예외 없이 문자열 `"null"` 을
     만들어 NOT NULL 컬럼을 **조용히** 통과하고, 읽을 때 `json.loads("null")` → None 이
-    되어 API 가 `"strengths": null` 을 내보낸다. 여기서도 생산자 한 곳에서 끝낸다.
+    되어 API 가 `"strengths": null` 을 내보낸다.
     """
     if result.get("efficiency") not in ("good", "ok", "poor"):
         result["efficiency"] = "ok"
@@ -109,7 +109,14 @@ efficiency 기준:
     raw = choice_text(response)
     if not raw:
         raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
-    result = json.loads(raw)
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as e:
+        # JSONDecodeError 는 ValueError 의 서브클래스라, 감싸지 않으면 라우터의
+        # "analyzer 가 직접 만든 사용자용 안내" 분기를 그대로 타고 나간다 —
+        # 사용자는 "Expecting value: line 1 column 1 (char 0)" 를 502 와 함께 본다.
+        raise ValueError("AI 응답을 JSON 으로 해석하지 못했습니다. "
+                         "모델 설정(OPENAI_MODEL)을 확인해주세요.") from e
 
     return normalize_review_result(result)
 
@@ -153,8 +160,8 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         timeout=_API_TIMEOUT,
     )
 
-    # 인덱싱보다 먼저 확인한다 — 순서가 뒤집히면 choices 가 빈 응답에서 IndexError 가 나고
-    # 가드가 도달하지 못한다(analyze_code 는 올바른 순서였는데 여기만 뒤집혀 있었다).
+    # 인덱싱보다 먼저 확인한다 — 순서가 뒤집히면 choices 가 빈 응답에서 IndexError 가 나
+    # 가드에 도달하지 못한다.
     require_choice(response)
     if response.choices[0].finish_reason == "length":
         # max_tokens 에 걸려 리포트가 중간에서 잘렸다 — 캐시가 없어 매번 재생성되므로

@@ -43,8 +43,9 @@ def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str
 
 
 # 본문 수집 함수들은 예외를 던지지 않고 실패 문자열을 반환한다. 그걸 그대로 LLM 에 넘기면
-# 프롬프트의 문제 설명 자리에 에러 메시지가 박힌다 — acmicpc.net 종료 이후 BOJ 리뷰가
-# 실제로 이 상태였다. 빈 본문을 주는 편이 낫다(analyzer 가 제목·티어·태그·코드로 분석한다).
+# 프롬프트의 문제 설명 자리에 에러 메시지가 박힌다. BOJ 는 acmicpc.net 종료로 수집이 상시
+# 실패하므로 이 판별이 없으면 매 리뷰가 그 상태가 된다. 빈 본문을 주는 편이 낫다
+# (analyzer 가 제목·티어·태그·코드로 분석한다).
 _SCRAPE_FAILURE_PREFIXES = (
     "크롤링 실패",
     "문제 설명을 가져올 수 없습니다",

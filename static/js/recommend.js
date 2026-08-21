@@ -27,8 +27,7 @@ recommendBtn.addEventListener('click', () => fetchRecommend());
 function renderRecommend(container, data) {
   if (!data.recommendations || data.recommendations.length === 0) {
     // 검색 실패와 "기록이 없어서 빈 결과" 를 구분한다 — 서버가 error 를 주면 그 이유를
-    // 그대로 보인다. 예전에는 solved.ac 가 막혀도 "먼저 코드 리뷰를 몇 개 진행해보세요"
-    // 라고 사용자를 탓했다.
+    // 그대로 보인다. 구분하지 않으면 외부 API 장애를 사용자 탓으로 표시하게 된다.
     container.innerHTML = data.error
       ? `<div class="alert alert-error">${escapeHtml(data.error)} 잠시 후 다시 시도해주세요.</div>`
       : `<div class="alert alert-info">

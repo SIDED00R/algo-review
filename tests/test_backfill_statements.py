@@ -243,7 +243,11 @@ def test_set_problem_statement_rejects_empty():
 # ── 수집 실패 처리 ──
 
 def test_resolve_statement_never_returns_failure_string(monkeypatch):
-    """acmicpc.net 종료 이후 BOJ 리뷰가 프롬프트의 문제 설명 자리에 404 문자열을 넣고 있었다."""
+    """수집 실패 문자열이 LLM 프롬프트의 문제 설명 자리로 흘러가면 안 된다.
+
+    BOJ 는 acmicpc.net 종료로 수집이 상시 실패하므로 이 판별이 없으면 매 리뷰가
+    `"크롤링 실패: 404 …"` 를 본문으로 받는다.
+    """
     from routes import problem_resolve
 
     monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",
@@ -266,14 +270,15 @@ def test_resolve_statement_prefers_stored_body_over_scraping(monkeypatch):
     assert problem_resolve.resolve_statement("boj", {"problem_ref": "1000"}, stored) == stored
 
 
-# ── 저장소 트리 조회 (#100 의 핵심 함수 — 예전에는 커버리지 0 이었다) ──
+# ── 저장소 트리 조회 ──
 
 def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
     """트리 → {문제번호: [README 경로]} 변환. BaekjoonHub 폴더명 규칙을 실제로 통과시킨다.
 
     폴더명을 조립해 맞히려 하면 실패한다 — BaekjoonHub 는 공백을 U+2005 로, 특수문자를
     전각으로 바꾸고 `번` 을 붙이지 않으며, 티어 폴더도 저장 당시 값이라 DB 와 다를 수 있다.
-    예전 테스트는 이 dict 를 리터럴로 주입해서, 이 함수가 {} 를 돌려줘도 전부 초록이었다.
+    변환 결과 dict 를 리터럴로 주입하면 이 함수가 {} 를 돌려줘도 통과하므로, 트리 입력을
+    주고 변환 자체를 태운다.
     """
     tree = [
         # BaekjoonHub: `번` 없음 + U+2005 공백 + 전각 문자
@@ -327,10 +332,10 @@ def test_truncated_tree_raises_instead_of_returning_partial_results(monkeypatch)
         github_client.fetch_repo_tree("me/solutions", "tok")
 
 
-# ── main() 의 저장 가드 (회귀) ──
+# ── main() 의 저장 가드 ──
 #
-# "저장 가드" 섹션이 is_scrape_failure 와 set_problem_statement 만 검사해, main() 안의
-# 길이 검사(MIN_STATEMENT_LEN)는 0 으로 바꿔도 스위트가 초록이었다.
+# is_scrape_failure 와 set_problem_statement 만 검사하면 main() 안의 길이 검사
+# (MIN_STATEMENT_LEN)를 0 으로 바꿔도 통과한다. 여기서는 main() 을 직접 태운다.
 
 def _run_main(monkeypatch, statement, apply=False):
     """main() 을 BOJ 한 건에 대해 돌린다. 수집 결과만 주입한다."""
@@ -401,8 +406,8 @@ def test_db_target_is_printed_before_any_query(monkeypatch, capsys):
 def test_reason_bucket_collapses_every_form_main_produces():
     """main() 이 실제로 만드는 사유 전부가 수렴해야 한다.
 
-    예전에는 `문자열(37자)` 처럼 괄호 앞에 공백이 없어 길이마다 별개 버킷이 됐고,
-    구분자 `" ("` 는 어떤 사유에도 매칭되지 않는 dead branch 였다.
+    `문자열(37자)` 처럼 괄호 앞에 공백이 없는 형태가 섞이면 길이마다 별개 버킷이 되고,
+    `" ("` 를 구분자로 쓰면 그런 사유에는 매칭되지 않는다.
     """
     forms = [
         "BOJ 문제 번호가 숫자가 아니다",

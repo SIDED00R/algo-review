@@ -1,4 +1,5 @@
-"""GitHub push 공용 헬퍼 — README 조립, 저장 폴더/커밋 메시지, 저장소 타깃 병합, 파일 push.
+"""라우터 공용 헬퍼 — GitHub push(README 조립, 저장 폴더·커밋 메시지, 저장소 타깃 병합,
+번들 push)와 요청 검증(require_platform · require_language · upstream_failure).
 
 push 함수가 둘인 이유: push_solution 은 파일별 PUT(가져오기처럼 수백 건을 훑는 경로에서
 한 문제가 실패해도 나머지가 진행되어야 한다), push_review_bundle 은 README+코드를
@@ -72,7 +73,7 @@ def require_language(language: str) -> str:
 def build_solution_target(platform: str, problem_ref, title: str, tier_name: str = "") -> tuple[str, str]:
     """플랫폼별 저장소 폴더명과 커밋 메시지를 조립해 (folder, msg) 반환."""
     if platform == "boj":
-        # `" "` 는 truthy 지만 split() 이 [] 라 인덱싱이 IndexError 였다.
+        # `" "` 는 truthy 지만 split() 이 [] 라 그대로 인덱싱하면 IndexError 다.
         tier_cat = (tier_name.split() or ["Unrated"])[0]
         folder = f"백준/{tier_cat}/{problem_ref}번. {title}"
         msg = f"[BOJ] {problem_ref}번. {title}"
@@ -136,8 +137,8 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
 
     require_sections: 스크래핑 실패 시 막을지 여부. 기존 문서를 본문 없이 재생성하면
     이미 올라간 문제 설명을 지우므로 True(기본값)로 막는다. 단 **저장소에 그 README 가
-    실제로 있을 때만** 막는다 — 지킬 문서가 없으면 502 는 최초 등록을 이유 없이 차단한다
-    (acmicpc.net 종료로 BOJ 수집이 상시 실패하므로 BOJ push 가 전부 막혀 있었다).
+    실제로 있을 때만** 막는다 — 지킬 문서가 없으면 502 는 최초 등록을 이유 없이 차단한다.
+    BOJ 는 acmicpc.net 종료로 수집이 상시 실패하므로 이 구분이 없으면 push 가 전부 막힌다.
     False 로 넘기면 확인조차 하지 않는다(이미 문서가 없음이 확실한 경로).
 
     description 을 직접 주면 input/output 은 호출자 책임이다. `【문제】/【입력】/【출력】`
@@ -147,9 +148,9 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     url = url or api_client.get_problem_url(platform, problem_ref)
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 
-    # 호출자가 섹션을 하나라도 직접 줬으면 스크래핑하지 않는다 — 예전에는 description 만
-    # 보고 분기해서, description="" + input_desc/output_desc 조합에서 호출자가 넘긴 값을
-    # 스크래핑 결과로 덮어썼다(CF 뷰어에서 넘어오는 경로가 그 조합을 만든다).
+    # 호출자가 섹션을 하나라도 직접 줬으면 스크래핑하지 않는다. description 만 보고
+    # 분기하면 description="" + input_desc/output_desc 조합(CF 뷰어에서 넘어오는 경로)에서
+    # 호출자가 넘긴 값을 스크래핑 결과가 덮어쓴다.
     if not (description or input_desc or output_desc):
         if platform == "boj":
             try:

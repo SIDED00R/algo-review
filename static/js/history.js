@@ -292,11 +292,12 @@ async function runRereview(e) {
 // 모달은 #tab-history 안에 있다 — 닫지 않고 탭을 옮기면 그대로 남으므로
 // 닫기 경로를 한 곳으로 모은다.
 function closeReviewModal() {
+  _modalToken++;
   document.getElementById('review-modal').classList.add('hidden');
 }
 
 document.getElementById('modal-close').addEventListener('click', closeReviewModal);
-// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다 — 예전에는 이 모달만 셋 다 없었다.
+// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다.
 registerModal('review-modal', closeReviewModal, { initial: '#modal-close' });
 document.getElementById('review-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeReviewModal();

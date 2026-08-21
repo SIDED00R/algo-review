@@ -61,8 +61,6 @@ def cache_set(key: str, payload) -> None:
     merge() 는 SELECT 후 없으면 INSERT 라, 인스턴스 두 개가 같은 키를 동시에 채우면
     한쪽이 IntegrityError 를 받는다. 캐시 쓰기는 **부수 효과**이므로 그것 때문에 요청이
     500 이 되면 안 된다 — 상대가 이미 같은 값을 넣었다는 뜻이라 그냥 넘어간다.
-    (warmup 경로는 자기 try/except 로 삼키지만 /api/themes/{id}/problems 경로는
-    잡는 곳이 없었다.)
     """
     data = json.dumps(payload, ensure_ascii=False)
     now = datetime.now(timezone.utc).isoformat()

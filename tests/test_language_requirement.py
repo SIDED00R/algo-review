@@ -1,10 +1,10 @@
-"""제출 언어를 요구하는 세 엔드포인트 (회귀).
+"""제출 언어를 요구하는 세 엔드포인트.
 
 언어를 모르면 get_file_extension 이 `.txt` 를 주고, 저장소에 `1000.txt` 로 커밋된 풀이는
 rereview 가 "저장된 언어 정보가 없어 파일명을 재현할 수 없습니다" 로 **영구 거부**한다.
 
-같은 하류 제약인데 예전에는 /api/review/pending 하나만 막고 있었다. 프론트의 "자동 감지"
-옵션은 detectLanguage 가 미인식 코드에 '' 를 반환하므로 빈 값이 실제로 도달한다.
+세 엔드포인트가 같은 하류 제약을 공유하므로 셋 다 막는다. 프론트의 "자동 감지" 옵션은
+detectLanguage 가 미인식 코드에 '' 를 반환하므로 빈 값이 실제로 도달한다.
 """
 import pytest
 from fastapi import FastAPI
@@ -62,7 +62,7 @@ def test_language_check_runs_before_any_external_work(monkeypatch):
 
 
 def test_a_real_language_still_gets_through(monkeypatch):
-    """거절 규칙이 정상 경로까지 막지 않는지 — 4회차에서 가드를 조이다 실제로 겪은 회귀다."""
+    """거절 규칙이 정상 경로까지 막지 않는지 — 가드는 빈 값만 걸러야 한다."""
     monkeypatch.setattr(pending_review, "IS_DEMO", True)
     info = pending_review.DEMO_PROBLEM_INFO
     r = _client(pending_review).post(

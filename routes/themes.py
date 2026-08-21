@@ -18,7 +18,9 @@ def get_themes(response: Response):
 def get_theme_problems(theme_id: str, response: Response, platform: str = "codeforces"):
     # 푼 문제 제외 결과라 사용자 상태에 의존 — 브라우저 캐시 금지(클라이언트 캐싱은 localStorage 계층이 담당).
     response.headers["Cache-Control"] = "no-store"
-    platform = require_platform(platform)
+    # `?platform=` (빈 값) 은 normalize_platform 이 "boj" 로 채운다 — 이 엔드포인트의
+    # 기본값은 codeforces 이므로 먼저 채우고 검증한다(recommend.py 와 같은 이유).
+    platform = require_platform(platform or "codeforces")
 
     if IS_DEMO:
         data = DEMO_THEME_PROBLEMS.get((platform, theme_id))
