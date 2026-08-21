@@ -33,6 +33,9 @@ class Review(Base):
     strengths: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'[]'"))
     weaknesses: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'[]'"))
     language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    # 불러오기로 폼을 복원할 때 쓴다. 사용자가 붙여 넣은 원문만 담는다 —
+    # 서버가 스크래핑한 본문은 재제출 시 어차피 다시 해석된다(routes/problem_resolve.py).
+    problem_statement: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (

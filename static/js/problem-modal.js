@@ -250,30 +250,18 @@ async function runSamples() {
   }
 }
 
+// 뷰어에서 작성한 코드를 리뷰 폼으로 넘긴다. 폼 채우기·탭 전환은 fillReviewForm 이
+// 담당한다 — 예전에는 여기서 탭 클래스를 직접 토글해 tabs.js 와 중복이었고,
+// #code-language 에 change 를 발생시키지 않아 CodeMirror 모드가 파이썬으로 남았다.
 function proceedToReview() {
   if (!_currentProblem) return;
-
-  document.getElementById('problem-platform').value = 'codeforces';
-  document.getElementById('problem-platform').dispatchEvent(new Event('change'));
-  document.getElementById('problem-id').value = _currentProblem.ref;
-  window.setEditorValue('code-input', window.getEditorValue('pm-code'));
-
-  const lang = document.getElementById('pm-language').value;
-  document.getElementById('code-language').value = lang === 'cpp' ? 'GNU C++17' : 'Python 3';
-
   closeProblemModal();
-
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(s => {
-    s.classList.remove('active');
-    s.classList.add('hidden');
+  fillReviewForm({
+    platform: 'codeforces',
+    problem_ref: _currentProblem.ref,
+    code: window.getEditorValue('pm-code'),
+    language: document.getElementById('pm-language').value === 'cpp' ? 'GNU C++17' : 'Python 3',
   });
-  document.querySelector('[data-tab="review"]').classList.add('active');
-  const reviewTab = document.getElementById('tab-review');
-  reviewTab.classList.remove('hidden');
-  reviewTab.classList.add('active');
-
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── 이벤트 배선 ──

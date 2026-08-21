@@ -171,3 +171,71 @@
 .CodeMirror-hint-active {
   background: var(--surface-2); color: var(--fg); border-left-color: var(--fg);
 }
+
+/* ═══ 명령 팔레트 (⌘K) ═══
+   목록 항목은 제출 원장과 같은 모노 정렬을 쓴다 — 같은 데이터를 같은 방식으로 읽는다. */
+.cmdk-overlay {
+  position: fixed; inset: 0;
+  background: var(--scrim);
+  z-index: var(--z-overlay);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 10vh var(--s-4) var(--s-4);
+}
+.cmdk-box {
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  width: 100%; max-width: 560px;
+  display: flex; flex-direction: column;
+  max-height: 70vh; overflow: hidden;
+}
+.cmdk-head {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-3); border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.cmdk-crumb {
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  color: var(--fg-dim); width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cmdk-input {
+  flex: 1; width: auto; min-width: 0;
+  background: transparent; border: none; border-radius: 0;
+  color: var(--fg); font-size: var(--fs-base); padding: 0;
+}
+.cmdk-input:focus { border: none; }
+.cmdk-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex-shrink: 0;
+  background: transparent; color: var(--fg-dim);
+  border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; padding: 0;
+}
+.cmdk-close:hover { color: var(--fg); border-color: var(--line-strong); }
+.cmdk-close svg { width: 13px; height: 13px; display: block; }
+
+.cmdk-list { list-style: none; margin: 0; padding: var(--s-1); overflow-y: auto; flex: 1; }
+.cmdk-item {
+  display: flex; align-items: center; gap: var(--s-3);
+  width: 100%; text-align: left; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: var(--r);
+  padding: var(--s-2) var(--s-3);
+  color: var(--fg-muted); font-family: inherit; font-size: var(--fs-sm);
+}
+.cmdk-item:hover { background: var(--surface-2); color: var(--fg); }
+.cmdk-item.active {
+  background: var(--surface-2); color: var(--fg); border-color: var(--line-strong);
+}
+.cmdk-item-label {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cmdk-item-meta { margin-left: auto; color: var(--fg-dim); font-size: var(--fs-xs); white-space: nowrap; }
+.cmdk-empty { padding: var(--s-4) var(--s-3); color: var(--fg-dim); font-size: var(--fs-sm); }
+
+.cmdk-foot {
+  display: flex; gap: var(--s-4); flex-wrap: wrap;
+  padding: var(--s-2) var(--s-3); border-top: 1px solid var(--line);
+  font-size: var(--fs-label); color: var(--fg-dim);
+}
+.cmdk-foot kbd { margin-right: 2px; }

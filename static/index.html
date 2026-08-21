@@ -101,6 +101,9 @@
             </div>
           </div>
         </div>
+        <button id="cmdk-open" class="kbd-hint" aria-label="명령 팔레트 열기">
+          <span>검색</span><kbd>⌘K</kbd>
+        </button>
         <button id="theme-toggle" class="theme-btn" aria-label="테마 변경" aria-pressed="false">
           <svg aria-hidden="true"><use href="#i-moon" /></svg>
         </button>
@@ -155,7 +158,7 @@
       </div>
 
       <!-- 선택 입력이고 대부분 비어 있으므로 접어 둔다 -->
-      <details class="statement-toggle">
+      <details class="statement-toggle" id="statement-toggle">
         <summary>
           <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
           문제 설명 직접 붙여넣기 (선택)
@@ -166,6 +169,8 @@
 
       <div class="field-head">
         <span class="label">풀이 코드</span>
+        <button type="button" id="load-submission-btn" class="btn-ghost">지난 제출 불러오기</button>
+        <span id="load-submission-msg" class="hint"></span>
       </div>
       <div id="code-input" class="cm-wrap"></div>
 
@@ -447,6 +452,26 @@
     </div>
   </div>
 
+  <!-- ── 명령 팔레트 (⌘K) ── -->
+  <div id="cmdk" class="cmdk-overlay hidden" role="dialog" aria-modal="true" aria-label="명령 팔레트">
+    <div class="cmdk-box">
+      <div class="cmdk-head">
+        <span id="cmdk-crumb" class="cmdk-crumb hidden"></span>
+        <input id="cmdk-input" class="cmdk-input" type="text" autocomplete="off"
+               spellcheck="false" placeholder="무엇을 할까요?" aria-label="명령 검색" />
+        <button type="button" id="cmdk-close" class="cmdk-close" aria-label="닫기">
+          <svg aria-hidden="true"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <ul id="cmdk-list" class="cmdk-list"></ul>
+      <div class="cmdk-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
+        <span><kbd>Enter</kbd> 실행</span>
+        <span><kbd>Esc</kbd> 뒤로 · 닫기</span>
+      </div>
+    </div>
+  </div>
+
   <!-- CodeMirror 5 JS (modes + addons) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
@@ -483,5 +508,8 @@
   <script src="/static/js/import-boj.js?v=__V__"></script>
   <script src="/static/js/import-codeforces.js?v=__V__"></script>
   <script src="/static/js/report.js?v=__V__"></script>
+  <!-- 지난 제출 불러오기 (utils·editor·tabs 의존) -->
+  <script src="/static/js/load-submission.js?v=__V__"></script>
+  <script src="/static/js/command-palette.js?v=__V__"></script>
 </body>
 </html>

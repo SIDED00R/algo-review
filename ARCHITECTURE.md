@@ -75,7 +75,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | 파일 | 단일 책임 |
 |------|----------|
-| `db/models.py` | ORM 모델 5개(Review·TagStat·SolvedHistory·GithubSetting·ApiCache) + 인덱스 |
+| `db/models.py` | ORM 모델 5개(Review·TagStat·SolvedHistory·GithubSetting·ApiCache) + 인덱스. `reviews.problem_statement` 는 불러오기로 폼을 복원할 때 쓰는, 사용자가 붙여 넣은 원문이다 |
 | `db/connection.py` | 지연 엔진 싱글턴(`get_engine`)·세션 컨텍스트(`session_scope`)·`dispose_engine` |
 | `db/migrate.py` | 프로그래매틱 Alembic `upgrade head` 실행(`run_migrations`) |
 | `db/normalize.py` | reviews/solved 행 정규화 공용 헬퍼 (platform·problem_ref·tags·tier_name 폴백) |
@@ -136,9 +136,11 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 |------|----------|
 | `utils.js` | 공통 유틸 — 순수 함수(tierClass, cfRatingClass, tierBadgeHtml, escapeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk) |
 | `editor.js` | CodeMirror 에디터 초기화 및 관리 |
+| `load-submission.js` | 지난 제출을 리뷰 폼에 채워 편집 가능한 상태로 만든다. 진입점 넷(메인 탭 버튼·리뷰 기록 모달·⌘K 팔레트·문제 풀기 모달의 '코드 리뷰 진행')이 이 파일의 `fillReviewForm` 을 쓴다 |
+| `command-palette.js` | ⌘K 팔레트 — 탭 이동 + 문제 검색 → 회차 선택 → 불러오기 |
 | `theme.js` | 다크/라이트 테마 토글 (`html[data-theme]`). 첫 페인트 전 확정은 `index.html` `<head>` 인라인 스크립트가 담당 |
 | `github.js` | GitHub OAuth 연결 UI |
-| `tabs.js` | 탭 전환 네비게이션 |
+| `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
@@ -196,6 +198,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `themes.js` | `GET /api/themes` | 테마 목록 요청 (localStorage 24h 캐시) |
 | `themes.js` | `GET /api/themes/{theme_id}/problems` | 플랫폼별 테마 문제 요청 (메모리/localStorage 30분 캐시) |
 | `import-history.js` | `GET /api/solved-history` | 가져온 기록 목록 조회 |
+| `load-submission.js` | `GET /api/reviews/problem/{platform}/{ref}` | 지난 제출 코드·언어·문제 설명 조회 |
+| `command-palette.js` | `GET /api/reviews/grouped` | 팔레트 문제 검색 목록 |
 
 ---
 
@@ -209,6 +213,18 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
 | 5 | `server.py` | 전역 예외 핸들러 — DB 연결 실패(`OperationalError`)는 503 + 안내, 그 외 미처리 예외는 500 generic(내부 상세 비노출) + traceback 로깅 |
 | 6 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
+
+---
+
+## 조용한 오답이 나는 지점
+
+테스트가 없으면 잡히지 않고, 실패하지도 않으면서 결과만 틀리는 곳이다.
+
+| 지점 | 내용 | 방어 |
+|------|------|------|
+| `routes/problem_resolve.py` `resolve_statement` | 요청에 `problem_statement` 가 있으면 **무조건** 그것을 쓴다. 이전 문제의 붙여넣은 본문이 폼에 남아 있으면 다른 문제를 그 본문으로 리뷰한다 | `load-submission.js` 가 값이 없어도 `''` 를 조건 없이 대입한다. `tests/test_load_submission_wiring.py` 가 이 코드의 존재를 고정 |
+| `reviews.language` | 자유 문자열이다 — import 경로가 CF/BOJ 원문(`"GNU G++17 7.3.0"`)을 그대로 저장한다. `select.value` 에 없는 값을 넣으면 조용히 실패해 빈 select 가 된다 | `submissionLanguageOption()` 이 option 존재를 확인하고, 없으면 `detectLanguage(code)` 로 재추론한다(반환 도메인이 option value 와 같다) |
+| 탭 전환 | 전환 로직을 복제하면 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛴다 | `activateTab()` 한 곳만 둔다. 배선 테스트가 다른 JS 에 `.tab-content` 토글이 없음을 확인 |
 
 ---
 

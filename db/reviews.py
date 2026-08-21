@@ -50,7 +50,7 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
                 complexity: str = "", better_algorithm: str = "",
                 strengths: list = None, weaknesses: list = None,
                 platform: str = "boj", problem_ref: str | None = None,
-                tier_name: str = "", language: str = ""):
+                tier_name: str = "", language: str = "", problem_statement: str = ""):
     strengths = strengths or []
     weaknesses = weaknesses or []
     platform = (platform or "boj").strip().lower()
@@ -72,7 +72,7 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
             efficiency=efficiency, complexity=complexity, better_algorithm=better_algorithm or "",
             strengths=json.dumps(strengths, ensure_ascii=False),
             weaknesses=json.dumps(weaknesses, ensure_ascii=False),
-            language=language,
+            language=language, problem_statement=problem_statement or "",
             created_at=datetime.now().isoformat(),
         ))
 
@@ -227,7 +227,8 @@ def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
             select(Review.id, Review.problem_id, Review.platform, Review.problem_ref, Review.title,
                    Review.tier, Review.tier_name, Review.tags, Review.code, Review.efficiency,
                    Review.complexity, Review.better_algorithm, Review.strengths, Review.weaknesses,
-                   Review.feedback, Review.language, Review.created_at)
+                   Review.feedback, Review.language, Review.problem_statement,
+                   Review.created_at)
             .where(Review.platform == platform, Review.problem_ref == problem_ref)
             .order_by(Review.created_at.desc())
         ).mappings().all()

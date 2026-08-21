@@ -69,7 +69,7 @@ function getFilteredReviews() {
   const sort = document.getElementById('h-sort')?.value || 'recent';
 
   let list = allReviewProblems.filter(p => {
-    if (q && !`${problemLabel(p)} ${p.title} ${(p.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
+    if (!matchesProblemQuery(p, q)) return false;
     if (tier && !tierInGroup(p.tier, tier)) return false;
     if (eff) {
       const lastEff = p.efficiencies.split(',')[0];
@@ -192,11 +192,21 @@ async function openReviewModal(platform, problemRef) {
           <div class="markdown-body">${DOMPurify.sanitize(marked.parse(r.feedback || ''))}</div>
         </div>`}
         <div class="code-section">
-          <div class="field-head"><span class="label">제출 코드</span></div>
+          <div class="field-head">
+            <span class="label">제출 코드</span>
+            <button type="button" id="reuse-code-btn" class="btn-ghost">이 코드로 다시 풀기</button>
+          </div>
           <pre class="code-block">${escapeHtml(r.code)}</pre>
         </div>`;
 
       document.getElementById('rereview-btn')?.addEventListener('click', runRereview);
+      // 모든 회차에 준다 — 재리뷰는 서버가 최신 회차만 다루지만 불러오기는
+      // 순수 클라이언트 동작이라 과거 회차에도 유효하다.
+      document.getElementById('reuse-code-btn').addEventListener('click', () => {
+        if (!confirmEditorOverwrite()) return;
+        closeReviewModal();
+        fillReviewForm(r, reviews.length - idx, reviews.length);
+      });
     }
 
     content.querySelectorAll('.ledger-row').forEach(btn => {
