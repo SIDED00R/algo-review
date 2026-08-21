@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import db
-from routes import rereview
+from routes import problem_resolve, rereview
 
 
 @pytest.fixture
@@ -72,6 +72,33 @@ def test_pending_row_without_api_key_returns_400(client, monkeypatch):
     assert r.status_code == 400
     # 리뷰는 여전히 대기 상태로 남는다 — 나중에 다시 시도할 수 있다.
     assert db.get_reviews_by_problem("boj", "1000")[0]["efficiency"] == db.PENDING_EFFICIENCY
+
+
+def test_stored_statement_reaches_the_llm(client, monkeypatch):
+    """저장된 본문이 있으면 LLM 프롬프트에 그것이 들어가고 스크래핑을 타지 않는다.
+
+    resolve_statement 를 통째로 patch 하면 인자 전달 여부를 검증할 수 없다 — 수집 함수를
+    pytest.fail 로 두어 "스크래핑을 타지 않았다"를 실제로 고정한다. 예전에는 같은 파일이
+    README push 에는 저장값을 쓰면서 LLM 호출에만 넘기지 않아, 백필한 본문이 버려졌다.
+    """
+    stored = "【문제】 두 정수 A와 B를 입력받아 A+B를 출력한다."
+    _save(db.PENDING_EFFICIENCY, problem_statement=stored)
+    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",
+                        lambda pid: pytest.fail("저장된 본문이 있으면 스크래핑하면 안 된다"))
+    seen = {}
+
+    def fake_analyze(info, statement, code):
+        seen["statement"] = statement
+        return {"efficiency": "ok", "complexity": "O(N)", "better_algorithm": None,
+                "feedback": "피드백", "strengths": [], "weaknesses": []}
+
+    monkeypatch.setattr(rereview.analyzer, "analyze_code", fake_analyze)
+
+    body = client.post("/api/rereview/boj/1000").json()
+
+    assert body["reviewed"] is True
+    assert seen["statement"] == stored
 
 
 def test_repush_passes_stored_statement_as_description(client, monkeypatch):

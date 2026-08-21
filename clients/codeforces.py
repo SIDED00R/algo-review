@@ -1,3 +1,4 @@
+import logging
 import re
 import time
 import random
@@ -7,6 +8,8 @@ from itertools import zip_longest
 from urllib.parse import urlencode, urljoin
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger("uvicorn.error")
 
 CODEFORCES_API_BASE = "https://codeforces.com/api"
 
@@ -86,7 +89,8 @@ def get_codeforces_problem_statement(problem_ref: str) -> str:
             statement = soup.select_one(".problem-statement")
             if statement:
                 return statement.get_text(separator="\n", strip=True)
-        except Exception:
+        except Exception as e:
+            logger.warning("CF 문제 본문 수집 실패 (%s): %s", problem_ref, e)
             continue
 
     return "문제 설명 자동 수집에 실패했습니다. 제목, 난이도, 태그 기준으로 제한적으로 분석합니다."
@@ -248,7 +252,8 @@ def get_cf_problem_sections(problem_ref: str) -> dict | None:
 
         tree = etree.fromstring(resp.content, etree.HTMLParser())
         return _extract_cf_sections(tree)
-    except Exception:
+    except Exception as e:
+        logger.warning("CF 문제 섹션 수집 실패 (%s): %s", problem_ref, e)
         return None
 
 
@@ -413,7 +418,9 @@ def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
     # 태그별 API 재호출 대신 프로세스 1회 스냅샷을 로컬 필터링 — 테마/추천에서 반복 호출돼도 fetch는 1번.
     try:
         problems, stats_map = _get_cf_problemset_snapshot()
-    except Exception:
+    except Exception as e:
+        # 전면 실패를 빈 목록으로 돌려주면 호출부가 "다 풀었음"과 구분할 수 없다.
+        logger.warning("CF 문제셋 스냅샷 조회 실패 — 추천/테마가 빈 결과가 된다: %s", e)
         return []
 
     results = []
