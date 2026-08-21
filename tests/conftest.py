@@ -26,6 +26,10 @@ IS_POSTGRES = os.environ.get("DB_TYPE", "sqlite").lower() == "postgres"
 # 데모 서비스에 그 값을 넣으므로 로컬 .env 로 흘러들어올 수 있다).
 # 전제를 코드에 못박고, 데모 동작을 검증하는 테스트는 각자 True 로 되돌린다.
 _DEMO_AWARE_MODULES = [
+    # server 도 넣는다 — client 픽스처가 lifespan 을 실제로 태우므로, 빠뜨리면
+    # DEMO_MODE=true 환경에서 demo_seed.seed() 가 테스트 DB 에 행을 심고 마이그레이션이
+    # 스킵된다(이 주석이 막으려는 바로 그 상황이 서버 모듈에서만 열려 있었다).
+    "server",
     "routes.auth", "routes.execute", "routes.github_push", "routes.import_boj",
     "routes.import_codeforces", "routes.import_github", "routes.pending_review",
     "routes.problem", "routes.recommend", "routes.report", "routes.rereview",

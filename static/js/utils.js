@@ -141,9 +141,19 @@ function renderMarkdown(text) {
 function makeRowActivatable(el, onActivate) {
   el.setAttribute('role', 'button');
   el.setAttribute('tabindex', '0');
-  el.addEventListener('click', onActivate);
+
+  // 행 안의 링크·버튼은 자기 동작을 해야 한다. 이 가드가 없으면 keydown 의
+  // preventDefault 가 앵커의 기본 활성화(내비게이션)까지 취소해, 링크에 포커스한 채
+  // Enter 를 눌러도 문제 페이지가 열리지 않고 행 모달이 열린다(WCAG 2.1.1 위반).
+  const fromChildControl = e => e.target !== el && e.target.closest('a, button');
+
+  el.addEventListener('click', e => {
+    if (fromChildControl(e)) return;
+    onActivate(e);
+  });
   el.addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (fromChildControl(e)) return;
     e.preventDefault();
     onActivate(e);
   });

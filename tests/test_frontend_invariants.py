@@ -42,8 +42,10 @@ def test_run_samples_restores_the_button_in_a_finally_block(js):
         "runSamples 가 finally 로 버튼을 복원해야 한다"
     assert re.search(r"function\s+resetRunButton\s*\(", src)
     # 모달을 열 때·닫을 때도 진행 중인 실행을 무효화하고 버튼을 되돌린다.
-    assert src.count("resetRunButton()") >= 3
+    # count 로 세면 `function resetRunButton()` 선언이 부분문자열로 포함돼 헐거워진다 —
+    # 세 호출 지점을 각각 고정한다.
     assert re.search(r"function\s+closeProblemModal[\s\S]{0,200}?resetRunButton\(\)", src)
+    assert re.search(r"async function\s+openProblemModal[\s\S]{0,1200}?resetRunButton\(\)", src)
 
 
 def test_run_samples_guards_the_result_node_before_writing(js):
@@ -54,10 +56,22 @@ def test_run_samples_guards_the_result_node_before_writing(js):
     assert re.search(r"const\s+cell\s*=\s*document\.getElementById\(tcId\)[\s\S]{0,120}?if\s*\(cell\)", src)
 
 
-def test_all_fill_review_form_entry_points_confirm_overwrite(js):
-    """진입점 넷이 같은 규약을 따라야 한다 — 뷰어 경로만 확인을 건너뛰고 있었다."""
-    assert re.search(r"function\s+proceedToReview[\s\S]{0,300}?confirmEditorOverwrite\(\)",
-                     js["problem-modal.js"])
+def test_all_fill_review_form_entry_points_confirm_overwrite():
+    """진입점 넷이 같은 규약을 따라야 한다.
+
+    예전에는 이름만 "넷" 이고 뷰어 경로 하나만 검사해서, 나머지 세 곳에서 확인 호출을
+    지워도 초록이었다(편집 중 코드를 경고 없이 덮어쓰는 회귀).
+    """
+    entry_points = {
+        "problem-modal.js": "proceedToReview",
+        "load-submission.js": "지난 제출 불러오기 버튼",
+        "history.js": "리뷰 기록 모달",
+        "command-palette.js": "⌘K 팔레트",
+    }
+    for name, label in entry_points.items():
+        src = (_JS_DIR / name).read_text(encoding="utf-8")
+        assert "fillReviewForm(" in src, f"{name}({label}) 이 로더를 쓰지 않는다"
+        assert re.search(r"if\s*\(!confirmEditorOverwrite\(\)\)\s*return", src),             f"{name}({label}) 이 덮어쓰기 확인을 건너뛴다"
 
 
 def test_imported_review_updates_the_list_data_not_just_the_dom(js):
@@ -82,6 +96,10 @@ def test_tier_chart_keeps_the_first_occurrence_per_problem(js):
     assert ".reverse()" not in src, "reverse 하면 문제당 마지막 회차가 남는다"
     # 서버가 오름차순으로 주므로 재정렬이 필요 없다.
     assert not re.search(r"deduped\.sort\(", src)
+    # 부정 단정만 있으면 dedupe 블록을 통째로 지워도 통과한다 — 구현의 존재도 고정한다.
+    assert re.search(r"new Set\(", src), "문제별 중복 제거가 없다"
+    assert re.search(r"if\s*\(!\s*seenPids\.has\(", src), "첫 등장 유지 판정이 없다"
+    assert re.search(r"history\.forEach\(", src), "정순 1패스가 아니다"
 
 
 def test_pasted_statement_wins_over_the_viewer_cache(js):
@@ -206,11 +224,20 @@ def test_editor_focus_ring_is_on_the_wrapper(css):
     assert inner and "outline" not in inner.group(1)
 
 
-def test_row_hairlines_do_not_depend_on_first_child(css):
-    """#history-list 의 첫 자식은 항상 .toolbar 라 :first-child 가 매칭되지 않았다."""
+def test_row_hairlines_do_not_depend_on_dom_structure(css):
+    """목록 행의 구분선이 컨테이너 구조에 의존하면 안 된다.
+
+    두 번 틀렸다. ① `.row:first-child` — #history-list 의 첫 자식은 항상 .toolbar 라
+    리뷰 기록 탭에서 매칭되지 않았다. ② `.row + .row` — 가져오기 목록은 행마다 코드 보기
+    패널 div 를 형제로 끼워 넣고, 인접(+)은 DOM 구조 기준이라 display:none 형제도
+    인접을 끊어 그 탭에서만 구분선이 2px 로 겹쳤다.
+
+    일반 형제(~)는 중간 노드와 무관하게 매칭된다.
+    """
     src = css["components.css"]
-    assert not re.search(r"\.row:first-child", src)
-    assert re.search(r"\.row \+ \.row\s*\{[^}]*border-top:\s*none", src)
+    assert not re.search(r"\.row:first-child", src), "구조 의존 셀렉터가 돌아왔다"
+    assert not re.search(r"\.row \+ \.row", src), "인접 결합자는 중간 노드에 깨진다"
+    assert re.search(r"\.row ~ \.row\s*\{[^}]*border-top:\s*none", src)
 
 
 def test_mono_weights_stay_within_the_loaded_faces(css, html):
@@ -269,3 +296,39 @@ def test_modal_a11y_is_shared_not_duplicated():
     for name in ("history.js", "problem-modal.js", "command-palette.js"):
         src = (_JS_DIR / name).read_text(encoding="utf-8")
         assert "registerModal(" in src, f"{name} 이 공통 모듈을 쓰지 않는다"
+
+
+def test_problem_modal_has_a_height_ceiling(css):
+    """상한이 없으면 박스가 문제문 길이만큼 자란다.
+
+    `.pm-left`/`.pm-right` 의 상한을 지우면서 `.pm-box` 에 대체 상한을 넣지 않아,
+    긴 문제문에서 10,000px 이상까지 늘어났다(CDP 실측). 그러면 `.pm-body{overflow:hidden}`
+    과 두 열의 `overflow-y:auto` 가 전부 무효가 되고(scrollHeight == clientHeight),
+    닫기 버튼이 든 헤더가 화면 밖으로 스크롤되며 코드 에디터까지 같이 늘어난다.
+    """
+    # 줄 시작으로 앵커한다 — 앵커가 없으면 공유 규칙(`.modal-box, .pm-box {`)을 먼저 잡는다.
+    box = re.search(r"^\.pm-box\s*\{([^}]*)\}", css["surfaces.css"], re.M)
+    assert box, ".pm-box 규칙이 없다"
+    assert re.search(r"max-height:", box.group(1)), ".pm-box 에 높이 상한이 없다"
+    # 두 열은 스스로 상한을 갖지 않는다 — flex 가 배분해야 내부 스크롤이 동작한다.
+    for col in (".pm-left", ".pm-right"):
+        rule = re.search(re.escape(col) + r"\s*\{([^}]*)\}", css["surfaces.css"])
+        assert rule and "min-height: 0" in rule.group(1), f"{col} 에 min-height:0 이 없다"
+
+
+def test_row_activation_does_not_swallow_child_control_keys(js):
+    """행 안의 링크·버튼은 자기 동작을 해야 한다.
+
+    `makeRowActivatable` 의 keydown 핸들러가 preventDefault 로 앵커의 기본 활성화까지
+    취소해, 링크에 포커스한 채 Enter 를 눌러도 문제 페이지가 열리지 않고 행 모달이
+    열렸다(WCAG 2.1.1 위반). CDP 로 실제 Enter 를 주입해 확인했다.
+    """
+    src = js["utils.js"]
+    fn = re.search(r"function makeRowActivatable[\s\S]*?\n\}", src)
+    assert fn, "makeRowActivatable 이 없다"
+    body = fn.group(0)
+    # click·keydown 양쪽에서 자식 대화형 요소를 걸러야 한다.
+    assert body.count("closest('a, button')") >= 1 or body.count('closest("a, button")') >= 1
+    assert body.count("fromChildControl(e)") >= 2, "click·keydown 양쪽에 가드가 필요하다"
+    # 인라인 핸들러로 우회하던 방식은 남아 있으면 안 된다.
+    assert "onclick=" not in js["history.js"], "인라인 onclick 이 돌아왔다"

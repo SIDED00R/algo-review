@@ -73,6 +73,12 @@ async function openProblemModal(ref, title, tierName) {
   try {
     const data = await fetchJsonOk(`/api/problem/cf/${ref}`, undefined, '문제 로딩 실패');
 
+    // 이 응답이 아직 유효한지 확인한다. /api/problem/cf 는 CF 스크래핑 + 섹션 4개 번역이라
+    // 수 초~십수 초가 걸린다 — A 를 열고(로딩 중) 닫은 뒤 B 를 열면 A 의 늦은 응답이
+    // B 의 제목·본문·samples·sections 를 덮어, 예제 실행이 B 에 A 의 예제를 돌리고
+    // push-review 가 B 의 ref 와 A 의 sections 를 함께 보낸다(조용한 오답).
+    if (_currentProblem?.ref !== ref) return;
+
     _currentProblem.samples  = data.samples;
     _currentProblem.sections = data.statement_sections_ko || {};
 

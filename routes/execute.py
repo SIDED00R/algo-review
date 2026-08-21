@@ -14,14 +14,23 @@ router = APIRouter()
 
 # 코드 실행 subprocess에는 최소한의 환경변수만 전달해 민감한 서버 설정이 새지 않도록 한다.
 _SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
-_BASE_ENV = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
 _COMPILE_TIMEOUT = settings.compile_timeout
+
+
+def safe_env() -> dict:
+    """subprocess 에 넘길 환경변수. **호출 시점에** os.environ 을 필터한다.
+
+    import 시점 상수로 두면 이 필터를 실효 검증할 수 없다 — 테스트가 센티넬 키를 심어도
+    이미 만들어진 dict 에는 반영되지 않아, 필터를 통째로 지워도 스위트가 초록이었다
+    (변이로 확인). 호출 시점 계산이면 회귀 테스트가 실제로 필터를 태운다.
+    """
+    return {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
 # preexec_fn은 멀티스레드 서버(FastAPI threadpool)에서 fork 후 exec 전 deadlock 위험이 있어 사용하지 않는다.
 # 메모리·프로세스 제한은 Cloud Run 서비스 설정(컨테이너 메모리 상한)과 timeout에 위임한다.
 
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
-    env = {**_BASE_ENV, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    env = {**safe_env(), "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
     try:
         # 작업 디렉터리를 격리한다. cwd 를 지정하지 않으면 서버의 CWD 를 상속해
         # sys.path[0] 가 리포 루트가 되고, 제출 코드가 `import config` 로 .env 를 읽을 수
@@ -57,7 +66,7 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 capture_output=True,
                 text=True,
                 timeout=_COMPILE_TIMEOUT,
-                env=_BASE_ENV,
+                env=safe_env(),
             )
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
@@ -70,7 +79,7 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env=_BASE_ENV,
+                env=safe_env(),
                 cwd=tmpdir,   # 서버 CWD 를 상속하지 않는다 — 파이썬 경로와 같은 이유
             )
             return {"stdout": run_result.stdout, "stderr": run_result.stderr, "exit_code": run_result.returncode}

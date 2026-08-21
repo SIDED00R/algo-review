@@ -104,8 +104,7 @@ function renderProblemList(container, problems) {
     div.innerHTML = `
       <div class="row-main">
         <div class="row-title">
-          <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer"
-             onclick="event.stopPropagation()">
+          <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer">
             ${escapeHtml(problemLabel(p))}. ${escapeHtml(p.title)}
           </a>
         </div>

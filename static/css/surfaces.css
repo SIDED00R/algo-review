@@ -20,7 +20,13 @@
 }
 .modal-box { max-width: 860px; padding: var(--s-6); }
 .pm-box {
-  max-width: 1240px; min-height: 80vh;
+  max-width: 1240px;
+  /* 상한을 반드시 둔다 — 없으면 박스가 문제문 길이만큼 자라서 .pm-body 의 overflow:hidden 과
+     두 열의 overflow-y:auto 가 전부 무효가 되고(scrollHeight == clientHeight), 헤더(닫기
+     버튼 포함)가 화면 밖으로 스크롤되며 .pm-code .CodeMirror{flex:1} 때문에 에디터까지
+     같이 늘어난다(긴 문제문에서 10,000px 이상 실측). 오버레이 패딩(--s-6 × 2)과 맞춘다. */
+  min-height: min(80vh, calc(100vh - 2 * var(--s-6)));
+  max-height: calc(100vh - 2 * var(--s-6));
   display: flex; flex-direction: column;
 }
 .modal-close { position: absolute; top: var(--s-4); right: var(--s-4); }
