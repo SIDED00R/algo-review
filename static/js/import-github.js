@@ -1,5 +1,6 @@
 const ghImportBtn = document.getElementById('gh-import-btn');
 ghImportBtn.dataset.label = 'GitHub에서 가져오기';
+ghImportBtn.dataset.loadingLabel = '가져오는 중...';
 
 ghImportBtn.addEventListener('click', async () => {
   const repo = document.getElementById('gh-repo').value.trim();

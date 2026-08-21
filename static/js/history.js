@@ -1,5 +1,6 @@
 const historyBtn = document.getElementById('history-btn');
 historyBtn.dataset.label = '기록 불러오기';
+historyBtn.dataset.loadingLabel = '불러오는 중...';
 historyBtn.addEventListener('click', loadHistory);
 
 let allReviewProblems = [];
@@ -10,11 +11,7 @@ async function loadHistory() {
   list.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
 
   try {
-    const res = await fetch('/api/reviews/grouped');
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch (e) { throw new Error('서버 응답 오류: ' + text.slice(0, 100)); }
-    if (!res.ok) throw new Error(data.detail || '실패');
+    const data = await fetchJsonOk('/api/reviews/grouped', undefined, '기록 로딩 실패');
     allReviewProblems = data.problems || [];
     renderHistoryControls(list);
     renderProblemList(list, getFilteredReviews());
@@ -189,7 +186,7 @@ async function openReviewModal(platform, problemRef) {
         ${isPending ? '' : `
         <div class="feedback-box">
           <h4>피드백</h4>
-          <div class="markdown-body">${DOMPurify.sanitize(marked.parse(r.feedback || ''))}</div>
+          <div class="markdown-body">${renderMarkdown(r.feedback)}</div>
         </div>`}
         <div class="code-section">
           <div class="field-head">

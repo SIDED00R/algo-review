@@ -1,5 +1,6 @@
 const reportBtn = document.getElementById('report-btn');
 reportBtn.dataset.label = '리포트 생성';
+reportBtn.dataset.loadingLabel = '리포트 생성 중...';
 
 reportBtn.addEventListener('click', async () => {
   const result = document.getElementById('report-result');
@@ -12,7 +13,7 @@ reportBtn.addEventListener('click', async () => {
       <div class="result-card">
         <div class="feedback-box">
           <h4>📊 종합 분석 리포트</h4>
-          <div class="markdown-body">${DOMPurify.sanitize(marked.parse(data.report))}</div>
+          <div class="markdown-body">${renderMarkdown(data.report)}</div>
         </div>
       </div>`;
   } catch (e) {

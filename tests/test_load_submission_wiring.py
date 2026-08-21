@@ -6,21 +6,7 @@
 """
 import re
 
-import pytest
-from fastapi.testclient import TestClient
 
-import server
-import warmup
-
-
-@pytest.fixture
-def client(monkeypatch):
-    async def _noop():
-        return None
-
-    monkeypatch.setattr(warmup, "warm_theme_caches", _noop)
-    with TestClient(server.app) as c:
-        yield c
 
 
 def _asset(client, path):

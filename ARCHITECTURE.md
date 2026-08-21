@@ -232,6 +232,13 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 재업로드 '제출 일자' | `db.save_review` 는 `datetime.now()` 를 **tz 없이** 저장하고 Cloud Run 컨테이너는 UTC 다. `_format_kst` 가 변환하지 않으면 최초 push(KST)와 재푸시(UTC)의 날짜가 9시간 어긋난다 | `_format_kst` 가 naive 값을 UTC 로 간주해 KST 로 변환한다. `tests/test_helpers_readme.py` 가 naive·UTC·KST 세 입력을 고정 |
 | 언어 ↔ 확장자 | `_get_file_extension` 이 만든 확장자를 `_ext_to_language` 가 모르면 그 언어로 push 한 풀이를 다시 가져올 때 `language` 가 빈 문자열이 되고, `rereview` 가 파일명을 재현할 수 없다며 재업로드를 거부한다. BOJ 는 `C99`, CF 는 `GNU G++17 7.3.0` 처럼 `c`/`c++` 부분문자열이 없는 표기를 쓴다 | 두 함수를 왕복으로 고정한다 — `tests/test_clients_utils.py` 가 실제 표기 30여 종과 "만들 수 있는 확장자 전체가 역매핑에 있다" 를 검사 |
 | GitHub 트리 조회 | 항목 10 만 개 / 7MB 를 넘기면 GitHub 가 `truncated=true` 와 함께 트리를 자른다. 부분 결과를 성공으로 취급하면 가져오기·백필이 **조용히 일부 문제를 누락**한다 | `fetch_repo_tree()` 가 `truncated` 를 확인해 예외로 드러낸다 |
+| 성장 곡선 dedupe | `get_tier_history` 는 문제당 **모든 회차**를 준다. 문제당 한 점만 쓰려고 마지막 회차를 남기면, `tier` 는 회차가 아니라 문제의 속성이라 값은 그대로이고 **그 문제가 시계열에 놓이는 날짜만 이동**한다 → 예전 문제를 재제출하면 이미 지나간 구간의 레이팅이 소급 변한다 | 정순 1패스로 **첫 등장**을 남긴다(서버가 오름차순이므로 재정렬도 불필요). `tests/test_frontend_invariants.py` 가 `.reverse()` 부재를 고정 |
+| 뷰어 캐시 vs 붙여넣은 본문 | `closeProblemModal` 이 `_currentProblem` 을 지우지 않으므로, 뷰어를 닫은 뒤 같은 문제를 손으로 입력하면 옛 번역본이 남아 있다. 서버 `resolve_statement` 는 붙여넣은 본문을 우선하는데 프론트가 반대로 고르면 **LLM 리뷰와 GitHub README 의 문제 설명이 갈린다** | `description: pastedStatement \|\| cfSections?.statement` — 서버와 같은 우선순위. 뷰어에서 바로 넘어온 경우엔 `fillReviewForm` 이 textarea 를 비우므로 번역본이 그대로 쓰인다 |
+| 목록 데이터 vs DOM | `/api/review-imported` 는 서버에서 `solved_history` 행을 **실제로 삭제**한다. 프론트가 DOM 만 지우면 목록 배열이 stale 이 되고, 필터를 한 번만 만져도 삭제된 항목이 되살아난다(재클릭 시 404) | `requestImportedReview` 를 `loadImportedHistory` 클로저 안에 두어 `allProblems` 에서도 뺀 뒤 재렌더한다 |
+| 예제 실행 버튼 | 실행 중(케이스당 최대 5초) 모달을 닫거나 다른 문제를 열면 결과 노드가 사라진다. 노드 확인 없이 쓰면 TypeError 가 나고, **catch 안에서 같은 노드를 다시 참조하면 예외가 함수를 탈출**해 버튼 복원에 도달하지 못한다(새로고침 외 복구 불가) | 세대 토큰으로 갈린 실행을 멈추고, `finally` 로 버튼을 되돌린다. 모달 열기·닫기도 `resetRunButton()` 을 부른다 |
+| 서드파티 CDN | `marked`·`DOMPurify` 를 무가드로 부르면 CDN 이 막힐 때 ReferenceError 가 나고, **서버가 이미 저장·과금한 리뷰 결과가 화면에서 통째로 사라진다** | `renderMarkdown()` 한 곳만 두고 미로드 시 평문으로 폴백한다. `Chart`·KaTeX 는 원래 같은 가드가 있었다 |
+| 503 vs 빈 데이터 | `res.ok` 를 보지 않으면 온디맨드 DB 정지(503)가 빈 배열로 흘러 "기록이 없습니다"로 표시된다 — 사용자가 장애를 알 수 없다 | 모든 조회가 `fetchJsonOk` 를 쓴다(비-JSON 응답도 본문 앞머리를 보여준다). `dataset.loaded` 는 성공했을 때만 세운다 |
+| CodeMirror 모드 등록 | `mode/rust` 는 `CodeMirror.defineSimpleMode` 를 쓴다 — `addon/mode/simple` 이 없으면 rust.min.js 가 죽고 Rust 하이라이팅이 **조용히 등록되지 않는다**(페이지에 uncaught TypeError 가 남는다) | addon 을 모드 스크립트보다 먼저 로드한다. 모드 등록 여부는 헤드리스 브라우저로 실측해야 잡힌다 |
 
 ---
 
