@@ -22,6 +22,14 @@ function getTierLabel(score) {
   return 'Unrated';
 }
 
+// CSS 변수는 hex 로 오므로 면적 채우기용 알파를 붙이려면 변환이 필요하다
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 let tierChartInstance = null;
 
 async function loadTierChart() {
@@ -100,9 +108,13 @@ async function loadTierChart() {
     const maxScore = myTierLine.length ? Math.max(...myTierLine.map(p => p.y)) : 50;
     const yMax = Math.max(maxScore * 1.2, 50);
 
-    const isDark = !document.body.classList.contains('light');
-    const gridColor = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)';
-    const textColor = isDark ? '#8892a4' : '#5a6282';
+    const cssVar = name => getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+    const gridColor = cssVar('--line');
+    const textColor = cssVar('--fg-dim');
+    const lineColor = cssVar('--eff-good-fg');
+    // 면적도 데이터다 — 토큰 색에서 투명도만 낮춰 쓴다
+    const fillColor = hexToRgba(lineColor, 0.1);
 
     const tickValues = RATING_TIERS.map(t => t.min);
     const tickLabels = Object.fromEntries(RATING_TIERS.map(t => [t.min, t.label]));
@@ -122,9 +134,9 @@ async function loadTierChart() {
         datasets: [{
           label: '내 레이팅',
           data: myTierLine,
-          borderColor: '#4ecca3',
-          backgroundColor: 'rgba(78,204,163,0.08)',
-          borderWidth: 2.5,
+          borderColor: lineColor,
+          backgroundColor: fillColor,
+          borderWidth: 2,
           pointRadius: 3,
           pointHoverRadius: 5,
           fill: true,
@@ -157,9 +169,16 @@ async function loadTierChart() {
             min: 0,
             suggestedMax: yMax,
             afterBuildTicks(scale) {
-              scale.ticks = tickValues
-                .filter(v => v <= scale.max + 20)
-                .map(v => ({ value: v }));
+              // 티어 경계를 눈금으로 쓰되 너무 붙은 것은 버린다 —
+              // 그러지 않으면 축 하단에서 Bronze/Unrated 라벨이 겹쳐 읽을 수 없다.
+              const minGap = scale.max * 0.07;
+              const kept = [];
+              for (const v of [...tickValues].sort((a, b) => a - b)) {
+                if (v > scale.max + 20) continue;
+                if (kept.length && v - kept[kept.length - 1] < minGap) continue;
+                kept.push(v);
+              }
+              scale.ticks = kept.map(v => ({ value: v }));
             },
             ticks: {
               color: textColor,
@@ -174,3 +193,9 @@ async function loadTierChart() {
     console.error('tier chart error', e);
   }
 }
+
+// editor.js 와 같은 방식으로 테마 변경을 감시한다. 예전에는 감시자가 없어
+// 테마를 토글해도 축·그리드·범례 색이 그대로 남았다(통계 탭을 다시 눌러야 갱신).
+new MutationObserver(() => {
+  if (tierChartInstance) loadTierChart();
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

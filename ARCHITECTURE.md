@@ -119,12 +119,24 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
 
+### 프론트엔드 스타일 (`static/css/`)
+순수 CSS 5개. 빌드 스텝이 없으므로 `index.html` 의 로드 순서가 곧 캐스케이드 순서다 —
+서드파티(CodeMirror·KaTeX) CSS 를 먼저 걸고 앱 CSS 를 뒤에 두어야 오버라이드가 이긴다.
+
+| 파일 | 단일 책임 |
+|------|----------|
+| `css/tokens.css` | 리셋 + 디자인 토큰. 크롬은 무채색이고 유채색은 데이터(티어·CF 등급·효율 판정)에만 쓴다는 규칙의 정의 지점. 데이터 색 32쌍은 테마별 전경/배경/경계를 짝으로 두고 전부 4.5:1 이상을 만족한다 |
+| `css/base.css` | 요소 기본값, 타이포 스케일, 전역 `:focus-visible` 링, `prefers-reduced-motion` |
+| `css/components.css` | 버튼·폼·배지·태그·알림·스피너·코드블록·표·제출 원장(`.ledger`)·페이지네이션 |
+| `css/layout.css` | 헤더/탭바, 콘텐츠 성격별 컨테이너 3종(`.measure-work` / `.measure-list` / `.measure-prose`), 목록 행, 반응형 |
+| `css/surfaces.css` | 모달·오버레이·드롭다운·문제 풀기 모달·CodeMirror 오버라이드 |
+
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |
 |------|----------|
 | `utils.js` | 공통 유틸 — 순수 함수(tierClass, cfRatingClass, tierBadgeHtml, escapeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk) |
 | `editor.js` | CodeMirror 에디터 초기화 및 관리 |
-| `theme.js` | 다크/라이트 테마 토글 |
+| `theme.js` | 다크/라이트 테마 토글 (`html[data-theme]`). 첫 페인트 전 확정은 `index.html` `<head>` 인라인 스크립트가 담당 |
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
@@ -132,7 +144,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
 | `problem-modal.js` | CF 문제 모달 (조회, 샘플 실행, 리뷰 이동) |
 | `stats.js` | 태그 통계 시각화 |
-| `tier-chart.js` | 티어 변화 Chart.js 그래프 |
+| `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
 | `report.js` | 종합 분석 리포트 표시 |
 | `import-history.js` | 가져온 기록 목록 표시, 필터/페이징, 코드 보기, AI 리뷰 요청 |

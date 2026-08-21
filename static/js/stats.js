@@ -36,7 +36,8 @@ function renderStats(container, data) {
 
   let barsHtml = data.tag_stats.slice(0, 15).map(s => {
     const poorRatio = s.total_count > 0 ? s.poor_count / s.total_count : 0;
-    const barColor = poorRatio > 0.6 ? 'var(--red)' : poorRatio > 0.3 ? 'var(--yellow)' : 'var(--green)';
+    const barColor = poorRatio > 0.6 ? 'var(--eff-poor-fg)'
+      : poorRatio > 0.3 ? 'var(--eff-ok-fg)' : 'var(--eff-good-fg)';
     return `
       <div class="stat-bar-row">
         <span class="stat-tag-name" title="${escapeHtml(s.tag)}">${escapeHtml(s.tag)}</span>
@@ -49,23 +50,23 @@ function renderStats(container, data) {
 
   let historyHtml = data.history.map(r => {
     const tc = isCf ? '' : tierClass(r.tier);
-    const tierLabel = tierBadgeHtml(tc, escapeHtml(r.tier_name), 'font-size:.75rem');
+    const tierLabel = tierBadgeHtml(tc, escapeHtml(r.tier_name));
     return `<tr>
       <td><a href="${escapeHtml(problemUrl(r))}" target="_blank">${escapeHtml(problemLabel(r))}. ${escapeHtml(r.title)}</a></td>
       <td>${tierLabel}</td>
       <td class="${effClass(r.efficiency)}">${effLabel(r.efficiency)}</td>
-      <td style="color:var(--text-muted);font-size:.82rem">${r.created_at.slice(0,10)}</td>
+      <td class="td-dim">${r.created_at.slice(0,10)}</td>
     </tr>`;
   }).join('');
 
   const levelLabel = isCf ? '평균 레이팅' : '평균 레벨';
   const levelValue = isCf
-    ? `<span style="font-weight:700">${escapeHtml(data.avg_tier_name)}</span>`
+    ? `<span class="mono">${escapeHtml(data.avg_tier_name)}</span>`
     : tierBadgeHtml(tierClass(Math.floor(data.avg_tier)), escapeHtml(data.avg_tier_name));
 
   container.innerHTML = `
     <div class="result-card">
-      <div class="summary-grid" style="margin-bottom:24px">
+      <div class="summary-grid">
         <div class="summary-item">
           <div class="summary-label">총 리뷰 수</div>
           <div class="summary-value">${data.total_reviews}개</div>
@@ -75,11 +76,11 @@ function renderStats(container, data) {
           <div class="summary-value">${levelValue}</div>
         </div>
       </div>
-      <h3 style="font-size:.95rem;margin-bottom:14px;color:var(--text-muted)">태그별 취약도 (빨간색일수록 취약)</h3>
+      <h3 class="section-title">태그별 취약도 (빨간색일수록 취약)</h3>
       ${barsHtml}
-      <h3 style="font-size:.95rem;margin:24px 0 12px;color:var(--text-muted)">최근 풀이 기록</h3>
+      <h3 class="section-title section-title-gap">최근 풀이 기록</h3>
       ${data.history.length === 0
-        ? '<p style="color:var(--text-muted);font-size:.88rem">최근 기록이 없습니다.</p>'
+        ? '<p class="hint">최근 기록이 없습니다.</p>'
         : `<table class="history-table">
             <thead><tr><th>문제</th><th>난이도</th><th>평가</th><th>날짜</th></tr></thead>
             <tbody>${historyHtml}</tbody>

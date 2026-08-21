@@ -28,10 +28,10 @@ async function loadHistory() {
 function renderHistoryControls(container) {
   const ctrl = document.createElement('div');
   ctrl.id = 'history-controls';
-  ctrl.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center';
+  ctrl.className = 'toolbar';
   ctrl.innerHTML = `
-    <input id="h-search" type="text" placeholder="제목 또는 태그 검색..." style="flex:1;min-width:140px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem" />
-    <select id="h-tier" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem">
+    <input id="h-search" class="input filter-grow" type="text" placeholder="제목 또는 태그 검색..." />
+    <select id="h-tier" class="select filter-fixed" aria-label="난이도 필터">
       <option value="">전체 난이도</option>
       <option value="bronze">브론즈</option>
       <option value="silver">실버</option>
@@ -39,14 +39,14 @@ function renderHistoryControls(container) {
       <option value="platinum">플래티넘</option>
       <option value="diamond">다이아</option>
     </select>
-    <select id="h-eff" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem">
+    <select id="h-eff" class="select filter-fixed" aria-label="효율 필터">
       <option value="">전체 효율</option>
       <option value="good">효율적</option>
       <option value="ok">보통</option>
       <option value="poor">비효율적</option>
       <option value="${EFF_PENDING}">리뷰 대기</option>
     </select>
-    <select id="h-sort" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem">
+    <select id="h-sort" class="select filter-fixed" aria-label="정렬">
       <option value="recent">최근순</option>
       <option value="tier_desc">난이도 높은순</option>
       <option value="tier_asc">난이도 낮은순</option>
@@ -86,7 +86,7 @@ function getFilteredReviews() {
 }
 
 function renderProblemList(container, problems) {
-  container.querySelectorAll('.history-card, .alert').forEach(el => el.remove());
+  container.querySelectorAll('.row, .alert').forEach(el => el.remove());
 
   if (!problems || problems.length === 0) {
     const empty = document.createElement('div');
@@ -99,30 +99,25 @@ function renderProblemList(container, problems) {
   const frag = document.createDocumentFragment();
   problems.forEach(p => {
     const tc = tierClass(p.tier);
-    const effList = p.efficiencies.split(',');
-    const lastEff = effList[0];
+    const lastEff = p.efficiencies.split(',')[0];
     const div = document.createElement('div');
-    div.className = 'history-card';
+    div.className = 'row';
     div.dataset.platform = p.platform || 'boj';
     div.dataset.problemRef = p.problem_ref || String(p.problem_id || '');
-    div.style.cursor = 'pointer';
     div.innerHTML = `
-      <div class="history-card-info">
-        <div class="history-card-title">
+      <div class="row-main">
+        <div class="row-title">
           <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer"
-             style="color:inherit;text-decoration:none"
              onclick="event.stopPropagation()">
             ${escapeHtml(problemLabel(p))}. ${escapeHtml(p.title)}
           </a>
         </div>
-        <div class="history-card-meta">${escapeHtml((p.tags || []).slice(0, 3).join(' · '))}</div>
+        <div class="row-meta">${escapeHtml((p.tags || []).slice(0, 3).join(' · '))}</div>
       </div>
-      <div class="history-card-right">
-        ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''), 'font-size:.75rem')}
-        <span class="${effClass(lastEff)}" style="font-size:.82rem">${escapeHtml(effLabel(lastEff))}</span>
-        <span style="font-size:.78rem;color:var(--text-muted)">
-          제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(String(p.last_submitted || '').slice(0, 10))}
-        </span>
+      <div class="row-side">
+        ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''))}
+        <span class="${effClass(lastEff)}">${escapeHtml(effLabel(lastEff))}</span>
+        <span class="row-dim">제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(String(p.last_submitted || '').slice(0, 10))}</span>
       </div>`;
     div.addEventListener('click', () => openReviewModal(div.dataset.platform, div.dataset.problemRef));
     frag.appendChild(div);
@@ -145,25 +140,27 @@ async function openReviewModal(platform, problemRef) {
     const tc = tierClass(first.tier);
     const tagsHtml = (first.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
-    const tabsHtml = reviews.map((r, i) => `
-      <button class="submission-tab ${i === 0 ? 'active' : ''}" data-idx="${i}">
-        <span style="font-weight:600">제출 ${reviews.length - i}회차</span>
-        <span class="${effClass(r.efficiency)}" style="font-size:.78rem">${escapeHtml(effLabel(r.efficiency))}</span>
-        <span style="color:var(--text-muted);font-size:.75rem">${escapeHtml(String(r.created_at || '').slice(0, 10))}</span>
+    // 제출 원장 — 회차·날짜·복잡도·판정을 모노로 정렬한다.
+    const ledgerHtml = reviews.map((r, i) => `
+      <button class="ledger-row ${i === 0 ? 'active' : ''}" data-idx="${i}">
+        <span class="ledger-seq">#${reviews.length - i}</span>
+        <span>${escapeHtml(String(r.created_at || '').slice(0, 10))}</span>
+        <span class="ledger-meta">${escapeHtml(r.complexity || '-')}</span>
+        <span class="${effClass(r.efficiency)}">${escapeHtml(effLabel(r.efficiency))}</span>
       </button>`).join('');
 
     content.innerHTML = `
-      <div class="problem-header" style="margin-bottom:12px">
+      <div class="problem-header">
         <span class="problem-title">
-          <a href="${escapeHtml(problemUrl(first))}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">
+          <a href="${escapeHtml(problemUrl(first))}" target="_blank" rel="noopener noreferrer">
             ${escapeHtml(problemLabel(first))}. ${escapeHtml(first.title)}
           </a>
         </span>
         ${tierBadgeHtml(tc, escapeHtml(first.tier_name || ''))}
-        <span style="font-size:.82rem;color:var(--text-muted);margin-left:auto">총 ${reviews.length}회 제출</span>
+        <span class="hint push-right">총 ${reviews.length}회 제출</span>
       </div>
-      <div class="tag-list" style="margin-bottom:16px">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>
-      <div class="submission-tabs">${tabsHtml}</div>
+      <div class="tag-list">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>
+      <div class="ledger">${ledgerHtml}</div>
       <div id="submission-detail-area"></div>`;
 
     function renderDetail(idx) {
@@ -175,36 +172,36 @@ async function openReviewModal(platform, problemRef) {
       // idx 0 이 최신 회차 — 서버의 재리뷰/재푸시는 문제의 최신 회차를 대상으로 동작한다.
       const actionHtml = buildRereviewAction(r, isPending, idx === 0);
       document.getElementById('submission-detail-area').innerHTML = `
-        <div class="summary-grid" style="margin:16px 0">
+        <div class="summary-grid">
           <div class="summary-item">
             <div class="summary-label">효율성</div>
             <div class="summary-value ${effClass(r.efficiency)}">${escapeHtml(effLabel(r.efficiency))}</div>
           </div>
           ${r.complexity ? `<div class="summary-item"><div class="summary-label">시간복잡도</div><div class="summary-value">${escapeHtml(r.complexity)}</div></div>` : ''}
-          ${r.better_algorithm ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value" style="font-size:.82rem;color:var(--yellow)">${escapeHtml(r.better_algorithm)}</div></div>` : ''}
+          ${r.better_algorithm ? `<div class="summary-item"><div class="summary-label">더 나은 알고리즘</div><div class="summary-value summary-value-sm">${escapeHtml(r.better_algorithm)}</div></div>` : ''}
         </div>
         ${actionHtml}
         ${hasPoints ? `
-        <div class="points-grid" style="margin-bottom:16px">
-          <div class="points-box good"><h4>✓ 잘한 점</h4><ul>${sl || '<li>-</li>'}</ul></div>
-          <div class="points-box bad"><h4>✗ 개선할 점</h4><ul>${wl || '<li>-</li>'}</ul></div>
+        <div class="points-grid">
+          <div class="points-box good"><h4>잘한 점</h4><ul>${sl || '<li>-</li>'}</ul></div>
+          <div class="points-box bad"><h4>개선할 점</h4><ul>${wl || '<li>-</li>'}</ul></div>
         </div>` : ''}
         ${isPending ? '' : `
-        <div class="feedback-box" style="margin-bottom:16px">
+        <div class="feedback-box">
           <h4>피드백</h4>
           <div class="markdown-body">${DOMPurify.sanitize(marked.parse(r.feedback || ''))}</div>
         </div>`}
-        <div>
-          <h4 style="font-size:.85rem;color:var(--text-muted);margin-bottom:8px">제출 코드</h4>
+        <div class="code-section">
+          <div class="field-head"><span class="label">제출 코드</span></div>
           <pre class="code-block">${escapeHtml(r.code)}</pre>
         </div>`;
 
       document.getElementById('rereview-btn')?.addEventListener('click', runRereview);
     }
 
-    content.querySelectorAll('.submission-tab').forEach(btn => {
+    content.querySelectorAll('.ledger-row').forEach(btn => {
       btn.addEventListener('click', () => {
-        content.querySelectorAll('.submission-tab').forEach(b => b.classList.remove('active'));
+        content.querySelectorAll('.ledger-row').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         renderDetail(Number(btn.dataset.idx));
       });
@@ -212,35 +209,35 @@ async function openReviewModal(platform, problemRef) {
 
     renderDetail(0);
   } catch (e) {
-    content.innerHTML = `<div class="alert alert-error">❌ ${escapeHtml(e.message)}</div>`;
+    content.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
   }
 }
 
 // 재리뷰 / 문서 재업로드 액션 영역. 서버는 문제의 최신 회차를 대상으로 동작하므로
-// 버튼도 최신 회차에서만 준다 — 과거 대기 회차에 버튼을 두면 눌러도 아무 일이 없다.
+// 버튼도 최신 회차에서만 준다 — 과거 회차에 버튼을 두면 눌러도 아무 일이 없다.
 function buildRereviewAction(r, isPending, isLatest) {
   if (!isLatest) {
     return isPending
-      ? `<div class="alert alert-info" style="margin-bottom:12px">
-           ⏳ 리뷰 대기 회차입니다. 이후 회차에 리뷰가 있어 이 회차는 대기 상태로 남습니다.
+      ? `<div class="alert alert-info">
+           리뷰 대기 회차입니다. 이후 회차에 리뷰가 있어 이 회차는 대기 상태로 남습니다.
          </div>`
       : '';
   }
 
-  const label = isPending ? '🤖 지금 AI 리뷰 실행' : '📤 GitHub 문서 다시 올리기';
+  const label = isPending ? '지금 AI 리뷰 실행' : 'GitHub 문서 다시 올리기';
   const notice = isPending
-    ? `<div class="alert alert-info" style="margin-bottom:12px">
-         ⏳ AI 리뷰 대기 중입니다. LLM을 쓸 수 있을 때 아래 버튼을 누르면 리뷰 기록과 GitHub README가 함께 갱신됩니다.
+    ? `<div class="alert alert-info">
+         AI 리뷰 대기 중입니다. LLM을 쓸 수 있을 때 아래 버튼을 누르면 리뷰 기록과 GitHub README가 함께 갱신됩니다.
        </div>`
     : '';
   return `${notice}
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <button id="rereview-btn" class="btn-primary" style="font-size:.85rem;padding:7px 16px"
+    <div class="action-row">
+      <button id="rereview-btn" class="btn-primary btn-sm"
         data-platform="${escapeHtml(r.platform)}" data-problem-ref="${escapeHtml(r.problem_ref)}"
-        data-label="${escapeHtml(label)}">
+        data-label="${escapeHtml(label)}" data-loading-label="처리 중... (리뷰는 10~20초)">
         ${label}
       </button>
-      <span id="rereview-msg" style="font-size:.82rem"></span>
+      <span id="rereview-msg" class="action-msg"></span>
     </div>`;
 }
 
@@ -249,10 +246,9 @@ async function runRereview(e) {
   const msg = document.getElementById('rereview-msg');
   const platform = btn.dataset.platform;
   const problemRef = btn.dataset.problemRef;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> 처리 중... (리뷰는 10~20초)';
+  setLoading(btn, true);
   msg.textContent = '';
-  msg.style.color = '';
+  msg.className = 'action-msg';
 
   try {
     const data = await fetchJsonOk(
@@ -260,21 +256,24 @@ async function runRereview(e) {
       { method: 'POST' }, '재리뷰 실패');
     if (!data.pushed) {
       alert(`${data.detail || 'GitHub 갱신에 실패했습니다.'}\n\n` +
-            "최신 회차의 '📤 GitHub 문서 다시 올리기' 버튼으로 업로드만 재시도할 수 있습니다 (리뷰는 다시 돌리지 않습니다).");
+            "최신 회차의 'GitHub 문서 다시 올리기' 버튼으로 업로드만 재시도할 수 있습니다 (리뷰는 다시 돌리지 않습니다).");
     }
     await openReviewModal(platform, problemRef);  // 갱신된 리뷰로 모달 재렌더
     loadHistory();
   } catch (err) {
-    btn.disabled = false;
-    btn.textContent = btn.dataset.label;
+    setLoading(btn, false);
     msg.textContent = err.message;
-    msg.style.color = 'var(--red)';
+    msg.classList.add('bad');
   }
 }
 
-document.getElementById('modal-close').addEventListener('click', () => {
+// 모달은 #tab-history 안에 있다 — 닫지 않고 탭을 옮기면 그대로 남으므로
+// 닫기 경로를 한 곳으로 모은다.
+function closeReviewModal() {
   document.getElementById('review-modal').classList.add('hidden');
-});
+}
+
+document.getElementById('modal-close').addEventListener('click', closeReviewModal);
 document.getElementById('review-modal').addEventListener('click', e => {
-  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+  if (e.target === e.currentTarget) closeReviewModal();
 });

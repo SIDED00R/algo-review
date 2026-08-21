@@ -29,8 +29,8 @@ function cfRatingClass(rating) {
   return 'cf-grandmaster';
 }
 
-function tierBadgeHtml(cls, name, style) {
-  return `<span class="tier-badge ${cls}"${style ? ` style="${style}"` : ''}>${name}</span>`;
+function tierBadgeHtml(cls, name) {
+  return `<span class="tier-badge ${cls}">${name}</span>`;
 }
 
 // 백엔드 db.PENDING_EFFICIENCY 와 같은 값 — 리뷰 없이 등록한 행의 마커
@@ -79,12 +79,12 @@ function escapeHtml(str) {
 function setLoading(btn, loading) {
   btn.disabled = loading;
   btn.innerHTML = loading
-    ? '<span class="spinner"></span> 분석 중...'
+    ? `<span class="spinner spinner-sm"></span> ${btn.dataset.loadingLabel || '분석 중...'}`
     : btn.dataset.label;
 }
 
 function showError(container, msg) {
-  container.innerHTML = `<div class="alert alert-error">❌ ${escapeHtml(msg)}</div>`;
+  container.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`;
   container.classList.remove('hidden');
 }
 

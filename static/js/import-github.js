@@ -19,15 +19,15 @@ ghImportBtn.addEventListener('click', async () => {
     }, '실패');
 
     const failMsg = data.failed && data.failed.length > 0
-      ? `<br><span style="color:var(--text-muted);font-size:.82rem">정보 조회 실패: ${data.failed.length}개</span>`
+      ? `<br><span class="hint">정보 조회 실패: ${data.failed.length}개</span>`
       : '';
     result.innerHTML = `
-      <div class="alert alert-info" style="color:var(--green)">
-        ✅ 완료! 저장소에서 <b>${data.total_found}</b>개 발견 →
+      <div class="alert alert-ok">
+        완료! 저장소에서 <b>${data.total_found}</b>개 발견 →
         <b>${data.imported}</b>개 새로 저장, <b>${data.skipped}</b>개 이미 있음${failMsg}
       </div>
-      <button id="gh-reimport-btn" class="btn-primary" style="margin-top:8px;background:var(--red)">
-        🗑 기존 기록 전체 삭제 후 다시 가져오기
+      <button id="gh-reimport-btn" class="btn-secondary btn-danger">
+        기존 기록 전체 삭제 후 다시 가져오기
       </button>`;
     document.getElementById('gh-reimport-btn').addEventListener('click', async () => {
       if (!confirm('가져온 기록을 전부 삭제하고 다시 가져옵니다. 계속할까요?')) return;

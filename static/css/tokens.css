@@ -1,0 +1,139 @@
+/* ── 리셋 ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   디자인 토큰
+
+   규칙 하나: 크롬(헤더·탭·버튼·폼·경계선)은 무채색이고, 화면의 유채색은 전부
+   데이터다 — 백준 티어, CF 레이팅, 효율 판정, 차트.
+
+   이 앱은 외부가 정한 색 등급 체계를 둘 띄운다(solved.ac 티어, CF 레이팅).
+   인터페이스가 자기 강조색을 하나 더 얹으면 등급 색과 경쟁해 거짓 신호를 만든다.
+   실제로 예전 --accent(#6c8dfa)는 CF expert 파랑과 사실상 같은 색이었다.
+
+   그래서 primary 버튼은 색이 아니라 잉크 반전(--ink)이다. 부수 효과로 예전
+   "--accent 위 흰 글씨 3.08:1"(WCAG AA 미달)이 구조적으로 사라진다.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* 뉴트럴 — 순수 검정/순백을 피하고 약한 쿨 캐스트를 준다 */
+  --bg: #0B0C0E;
+  --surface-1: #121417;
+  --surface-2: #191C20;
+  --line: #24282E;
+  --line-strong: #333940;
+  --fg: #E6E8EA;
+  --fg-muted: #9BA1A9;
+  --fg-dim: #828993;      /* 11px 라벨용 — --bg 5.54:1 / --surface-2 4.84:1 */
+  --ink: #E6E8EA;         /* primary 버튼 배경 */
+  --ink-fg: #0B0C0E;      /* primary 버튼 글자 — 15.9:1 */
+  --scrim: rgba(0,0,0,.66);
+
+  /* 간격 — 4px 기반 8단. 이 밖의 값은 쓰지 않는다 */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* radius — 어휘 둘. 예전엔 4/5/6/8/12/20/50% 가 섞여 있었다 */
+  --r: 6px;
+  --r-pill: 999px;
+
+  /* 모션 */
+  --dur: 120ms;
+  --dur-slow: 200ms;
+  --ease: cubic-bezier(.2, 0, .38, 1);
+
+  /* z-index — 예전엔 10/100/200/1000/10000!important 리터럴이었다 */
+  --z-header: 10;
+  --z-dropdown: 40;
+  --z-overlay: 60;
+  --z-hint: 80;
+
+  /* 서체 */
+  --font-ui: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI',
+             'Malgun Gothic', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* 타이포 스케일 — base 16px 기준. 상위 두 단만 유동 */
+  --fs-label: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-base: 16px;
+  --fs-lg: 18px;
+  --fs-xl: clamp(20px, 1.2vw + 16px, 22px);   /* 작업 화면 제목 */
+
+  /* 컨테이너 폭 — 콘텐츠 성격별로 셋 */
+  --w-work: 1000px;
+  --w-list: 1180px;
+  --w-prose: 760px;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #FBFBFC;
+  --surface-1: #FFFFFF;
+  --surface-2: #F4F5F6;
+  --line: #E3E5E8;
+  --line-strong: #C9CDD2;
+  --fg: #14171A;
+  --fg-muted: #5B6169;
+  --fg-dim: #666D73;      /* 흰 표면 5.25:1 / --surface-2 4.81:1 */
+  --ink: #14171A;
+  --ink-fg: #FFFFFF;      /* 18.0:1 */
+  --scrim: rgba(20,23,26,.4);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   데이터 색 — 화면에서 유일한 유채색
+
+   전경/배경/경계를 테마별로 짝지어 정의한다. 예전 방식(다크 기준 rgba 배경 +
+   라이트에서 color 만 덮기)이 "라이트 모드에서 대비 1.3~1.7:1" 사고의 원인이었다.
+
+   32쌍 전부 자기 배경 위에서 4.5:1 이상을 만족한다(최저 4.61:1). 값은 눈으로
+   고르지 않고 색상 앵커에서 생성한 뒤 WCAG 상대휘도로 검산해 확정했다.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --tier-bronze-fg:#DAAD81; --tier-bronze-bg:#1C160F; --tier-bronze-line:#413325;
+  --tier-silver-fg:#A5ABB6; --tier-silver-bg:#141517; --tier-silver-line:#303236;
+  --tier-gold-fg:#E0C77B; --tier-gold-bg:#1F1A0D; --tier-gold-line:#463D20;
+  --tier-platinum-fg:#81DACE; --tier-platinum-bg:#0F1C1A; --tier-platinum-line:#25413D;
+  --tier-diamond-fg:#7BB6E0; --tier-diamond-bg:#0D171E; --tier-diamond-line:#213645;
+  --tier-ruby-fg:#E07B8F; --tier-ruby-bg:#1D0E11; --tier-ruby-line:#442229;
+
+  --cf-newbie-fg:#A7ABB4; --cf-newbie-bg:#151517; --cf-newbie-line:#313235;
+  --cf-pupil-fg:#85D692; --cf-pupil-bg:#101C12; --cf-pupil-line:#26402B;
+  --cf-specialist-fg:#81DAD7; --cf-specialist-bg:#0F1C1C; --cf-specialist-line:#254140;
+  --cf-expert-fg:#7B94E0; --cf-expert-bg:#0E121D; --cf-expert-line:#222B44;
+  --cf-candidate-master-fg:#C67CDE; --cf-candidate-master-bg:#190F1D; --cf-candidate-master-line:#3B2442;
+  --cf-master-fg:#E0AA7B; --cf-master-bg:#1F150D; --cf-master-line:#463220;
+  --cf-grandmaster-fg:#E07E7B; --cf-grandmaster-bg:#1E0E0D; --cf-grandmaster-line:#452221;
+
+  --eff-good-fg:#85D6A7; --eff-good-bg:#101C15; --eff-good-line:#264031;
+  --eff-ok-fg:#E0C27B; --eff-ok-bg:#1E190D; --eff-ok-line:#453A21;
+  --eff-poor-fg:#E07E7B; --eff-poor-bg:#1D0E0E; --eff-poor-line:#442422;
+}
+
+:root[data-theme="light"] {
+  --tier-bronze-fg:#865727; --tier-bronze-bg:#F7F4F0; --tier-bronze-line:#E3DAD1;
+  --tier-silver-fg:#4E545F; --tier-silver-bg:#F3F3F4; --tier-silver-line:#D8D9DC;
+  --tier-gold-fg:#866B18; --tier-gold-bg:#F9F6EE; --tier-gold-line:#E7E0CE;
+  --tier-platinum-fg:#247B6F; --tier-platinum-bg:#F0F7F6; --tier-platinum-line:#D1E3E1;
+  --tier-diamond-fg:#1A6193; --tier-diamond-bg:#EFF4F8; --tier-diamond-line:#CEDCE6;
+  --tier-ruby-fg:#8F1E35; --tier-ruby-bg:#F8EFF1; --tier-ruby-line:#E5CFD4;
+
+  --cf-newbie-fg:#50545E; --cf-newbie-bg:#F3F3F4; --cf-newbie-line:#D9DADB;
+  --cf-pupil-fg:#2A7E38; --cf-pupil-bg:#F0F7F1; --cf-pupil-line:#D2E2D4;
+  --cf-specialist-fg:#247B78; --cf-specialist-bg:#F0F7F7; --cf-specialist-line:#D1E3E3;
+  --cf-expert-fg:#1E3B8F; --cf-expert-bg:#EFF1F8; --cf-expert-line:#CFD5E5;
+  --cf-candidate-master-fg:#71238B; --cf-candidate-master-bg:#F6EFF8; --cf-candidate-master-line:#DFD0E4;
+  --cf-master-fg:#93531A; --cf-master-bg:#F9F3EE; --cf-master-line:#E7D9CE;
+  --cf-grandmaster-fg:#931E1A; --cf-grandmaster-bg:#F8EFEF; --cf-grandmaster-line:#E6CFCE;
+
+  --eff-good-fg:#2A7E4D; --eff-good-bg:#F0F7F3; --eff-good-line:#D2E2D9;
+  --eff-ok-fg:#8B6818; --eff-ok-bg:#F8F5EF; --eff-ok-line:#E6DFCE;
+  --eff-poor-fg:#8F221E; --eff-poor-bg:#F8EFEF; --eff-poor-line:#E5D0CF;
+}

@@ -110,12 +110,12 @@ function renderThemeProblems(container, data) {
   let html = '<div class="result-card">';
   html += `
     <div class="themes-list-header">
-      <span class="rec-tag-title" style="margin:0">📚 ${escapeHtml(label)}</span>
-      <button id="themes-refresh-btn" class="btn-toggle" style="padding:4px 12px;font-size:.78rem">🔄 새로고침</button>
+      <span class="rec-tag-title rec-tag-title-flush">${escapeHtml(label)}</span>
+      <button id="themes-refresh-btn" class="btn-toggle">새로고침</button>
     </div>`;
 
   if (data.error) {
-    html += `<div class="alert alert-error">❌ ${escapeHtml(data.error)}</div>`;
+    html += `<div class="alert alert-error">${escapeHtml(data.error)}</div>`;
   } else if (problems.length === 0) {
     html += '<div class="alert alert-info">표시할 문제가 없습니다. 이미 푼 문제는 제외됩니다.</div>';
   } else {

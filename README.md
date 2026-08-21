@@ -199,9 +199,8 @@ gcloud run deploy algo-review-demo \
 ├── tests/                  # pytest (DB 계층·라우트·마이그레이션·CF 본문 파싱)
 │
 └── static/
-    ├── index.html
-    ├── style.css
-    ├── img/                # UI 아이콘 (github.svg)
+    ├── index.html          # SPA 셸 (탭 7개 + 모달 2개 + 아이콘 SVG 스프라이트)
+    ├── css/                # 책임별 5개 — 파일별 책임은 ARCHITECTURE.md 참조
     └── js/                 # UI 기능별 모듈 17개 — 파일별 책임은 ARCHITECTURE.md 참조
 ```
 

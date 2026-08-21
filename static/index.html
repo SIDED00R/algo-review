@@ -4,59 +4,106 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Algo Review</title>
+
+  <!-- 테마를 페인트 전에 확정한다 — theme.js 는 </body> 직전에 로드되므로
+       거기서 처리하면 라이트 모드 사용자가 매 로드마다 다크 화면을 한 프레임 본다. -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('theme'); } catch (e) { /* 저장소 차단 */ }
+      var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
-  <link rel="stylesheet" href="/static/style.css?v=__V__" />
-  <!-- CodeMirror 5 -->
+
+  <!-- 서체: Pretendard(한국어 UI) + JetBrains Mono(숫자·코드). 둘 다 jsDelivr 로
+       받아 새 호스트를 늘리지 않는다. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.2.6/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.2.6/500.css" />
+
+  <!-- 서드파티 CSS 를 먼저 — 앱 스타일이 뒤에 와야 동일 특이도에서 이긴다 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css" />
+
+  <!-- 앱 스타일 — 책임별 분할. 순서 의존: tokens → base → components → layout → surfaces -->
+  <link rel="stylesheet" href="/static/css/tokens.css?v=__V__" />
+  <link rel="stylesheet" href="/static/css/base.css?v=__V__" />
+  <link rel="stylesheet" href="/static/css/components.css?v=__V__" />
+  <link rel="stylesheet" href="/static/css/layout.css?v=__V__" />
+  <link rel="stylesheet" href="/static/css/surfaces.css?v=__V__" />
+
   <!-- 아래 라이브러리는 전부 이벤트 시점에만 쓰여 defer 안전 (defer는 선언 순서 보존: katex→auto-render, chart→adapter) -->
-  <!-- KaTeX for LaTeX math rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-  <!-- marked.js for markdown rendering -->
-  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- DOMPurify for XSS sanitization of marked output -->
+  <!-- marked 는 버전을 고정한다. 무고정 URL 은 jsDelivr 가 15.0.12 를 주고 있었으므로
+       같은 버전으로 핀해 동작을 바꾸지 않는다. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
-  <!-- Chart.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
+  <!-- 아이콘 스프라이트. 별도 자산 파일을 늘리지 않고 currentColor 를 따르게 해
+       테마별 filter:invert 해킹을 없앤다. -->
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+      <circle cx="8" cy="8" r="3.1"/>
+      <path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3.05 3.05l1.13 1.13M11.82 11.82l1.13 1.13M12.95 3.05l-1.13 1.13M4.18 11.82l-1.13 1.13"/>
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13.5 9.9A5.9 5.9 0 0 1 6.1 2.5 5.9 5.9 0 1 0 13.5 9.9z"/>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <path d="M4 4l8 8M12 4l-8 8"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3l5 5-5 5"/>
+    </symbol>
+  </svg>
+
   <header>
     <div class="header-inner">
-      <span class="logo">🧠 Algo Review</span>
-      <nav id="main-nav">
-        <button class="tab-btn active" data-tab="review">코드 리뷰</button>
-        <button class="tab-btn" data-tab="recommend">문제 추천</button>
-        <button class="tab-btn" data-tab="themes">테마별 문제</button>
-        <button class="tab-btn" data-tab="stats">통계</button>
-        <button class="tab-btn" data-tab="report">종합 리포트</button>
-        <button class="tab-btn" data-tab="history">리뷰 기록</button>
-        <button class="tab-btn" data-tab="import">기록 가져오기</button>
+      <span class="logo">ALGO REVIEW</span>
+      <nav id="main-nav" role="tablist" aria-label="주요 화면">
+        <button class="tab-btn active" data-tab="review" role="tab" id="tabbtn-review" aria-selected="true" aria-controls="tab-review">코드 리뷰</button>
+        <button class="tab-btn" data-tab="recommend" role="tab" id="tabbtn-recommend" aria-selected="false" aria-controls="tab-recommend">문제 추천</button>
+        <button class="tab-btn" data-tab="themes" role="tab" id="tabbtn-themes" aria-selected="false" aria-controls="tab-themes">테마별 문제</button>
+        <button class="tab-btn" data-tab="stats" role="tab" id="tabbtn-stats" aria-selected="false" aria-controls="tab-stats">통계</button>
+        <button class="tab-btn" data-tab="report" role="tab" id="tabbtn-report" aria-selected="false" aria-controls="tab-report">종합 리포트</button>
+        <button class="tab-btn" data-tab="history" role="tab" id="tabbtn-history" aria-selected="false" aria-controls="tab-history">리뷰 기록</button>
+        <button class="tab-btn" data-tab="import" role="tab" id="tabbtn-import" aria-selected="false" aria-controls="tab-import">기록 가져오기</button>
       </nav>
       <div class="header-actions">
         <div class="github-wrap">
-          <button id="github-icon-btn" class="github-icon-btn" title="GitHub">
-            <img src="/static/img/github.svg?v=__V__" alt="GitHub" />
+          <button id="github-icon-btn" class="github-icon-btn" aria-label="GitHub 연결 설정" aria-expanded="false">
+            <svg aria-hidden="true"><use href="#i-github" /></svg>
           </button>
           <div id="github-dropdown" class="github-dropdown hidden">
-            <div id="github-status-badge" style="display:none">
+            <div id="github-status-badge" class="hidden">
               <div class="github-user-row">
                 <span id="github-username-badge"></span>
               </div>
-              <select id="github-repo-select" title="GitHub 저장소 선택"></select>
+              <select id="github-repo-select" aria-label="GitHub 저장소 선택"></select>
               <button id="github-disconnect-btn" class="github-disconnect-btn">연결 해제</button>
             </div>
-            <div id="github-connect-inner" style="display:none">
+            <div id="github-connect-inner" class="hidden">
               <p class="github-dropdown-desc">GitHub에 연결하면 풀이를 자동으로 저장할 수 있습니다.</p>
-              <button id="github-connect-btn" class="btn-primary" style="width:100%">🐙 GitHub 연결</button>
+              <button id="github-connect-btn" class="btn-primary">GitHub 연결</button>
             </div>
           </div>
         </div>
-        <button id="theme-toggle" class="theme-btn" title="테마 변경">🌙</button>
+        <button id="theme-toggle" class="theme-btn" aria-label="테마 변경" aria-pressed="false">
+          <svg aria-hidden="true"><use href="#i-moon" /></svg>
+        </button>
         <button id="menu-toggle" class="menu-btn" aria-label="메뉴 열기" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
@@ -65,35 +112,28 @@
   </header>
 
   <main>
-    <!-- ── 코드 리뷰 탭 ── -->
-    <section id="tab-review" class="tab-content active">
-      <div class="card">
+    <!-- ── 코드 리뷰 탭 — 작업 화면. 카드 래퍼 없이 탭 자체가 작업 표면이다 ── -->
+    <section id="tab-review" class="tab-content active measure-work" role="tabpanel" aria-labelledby="tabbtn-review">
+      <div class="work-head">
         <h2>코드 리뷰</h2>
         <p class="desc">백준 또는 Codeforces 문제 번호와 풀이 코드를 입력하면 AI가 분석해드립니다.</p>
+      </div>
 
-        <div class="form-row">
-          <label>플랫폼</label>
+      <div class="field-row cols-3">
+        <div>
+          <label class="label" for="problem-platform">플랫폼</label>
           <select id="problem-platform">
             <option value="boj">백준</option>
             <option value="codeforces" selected>Codeforces</option>
           </select>
         </div>
-
-        <div class="form-row">
-          <label>문제 번호</label>
+        <div>
+          <label class="label" for="problem-id">문제 번호</label>
           <input id="problem-id" type="text" placeholder="예) 1000" />
-          <p id="problem-id-help" class="desc" style="font-size:.8rem;margin-top:6px;color:var(--text-muted)">
-            백준: 숫자만 입력하세요. 예) 1000
-          </p>
+          <p id="problem-id-help" class="hint">백준: 숫자만 입력하세요. 예) 1000</p>
         </div>
-
-        <div class="form-row">
-          <label>문제 설명 <span style="color:var(--text-muted);font-size:.8rem">(선택)</span></label>
-          <textarea id="problem-statement" placeholder="Codeforces 문제문 자동 수집이 실패하면 여기에 직접 붙여 넣을 수 있습니다." rows="6" spellcheck="false"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>언어 <span style="color:var(--text-muted);font-size:.8rem">(GitHub push 시 파일 확장자에 사용)</span></label>
+        <div>
+          <label class="label" for="code-language">언어</label>
           <select id="code-language">
             <option value="GNU C++17">C++ (GNU C++17)</option>
             <option value="Python 3" selected>Python 3</option>
@@ -110,26 +150,39 @@
             <option value="Ruby">Ruby</option>
             <option value="">자동 감지</option>
           </select>
+          <p class="hint">GitHub push 시 파일 확장자에 사용됩니다.</p>
         </div>
+      </div>
 
-        <div class="form-row">
-          <label>풀이 코드</label>
-          <div id="code-input" class="cm-wrap"></div>
-        </div>
+      <!-- 선택 입력이고 대부분 비어 있으므로 접어 둔다 -->
+      <details class="statement-toggle">
+        <summary>
+          <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+          문제 설명 직접 붙여넣기 (선택)
+        </summary>
+        <textarea id="problem-statement" rows="6" spellcheck="false"
+          placeholder="Codeforces 문제문 자동 수집이 실패하면 여기에 직접 붙여 넣을 수 있습니다."></textarea>
+      </details>
 
+      <div class="field-head">
+        <span class="label">풀이 코드</span>
+      </div>
+      <div id="code-input" class="cm-wrap"></div>
+
+      <div class="action-row">
         <button id="review-btn" class="btn-primary">분석 시작</button>
       </div>
 
-      <div id="review-result" class="hidden"></div>
+      <div id="review-result" class="hidden" aria-live="polite"></div>
     </section>
 
     <!-- ── 문제 추천 탭 ── -->
-    <section id="tab-recommend" class="tab-content hidden">
+    <section id="tab-recommend" class="tab-content hidden measure-prose" role="tabpanel" aria-labelledby="tabbtn-recommend">
       <div class="card">
         <h2>문제 추천</h2>
         <p class="desc">누적 분석 데이터를 바탕으로 취약점을 보완할 문제를 추천합니다.</p>
         <div class="form-row">
-          <label>플랫폼</label>
+          <label class="label" for="recommend-platform">플랫폼</label>
           <select id="recommend-platform">
             <option value="codeforces" selected>Codeforces</option>
             <option value="boj">백준</option>
@@ -137,133 +190,133 @@
         </div>
         <button id="recommend-btn" class="btn-primary">추천받기</button>
       </div>
-      <div id="recommend-result"></div>
+      <div id="recommend-result" aria-live="polite"></div>
     </section>
 
     <!-- ── 테마별 문제 탭 ── -->
-    <section id="tab-themes" class="tab-content hidden">
-      <div class="card">
+    <section id="tab-themes" class="tab-content hidden measure-list" role="tabpanel" aria-labelledby="tabbtn-themes">
+      <div class="list-head">
         <h2>테마별 문제</h2>
         <p class="desc">알고리즘 분야별 대표 문제를 사이트별 난이도로 보여줍니다. 이미 푼 문제는 제외됩니다. Codeforces 문제는 클릭하면 인앱 뷰어로 열립니다.</p>
-        <div class="platform-toggle" style="margin-bottom:14px">
+      </div>
+      <div class="toolbar">
+        <div class="platform-toggle">
           <button class="btn-toggle active" data-themes-platform="codeforces">Codeforces</button>
           <button class="btn-toggle" data-themes-platform="boj">백준</button>
         </div>
-        <div id="themes-chips" class="theme-chips"></div>
       </div>
-      <div id="themes-result"></div>
+      <div id="themes-chips" class="theme-chips"></div>
+      <div id="themes-result" aria-live="polite"></div>
     </section>
 
     <!-- ── 통계 탭 ── -->
-    <section id="tab-stats" class="tab-content hidden">
-      <div class="card">
-        <h2>레이팅 변화 그래프</h2>
+    <section id="tab-stats" class="tab-content hidden measure-list" role="tabpanel" aria-labelledby="tabbtn-stats">
+      <div class="list-head">
+        <h2>레이팅 변화</h2>
         <p class="desc">백준 리뷰 기준 — 상위 20% 문제 평균 난이도 기반 레이팅입니다. 풀이량이 보조 지표로 가산됩니다.</p>
-        <div style="position:relative;height:280px">
-          <canvas id="tier-chart"></canvas>
-        </div>
-        <div id="tier-chart-empty" class="hidden" style="text-align:center;color:var(--text-muted);padding:40px 0">
-          백준 AI 리뷰 기록이 없습니다. 백준 문제 코드 리뷰를 진행하면 그래프가 표시됩니다.
-        </div>
       </div>
-      <div class="card">
+      <div class="chart-frame">
+        <canvas id="tier-chart"></canvas>
+      </div>
+      <div id="tier-chart-empty" class="empty-note hidden">
+        백준 AI 리뷰 기록이 없습니다. 백준 문제 코드 리뷰를 진행하면 그래프가 표시됩니다.
+      </div>
+
+      <div class="list-head">
         <h2>풀이 통계</h2>
         <p class="desc">태그별 강점 / 취약점 누적 현황입니다.</p>
-        <div class="platform-toggle" style="margin-bottom:14px">
+      </div>
+      <div class="toolbar">
+        <div class="platform-toggle">
           <button class="btn-toggle active" data-platform="boj">백준</button>
           <button class="btn-toggle" data-platform="codeforces">Codeforces</button>
         </div>
-        <button id="stats-btn" class="btn-primary">통계 불러오기</button>
+        <button id="stats-btn" class="btn-primary btn-sm">통계 불러오기</button>
       </div>
-      <div id="stats-result"></div>
+      <div id="stats-result" aria-live="polite"></div>
     </section>
 
     <!-- ── 종합 리포트 탭 ── -->
-    <section id="tab-report" class="tab-content hidden">
+    <section id="tab-report" class="tab-content hidden measure-prose" role="tabpanel" aria-labelledby="tabbtn-report">
       <div class="card">
         <h2>종합 분석 리포트</h2>
         <p class="desc">누적 데이터를 분석해 학습 방향을 제안합니다.</p>
         <button id="report-btn" class="btn-primary">리포트 생성</button>
       </div>
-      <div id="report-result"></div>
+      <div id="report-result" aria-live="polite"></div>
     </section>
 
     <!-- ── 리뷰 기록 탭 ── -->
-    <section id="tab-history" class="tab-content hidden">
-      <div class="card">
+    <section id="tab-history" class="tab-content hidden measure-list" role="tabpanel" aria-labelledby="tabbtn-history">
+      <div class="list-head">
         <h2>리뷰 기록</h2>
         <p class="desc">과거에 분석한 코드와 피드백을 다시 볼 수 있습니다.</p>
-        <button id="history-btn" class="btn-primary">기록 불러오기</button>
+        <button id="history-btn" class="btn-primary btn-sm push-right">기록 불러오기</button>
       </div>
-      <div id="history-list"></div>
-      <!-- 상세 모달 -->
-      <div id="review-modal" class="modal-overlay hidden">
+      <div id="history-list" aria-live="polite"></div>
+
+      <div id="review-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="리뷰 기록 상세">
         <div class="modal-box">
-          <button class="modal-close" id="modal-close">✕</button>
+          <button class="modal-close" id="modal-close" aria-label="닫기">
+            <svg aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
           <div id="modal-content"></div>
         </div>
       </div>
     </section>
 
     <!-- ── 기록 가져오기 탭 ── -->
-    <section id="tab-import" class="tab-content hidden">
-      <!-- GitHub 가져오기 -->
+    <section id="tab-import" class="tab-content hidden measure-list" role="tabpanel" aria-labelledby="tabbtn-import">
       <div class="card">
         <details>
-          <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px">
-            <span class="toggle-arrow">▶</span>
-            <h2 style="margin:0;display:inline">🐙 BaekjoonHub 연동</h2>
-            <span style="font-size:.8rem;color:var(--green);font-weight:400">추천 · 코드 포함 · 빠름</span>
+          <summary>
+            <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+            <h2>BaekjoonHub 연동</h2>
+            <span class="hint">추천 · 코드 포함 · 빠름</span>
           </summary>
-          <p class="desc" style="margin-top:12px">BaekjoonHub로 GitHub에 올린 풀이를 한 번에 가져옵니다.</p>
+          <p class="desc">BaekjoonHub로 GitHub에 올린 풀이를 한 번에 가져옵니다.</p>
 
           <div class="form-row">
-            <label>GitHub 저장소</label>
+            <label class="label" for="gh-repo">GitHub 저장소</label>
             <input id="gh-repo" type="text" placeholder="예) leedominico/BaekjoonHub" />
           </div>
 
           <div class="form-row">
-            <label>
-              GitHub 토큰 <span style="color:var(--text-muted);font-size:.8rem">(선택 · 비공개 저장소일 때 필요)</span>
-            </label>
+            <label class="label" for="gh-token">GitHub 토큰 (선택 · 비공개 저장소일 때 필요)</label>
             <input id="gh-token" type="password" placeholder="ghp_..." />
-            <p class="desc" style="font-size:.78rem;margin-top:6px;color:var(--text-muted)">
-              github.com → Settings → Developer settings → Personal access tokens → repo 권한
-            </p>
+            <p class="hint">github.com → Settings → Developer settings → Personal access tokens → repo 권한</p>
           </div>
 
           <button id="gh-import-btn" class="btn-primary">GitHub에서 가져오기</button>
         </details>
       </div>
-      <div id="gh-import-result"></div>
+      <div id="gh-import-result" aria-live="polite"></div>
 
-      <div class="card" style="margin-top:16px">
+      <div class="card">
         <details>
-          <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px">
-            <span class="toggle-arrow">▶</span>
-            <h2 style="margin:0;display:inline">BOJ 직접 가져오기</h2>
+          <summary>
+            <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+            <h2>BOJ 직접 가져오기</h2>
           </summary>
-          <p class="desc" style="margin-top:12px">BOJ 아이디를 입력하면 맞은 제출 기록을 자동으로 가져옵니다.<br>
+          <p class="desc">BOJ 아이디를 입력하면 맞은 제출 기록을 자동으로 가져옵니다.
             세션 쿠키를 입력하면 코드까지 저장할 수 있습니다 (선택 사항).</p>
 
           <div class="form-row">
-            <label>BOJ 아이디</label>
+            <label class="label" for="import-boj-id">BOJ 아이디</label>
             <input id="import-boj-id" type="text" placeholder="예) tourist" />
           </div>
 
           <div class="form-row">
-            <label>
-              세션 쿠키 <span style="color:var(--text-muted);font-size:.8rem">(선택 · 코드 저장 시 필요)</span>
-            </label>
+            <label class="label" for="import-cookie">세션 쿠키 (선택 · 코드 저장 시 필요)</label>
             <input id="import-cookie" type="password" placeholder="OnlineJudge 쿠키 값" />
-            <p class="desc" style="font-size:.78rem;margin-top:6px;color:var(--text-muted)">
-              F12 → Application → Cookies → www.acmicpc.net → <b>OnlineJudge</b> 값 복사<br>
+            <p class="hint">
+              F12 → Application → Cookies → www.acmicpc.net → <b>OnlineJudge</b> 값 복사.
               코드를 저장해야 나중에 AI 리뷰 요청이 가능합니다.
             </p>
           </div>
 
           <div class="form-row">
-            <label>가져올 범위 <span style="color:var(--text-muted);font-size:.8rem">(페이지당 약 20개)</span></label>
+            <label class="label" for="import-pages">가져올 범위 (페이지당 약 20개)</label>
             <select id="import-pages">
               <option value="3">최근 ~60개 (3페이지)</option>
               <option value="5">최근 ~100개 (5페이지)</option>
@@ -276,86 +329,88 @@
           <button id="import-btn" class="btn-primary">가져오기</button>
         </details>
       </div>
+      <div id="import-result" aria-live="polite"></div>
 
-      <div id="import-result"></div>
-
-      <div class="card" style="margin-top:16px">
+      <div class="card">
         <details open>
-          <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px">
-            <span class="toggle-arrow">▶</span>
-            <h2 style="margin:0;display:inline">Codeforces 가져오기</h2>
+          <summary>
+            <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+            <h2>Codeforces 가져오기</h2>
           </summary>
-          <p class="desc" style="margin-top:12px">
+          <p class="desc">
             Codeforces handle로 AC 기록을 가져옵니다. 소스 코드까지 같이 가져오려면 본인 계정 API Key/Secret이 필요합니다.
           </p>
 
-          <div class="form-row">
-            <label>Codeforces handle</label>
-            <input id="cf-handle" type="text" placeholder="예) sidedoor" value="sidedoor" />
+          <div class="field-row cols-2">
+            <div>
+              <label class="label" for="cf-handle">Codeforces handle</label>
+              <input id="cf-handle" type="text" placeholder="예) sidedoor" />
+            </div>
+            <div>
+              <label class="label" for="cf-count">가져올 제출 수</label>
+              <select id="cf-count">
+                <option value="100">최근 100개</option>
+                <option value="200" selected>최근 200개</option>
+                <option value="500">최근 500개</option>
+                <option value="1000">최근 1000개</option>
+              </select>
+            </div>
           </div>
 
-          <div class="form-row">
-            <label>가져올 제출 수</label>
-            <select id="cf-count">
-              <option value="100">최근 100개</option>
-              <option value="200" selected>최근 200개</option>
-              <option value="500">최근 500개</option>
-              <option value="1000">최근 1000개</option>
-            </select>
+          <div class="field-row cols-2">
+            <div>
+              <label class="label" for="cf-api-key">API Key (선택)</label>
+              <input id="cf-api-key" type="password" placeholder="Codeforces API Key" />
+            </div>
+            <div>
+              <label class="label" for="cf-api-secret">API Secret (선택)</label>
+              <input id="cf-api-secret" type="password" placeholder="Codeforces API Secret" />
+            </div>
           </div>
+          <p class="hint">
+            입력칸을 비워두면 서버의 <code>.env</code>에 있는 <code>CODEFORCES_API_KEY</code>,
+            <code>CODEFORCES_API_SECRET</code>을 우선 사용합니다.
+          </p>
 
-          <div class="form-row">
-            <label>API Key <span style="color:var(--text-muted);font-size:.8rem">(선택)</span></label>
-            <input id="cf-api-key" type="password" placeholder="Codeforces API Key" />
-          </div>
-
-          <div class="form-row">
-            <label>API Secret <span style="color:var(--text-muted);font-size:.8rem">(선택)</span></label>
-            <input id="cf-api-secret" type="password" placeholder="Codeforces API Secret" />
-            <p class="desc" style="font-size:.78rem;margin-top:6px;color:var(--text-muted)">
-              입력칸을 비워두면 서버의 `.env`에 있는 `CODEFORCES_API_KEY`, `CODEFORCES_API_SECRET`을 우선 사용합니다.
-            </p>
-          </div>
-
-          <details style="margin-top:16px">
-            <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;font-size:.88rem;color:var(--text-muted)">
-              <span class="toggle-arrow">▶</span>
-              GitHub 자동 push <span style="font-size:.78rem">(BaekjoonHub처럼 풀이를 GitHub에 올리려면 펼치세요)</span>
+          <details class="nested-toggle">
+            <summary>
+              <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+              <span class="hint">GitHub 자동 push — BaekjoonHub처럼 풀이를 GitHub에 올리려면 펼치세요</span>
             </summary>
-            <div style="margin-top:10px">
-              <div class="form-row">
-                <label>GitHub 저장소</label>
-                <input id="cf-gh-repo" type="text" placeholder="예) username/my-solutions" />
-              </div>
-              <div class="form-row">
-                <label>GitHub Personal Access Token</label>
-                <input id="cf-gh-token" type="password" placeholder="ghp_..." />
-                <p class="desc" style="font-size:.78rem;margin-top:6px;color:var(--text-muted)">
-                  Settings → Developer settings → Personal access tokens → <b>Contents: Write</b> 권한 필요<br>
-                  소스 코드가 있는 문제만 push됩니다 (API Key/Secret 필요).
-                </p>
-              </div>
+            <div class="form-row">
+              <label class="label" for="cf-gh-repo">GitHub 저장소</label>
+              <input id="cf-gh-repo" type="text" placeholder="예) username/my-solutions" />
+            </div>
+            <div class="form-row">
+              <label class="label" for="cf-gh-token">GitHub Personal Access Token</label>
+              <input id="cf-gh-token" type="password" placeholder="ghp_..." />
+              <p class="hint">
+                Settings → Developer settings → Personal access tokens → <b>Contents: Write</b> 권한 필요.
+                소스 코드가 있는 문제만 push됩니다 (API Key/Secret 필요).
+              </p>
             </div>
           </details>
 
-          <button id="cf-import-btn" class="btn-primary" style="margin-top:16px">Codeforces에서 가져오기</button>
+          <div class="action-row"><button id="cf-import-btn" class="btn-primary">Codeforces에서 가져오기</button></div>
         </details>
       </div>
 
-      <div id="cf-import-result"></div>
+      <div id="cf-import-result" aria-live="polite"></div>
       <div id="import-history-list"></div>
     </section>
   </main>
 
   <!-- ── 문제 풀기 모달 ── -->
-  <div id="problem-modal" class="pm-overlay hidden">
+  <div id="problem-modal" class="pm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pm-title">
     <div class="pm-box">
       <div class="pm-header">
         <h2 id="pm-title">문제 로딩 중...</h2>
         <span id="pm-difficulty" class="tier-badge"></span>
         <span id="pm-meta" class="pm-meta"></span>
         <span id="pm-link" class="pm-link"></span>
-        <button class="pm-close" onclick="closeProblemModal()">✕</button>
+        <button id="pm-close-btn" class="pm-close" aria-label="닫기">
+          <svg aria-hidden="true"><use href="#i-close" /></svg>
+        </button>
       </div>
       <div class="pm-body">
         <!-- 왼쪽: 문제문 -->
@@ -367,8 +422,8 @@
         </div>
         <!-- 오른쪽: 코드 에디터 + 실행 -->
         <div class="pm-right">
-          <div class="form-row" style="margin-bottom:8px">
-            <label>언어</label>
+          <div>
+            <label class="label" for="pm-language">언어</label>
             <select id="pm-language">
               <option value="python3">Python 3</option>
               <option value="cpp">C++ (GNU C++17)</option>
@@ -376,16 +431,14 @@
           </div>
           <div id="pm-code" class="pm-code"></div>
           <div class="pm-run-row">
-            <button id="pm-run-btn" class="btn-primary" onclick="runSamples()">▶ 예제 실행</button>
-            <button id="pm-review-btn" class="btn-primary btn-review hidden" onclick="proceedToReview()">
-              코드 리뷰 진행 →
-            </button>
+            <button id="pm-run-btn" class="btn-primary btn-sm">예제 실행</button>
+            <button id="pm-review-btn" class="btn-primary btn-sm btn-review hidden">코드 리뷰 진행</button>
           </div>
-          <div id="pm-test-results"></div>
+          <div id="pm-test-results" aria-live="polite"></div>
           <div class="pm-custom-section">
             <div class="pm-custom-header">
               <span class="pm-custom-label">커스텀 예제</span>
-              <button class="pm-custom-add-btn" onclick="addCustomCase()">+ 예제 추가</button>
+              <button id="pm-custom-add-btn" class="pm-custom-add-btn">예제 추가</button>
             </div>
             <div id="pm-custom-cases"></div>
           </div>
@@ -400,6 +453,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/rust/rust.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/go/go.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/swift/swift.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/ruby/ruby.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
