@@ -110,3 +110,39 @@ def test_demo_mode_blocks_even_when_enabled(monkeypatch):
                         lambda *a, **k: pytest.fail("데모에서 실행하면 안 된다"))
 
     assert _client().post("/api/execute", json=_REQ).status_code == 403
+
+
+# ── UTF-8 출력 (회귀) ──
+#
+# `-I`(isolated)는 `-E` 를 포함해 **모든 PYTHON* 환경변수를 무시**한다. 그래서
+# PYTHONIOENCODING/PYTHONUTF8 를 env 로 넘겨도 적용되지 않았고, 비-ASCII 를 출력하는
+# 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽었다. 커맨드라인 플래그로 줘야 한다.
+
+@pytest.mark.parametrize("text", ["안녕하세요", "你好世界", "Привет", "😀🎉", "café"])
+def test_non_ascii_output_survives(text):
+    r = _run_python(f"print({text!r})", "", 8)
+
+    assert r["exit_code"] == 0, r["stderr"]
+    assert text in r["stdout"]
+
+
+def test_child_stdout_is_utf8():
+    r = _run_python("import sys; print(sys.stdout.encoding)", "", 8)
+
+    assert r["exit_code"] == 0
+    assert r["stdout"].strip().lower().replace("-", "") == "utf8"
+
+
+def test_non_ascii_stdin_is_readable():
+    r = _run_python("print(input()[::-1])", "가나다", 8)
+
+    assert r["exit_code"] == 0
+    assert r["stdout"].strip() == "다나가"
+
+
+def test_output_is_unbuffered_enough_to_survive_a_crash():
+    """-u 가 없으면 버퍼에 남은 출력이 비정상 종료에 유실된다."""
+    r = _run_python("import sys; print('before'); sys.exit(3)", "", 8)
+
+    assert r["exit_code"] == 3
+    assert "before" in r["stdout"]

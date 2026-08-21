@@ -68,11 +68,16 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
         session.add(Review(
             problem_id=problem_id, platform=platform, problem_ref=problem_ref,
             title=title, tier=tier, tier_name=tier_name,
-            tags=json.dumps(tags, ensure_ascii=False), code=code, feedback=feedback,
-            efficiency=efficiency, complexity=complexity, better_algorithm=better_algorithm or "",
-            strengths=json.dumps(strengths, ensure_ascii=False),
-            weaknesses=json.dumps(weaknesses, ensure_ascii=False),
-            language=language, problem_statement=problem_statement or "",
+            # NOT NULL 컬럼에는 `or ""` 를 쓴다 — 호출부가 None 을 넘기면(LLM 이 null 을 준
+            # 필드가 그대로 흘러오는 경우) IntegrityError 로 죽고, 이미 과금된 응답이
+            # 롤백으로 사라진다. analyzer.normalize_review_result 가 먼저 막지만 이 함수는
+            # dict 를 직접 받는 공개 경로다.
+            tags=json.dumps(tags, ensure_ascii=False), code=code, feedback=feedback or "",
+            efficiency=efficiency, complexity=complexity or "",
+            better_algorithm=better_algorithm or "",
+            strengths=json.dumps(strengths or [], ensure_ascii=False),
+            weaknesses=json.dumps(weaknesses or [], ensure_ascii=False),
+            language=language or "", problem_statement=problem_statement or "",
             created_at=datetime.now().isoformat(),
         ))
 
@@ -108,9 +113,12 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
 
         efficiency = result["efficiency"]
         row.efficiency = efficiency
-        row.complexity = result.get("complexity", "")
+        # `or ""` 로 통일한다 — `.get(key, default)` 는 LLM 이 값에 null 을 준 경우
+        # default 를 적용하지 않아 NOT NULL 컬럼에 None 이 들어간다(analyzer 가 이미
+        # 정규화하지만, 이 함수는 dict 를 직접 받는 공개 경로라 여기서도 막는다).
+        row.complexity = result.get("complexity") or ""
         row.better_algorithm = result.get("better_algorithm") or ""
-        row.feedback = result.get("feedback", "")
+        row.feedback = result.get("feedback") or ""
         row.strengths = json.dumps(result.get("strengths", []), ensure_ascii=False)
         row.weaknesses = json.dumps(result.get("weaknesses", []), ensure_ascii=False)
 

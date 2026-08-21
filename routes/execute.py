@@ -30,7 +30,10 @@ def safe_env() -> dict:
 
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
-    env = {**safe_env(), "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    # UTF-8·무버퍼는 **커맨드라인 플래그**로 준다. -I 는 -E 를 포함해 모든 PYTHON* 환경변수를
+    # 무시하므로 PYTHONIOENCODING/PYTHONUTF8 를 넣어도 적용되지 않는다(실측: 비-ASCII 를
+    # 출력하는 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽었다).
+    env = safe_env()
     try:
         # 작업 디렉터리를 격리한다. cwd 를 지정하지 않으면 서버의 CWD 를 상속해
         # sys.path[0] 가 리포 루트가 되고, 제출 코드가 `import config` 로 .env 를 읽을 수
@@ -38,10 +41,12 @@ def _run_python(code: str, stdin: str, timeout: int) -> dict:
         # import 까지 끊는다. 환경변수 필터만으로는 이 경로가 막히지 않았다.
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
-                [sys.executable, "-I", "-c", code],
+                [sys.executable, "-I", "-X", "utf8=1", "-u", "-c", code],
                 input=stdin,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=env,
                 cwd=tmpdir,
@@ -65,11 +70,19 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 ["g++", "-O2", "-std=c++17", "-o", exe, src],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_COMPILE_TIMEOUT,
                 env=safe_env(),
+                cwd=tmpdir,   # 실행 단계와 같은 이유 — 서버 CWD 를 상속하지 않는다
             )
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
+        except subprocess.TimeoutExpired:
+            # 실행 단계는 이 예외를 잡는데 컴파일 단계는 잡지 않아, 과도한 템플릿 재귀 등으로
+            # 컴파일이 오래 걸리면 예외가 라우터를 탈출해 30초 뒤 원인 불명 500 이 됐다.
+            return {"stdout": "", "stderr": f"[컴파일 시간 초과 - {_COMPILE_TIMEOUT}초]",
+                    "exit_code": -1}
         if compile_result.returncode != 0:
             return {"stdout": "", "stderr": compile_result.stderr, "exit_code": compile_result.returncode}
         try:
@@ -78,6 +91,8 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 input=stdin,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=safe_env(),
                 cwd=tmpdir,   # 서버 CWD 를 상속하지 않는다 — 파이썬 경로와 같은 이유
