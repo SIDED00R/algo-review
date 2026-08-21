@@ -1,9 +1,12 @@
 from pydantic import BaseModel, Field, field_validator
 
+from constants import is_supported_platform, normalize_platform
 
-def _normalize_platform(value: str) -> str:
-    platform = (value or "boj").strip().lower()
-    if platform not in {"boj", "codeforces"}:
+
+def validate_platform(value: str) -> str:
+    """pydantic 검증용 — 패키지 밖 3개 모듈이 쓰므로 이름에 밑줄을 두지 않는다."""
+    platform = normalize_platform(value)
+    if not is_supported_platform(platform):
         raise ValueError("지원하지 않는 플랫폼입니다. 'boj' 또는 'codeforces'만 가능합니다.")
     return platform
 
@@ -20,7 +23,7 @@ class ReviewRequest(BaseModel):
     @field_validator("platform")
     @classmethod
     def _validate_platform(cls, v):
-        return _normalize_platform(v)
+        return validate_platform(v)
 
     @field_validator("code")
     @classmethod
@@ -114,7 +117,7 @@ class PushReviewRequest(BaseModel):
     @field_validator("platform")
     @classmethod
     def _validate_platform(cls, v):
-        return _normalize_platform(v)
+        return validate_platform(v)
 
     @field_validator("problem_ref", "title", "code")
     @classmethod

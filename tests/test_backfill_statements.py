@@ -325,3 +325,101 @@ def test_truncated_tree_raises_instead_of_returning_partial_results():
             gh.fetch_repo_tree("me/solutions", "tok")
     finally:
         gh.requests.get = original
+
+
+# ── main() 의 저장 가드 (회귀) ──
+#
+# "저장 가드" 섹션이 is_scrape_failure 와 set_problem_statement 만 검사해, main() 안의
+# 길이 검사(MIN_STATEMENT_LEN)는 0 으로 바꿔도 스위트가 초록이었다.
+
+def _run_main(monkeypatch, statement, apply=False, capsys=None):
+    """main() 을 BOJ 한 건에 대해 돌린다. 수집 결과만 주입한다."""
+    monkeypatch.setattr(db, "get_problems_missing_statement",
+                        lambda platform=None: [{"platform": "boj", "problem_ref": "1000",
+                                                "empty_rows": 1}])
+    monkeypatch.setattr(db, "get_github_settings",
+                        lambda: {"target_repo": "me/solutions", "access_token": "tok"})
+    monkeypatch.setattr(backfill.api_client, "get_boj_readme_paths",
+                        lambda repo, token=None: {1000: ["백준/Silver/1000. A+B/README.md"]})
+    monkeypatch.setattr(backfill, "fetch_boj_statement",
+                        lambda problem, repo, token, paths: (statement, "테스트"))
+    written = []
+    monkeypatch.setattr(db, "set_problem_statement",
+                        lambda p, r, s: written.append((p, r, s)) or 1)
+    argv = ["backfill_statements.py"] + (["--apply"] if apply else [])
+    monkeypatch.setattr(backfill.sys, "argv", argv)
+    assert backfill.main() == 0
+    return written
+
+
+def test_short_statement_is_skipped_not_stored(monkeypatch, capsys):
+    short = "가" * (backfill.MIN_STATEMENT_LEN - 1)
+    written = _run_main(monkeypatch, short, apply=True)
+
+    assert written == []
+    out = capsys.readouterr().out
+    assert "SKIP" in out and "너무 짧거나" in out
+
+
+def test_long_enough_statement_is_stored(monkeypatch, capsys):
+    body = "가" * (backfill.MIN_STATEMENT_LEN + 1)
+    written = _run_main(monkeypatch, body, apply=True)
+
+    assert len(written) == 1 and written[0][2] == body
+
+
+def test_failure_string_is_skipped_even_when_long(monkeypatch, capsys):
+    """길이는 충분하지만 실패 문자열이면 저장하면 안 된다 — 저장하면 그 문제의 리뷰가
+    resolve_statement 를 통해 영구히 오염된다."""
+    failure = "크롤링 실패: 404 Client Error: Not Found for url: " + "x" * 40
+    assert len(failure) >= backfill.MIN_STATEMENT_LEN
+    written = _run_main(monkeypatch, failure, apply=True)
+
+    assert written == []
+
+
+def test_dry_run_never_writes(monkeypatch, capsys):
+    body = "가" * (backfill.MIN_STATEMENT_LEN + 1)
+    written = _run_main(monkeypatch, body, apply=False)
+
+    assert written == []
+    assert "--apply" in capsys.readouterr().out
+
+
+def test_db_target_is_printed_before_any_query(monkeypatch, capsys):
+    """어느 DB 에 쓰는지 먼저 찍어야 한다 — config 의 env_file 은 CWD 상대 경로라
+    리포 루트가 아닌 곳에서 돌리면 조용히 로컬 SQLite 에 붙고 '대상 0건 + exit 0' 이 된다."""
+    monkeypatch.setattr(db, "get_problems_missing_statement", lambda platform=None: [])
+    monkeypatch.setattr(backfill.sys, "argv", ["backfill_statements.py"])
+
+    assert backfill.main() == 0
+    out = capsys.readouterr().out
+    assert "sqlite" in out or "postgres" in out
+    assert out.index("DRY-RUN") < out.index("문제 설명이 빈 기록이 없습니다")
+
+
+def test_reason_bucket_collapses_every_form_main_produces():
+    """main() 이 실제로 만드는 사유 전부가 수렴해야 한다.
+
+    예전에는 `문자열(37자)` 처럼 괄호 앞에 공백이 없어 길이마다 별개 버킷이 됐고,
+    구분자 `" ("` 는 어떤 사유에도 매칭되지 않는 dead branch 였다.
+    """
+    forms = [
+        "BOJ 문제 번호가 숫자가 아니다",
+        "저장소에 README 가 없다",
+        "README 는 있으나 문제 설명 섹션이 비었다: 백준/Gold/1182. 제목/README.md",
+        "codeforces.com 수집 실패",
+        "GitHub 미연결",
+        "저장소에 BOJ README 가 없다",
+        "처리 중 예외: ValueError",
+        "본문이 너무 짧거나 실패 문자열 (37자)",
+        "본문이 너무 짧거나 실패 문자열 (12자)",
+    ]
+    buckets = [backfill.reason_bucket(f) for f in forms]
+    # 길이만 다른 두 사유가 하나로 합쳐진다.
+    assert len(set(buckets)) == len(forms) - 1
+    assert buckets[-1] == buckets[-2] == "본문이 너무 짧거나 실패 문자열"
+    assert buckets[2] == "README 는 있으나 문제 설명 섹션이 비었다"
+    assert buckets[6] == "처리 중 예외"
+    # 경로·상세가 붙지 않는 사유는 그대로 남는다.
+    assert buckets[0] == forms[0]

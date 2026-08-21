@@ -23,15 +23,22 @@ _COMPILE_TIMEOUT = settings.compile_timeout
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
     env = {**_BASE_ENV, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
     try:
-        result = subprocess.run(
-            [sys.executable, "-c", code],
-            input=stdin,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-        )
-        return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
+        # 작업 디렉터리를 격리한다. cwd 를 지정하지 않으면 서버의 CWD 를 상속해
+        # sys.path[0] 가 리포 루트가 되고, 제출 코드가 `import config` 로 .env 를 읽을 수
+        # 있다(config 의 env_file 은 CWD 상대 경로다). -I 는 환경변수·사용자 site 기반
+        # import 까지 끊는다. 환경변수 필터만으로는 이 경로가 막히지 않았다.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(
+                [sys.executable, "-I", "-c", code],
+                input=stdin,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+                cwd=tmpdir,
+            )
+            return {"stdout": result.stdout, "stderr": result.stderr,
+                    "exit_code": result.returncode}
     except subprocess.TimeoutExpired:
         return {"stdout": "", "stderr": f"[시간 초과 - {timeout}초]", "exit_code": -1}
     except FileNotFoundError:
@@ -64,6 +71,7 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
                 text=True,
                 timeout=timeout,
                 env=_BASE_ENV,
+                cwd=tmpdir,   # 서버 CWD 를 상속하지 않는다 — 파이썬 경로와 같은 이유
             )
             return {"stdout": run_result.stdout, "stderr": run_result.stderr, "exit_code": run_result.returncode}
         except subprocess.TimeoutExpired:

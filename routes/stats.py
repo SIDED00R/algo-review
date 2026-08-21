@@ -1,7 +1,7 @@
 import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
-from routes.models import _normalize_platform
+from routes.models import validate_platform
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ def get_tier_history():
 @router.get("/api/stats")
 def get_stats(platform: str | None = "boj"):
     try:
-        platform = _normalize_platform(platform)
+        platform = validate_platform(platform)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

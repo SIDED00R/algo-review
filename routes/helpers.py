@@ -4,10 +4,13 @@ push 함수가 둘인 이유: push_solution 은 파일별 PUT(가져오기처럼
 한 문제가 실패해도 나머지가 진행되어야 한다), push_review_bundle 은 README+코드를
 한 커밋으로 묶는다(단건 등록은 저장소 이력이 문제 단위로 남는 게 낫다).
 """
+import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 import db
 import clients as api_client
+
+logger = logging.getLogger("uvicorn.error")
 
 KST = timezone(timedelta(hours=9))
 
@@ -15,8 +18,12 @@ KST = timezone(timedelta(hours=9))
 def push_solution(repo: str, token: str, folder: str, file_stem: str,
                   ext: str, code: str, readme: str, msg: str) -> bool:
     """README + 코드 파일을 저장소에 push. 코드 push 성공 여부 반환."""
-    api_client.push_file_to_github(repo, token, f"{folder}/README.md", readme, msg)
-    return api_client.push_file_to_github(repo, token, f"{folder}/{file_stem}{ext}", code, msg)
+    readme_ok = api_client.push_file_to_github(repo, token, f"{folder}/README.md", readme, msg)
+    code_ok = api_client.push_file_to_github(repo, token, f"{folder}/{file_stem}{ext}", code, msg)
+    if code_ok and not readme_ok:
+        # README 만 실패하면 호출부가 성공으로 집계해 사용자에게 보고되는 숫자가 틀린다.
+        logger.warning("README push 실패 (repo=%s, folder=%s) — 코드만 올라갔다", repo, folder)
+    return code_ok and readme_ok
 
 
 def build_solution_target(platform: str, problem_ref, title: str, tier_name: str = "") -> tuple[str, str]:

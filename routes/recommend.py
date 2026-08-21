@@ -3,6 +3,8 @@ import clients as api_client
 import recommender
 from recommender import CF_RANGE_LOW, CF_RANGE_HARD_HIGH
 from fastapi import APIRouter, HTTPException, Query
+
+from constants import is_supported_platform, normalize_platform
 from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
 
 router = APIRouter()
@@ -10,8 +12,8 @@ router = APIRouter()
 
 @router.get("/api/recommend")
 def get_recommendations(platform: str = Query("codeforces"), exclude: str = Query("")):
-    platform = (platform or "codeforces").strip().lower()
-    if platform not in {"boj", "codeforces"}:
+    platform = normalize_platform(platform, default="codeforces")
+    if not is_supported_platform(platform):
         raise HTTPException(status_code=400, detail="지원하지 않는 플랫폼입니다.")
 
     if IS_DEMO:

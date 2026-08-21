@@ -24,6 +24,29 @@ jobs:
       - run: pip install ruff==0.15.22
       - run: ruff check .
 
+  lint-js:
+    name: Lint (JS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # 빌드 스텝이 없어 JS 는 브라우저에서만 파싱된다 — 구문 오류가 배포로 나간다.
+      - name: 구문 검사
+        run: node --check static/js/*.js
+      # 스크립트가 전역 렉시컬 스코프를 공유하므로 최상위 const/let/class 이름이 겹치면
+      # 전체 스크립트가 SyntaxError 로 죽는다(앱 전체 무음 실패의 단일 지점).
+      - name: 최상위 선언 중복 검사
+        run: |
+          dupes=$(grep -hoE "^(const|let|var|class|function|async function)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" static/js/*.js                   | awk '{print $NF}' | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "최상위 선언이 중복됩니다 — 전역 스코프를 공유하므로 전체 스크립트가 죽습니다:"
+            echo "$dupes"
+            exit 1
+          fi
+          echo "중복 없음"
+
   test:
     name: Test (${{ matrix.dialect }})
     runs-on: ubuntu-latest
@@ -65,7 +88,7 @@ jobs:
 
   deploy:
     name: Deploy ${{ matrix.service }}
-    needs: [lint, test]
+    needs: [lint, lint-js, test]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
