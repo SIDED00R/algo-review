@@ -6,7 +6,7 @@ import db
 from config import settings
 from fastapi import APIRouter, HTTPException
 from routes.helpers import merged_github_target, push_review_bundle
-from routes.models import _normalize_platform
+from routes.models import validate_platform
 from routes.problem_resolve import resolve_statement
 from demo_mode import IS_DEMO, DEMO_REVIEW_RESULT
 
@@ -78,7 +78,7 @@ def rereview_problem(platform: str, problem_ref: str):
     'GitHub 문서 다시 올리기' 버튼이 이 경로로 토큰 없이 업로드만 재시도한다.
     """
     try:
-        platform = _normalize_platform(platform)
+        platform = validate_platform(platform)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -1,4 +1,6 @@
 import json
+import threading
+
 from openai import OpenAI
 
 from config import settings
@@ -7,11 +9,39 @@ GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
 # openai SDK 기본값은 read 600s·재시도 2회 — 제공자가 멎으면 워커 스레드가 수십 분 잡힌다.
+# timeout 만 줄이면 실효 상한이 3×timeout + 백오프가 되므로 재시도 횟수도 함께 못박는다.
 _API_TIMEOUT = settings.openai_timeout
+_MAX_RETRIES = 1
+
+# 클라이언트는 모듈 레벨에 하나만 둔다 — 호출마다 새로 만들면 httpx 커넥션 풀과 TLS
+# 핸드셰이크를 매번 버린다(문제 뷰어는 한 요청에 섹션 4개를 동시 번역한다).
+# settings 는 프로세스 기동 시 고정되므로 재생성할 이유가 없다.
+_client = None
+_client_lock = threading.Lock()
+
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is not None:
+        return _client
+    with _client_lock:
+        if _client is None:
+            _client = OpenAI(api_key=settings.openai_api_key,
+                             base_url=settings.openai_base_url or None,
+                             timeout=_API_TIMEOUT, max_retries=_MAX_RETRIES)
+    return _client
+
+
+def _require_choice(response) -> None:
+    """choices 가 비면 아래 인덱싱이 IndexError 로 새어 "코드 분석 실패: list index out of
+    range" 라는 해독 불가 500 이 된다. .env.example 이 Gemini 호환 엔드포인트를 1급 대안으로
+    안내하므로(응답 형태가 미묘하게 다를 수 있다) 현실적인 경계다."""
+    if not getattr(response, "choices", None):
+        raise ValueError("AI 응답에 결과가 없습니다. 제공자 설정(OPENAI_BASE_URL·모델)을 확인해주세요.")
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
+    client = _get_client()
 
     tags_str = ", ".join(problem_info["tags"]) if problem_info["tags"] else "태그 없음"
     platform = (problem_info.get("platform") or "boj").lower()
@@ -71,6 +101,7 @@ efficiency 기준:
         timeout=_API_TIMEOUT,
     )
 
+    _require_choice(response)
     if response.choices[0].finish_reason == "length":
         # max_tokens 에 걸려 JSON 이 중간에 잘렸다 — json.loads 로 넘기면 유료 호출을 다 쓴
         # 뒤 알아보기 힘든 JSONDecodeError 로 500이 난다. 사람이 읽을 수 있는 에러로 분기한다.
@@ -79,7 +110,9 @@ efficiency 기준:
             "코드가 너무 길 수 있습니다."
         )
 
-    raw = response.choices[0].message.content.strip()
+    raw = (response.choices[0].message.content or "").strip()
+    if not raw:
+        raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
     result = json.loads(raw)
 
     if result.get("efficiency") not in ("good", "ok", "poor"):
@@ -89,10 +122,10 @@ efficiency 기준:
 
 
 def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -> str:
-    if not tag_stats:
-        return "아직 분석 데이터가 없습니다. 더 많은 문제를 풀어보세요."
+    # 빈 입력 안내는 라우터가 400 으로 낸다(routes/report.py) — 여기 두면 같은 문구가
+    # 두 곳에 정의돼 어느 쪽이 정본인지 알 수 없다.
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
+    client = _get_client()
 
     stats_text = "\n".join(
         f"- {s['tag']}: 총 {s['total_count']}회 (잘함 {s['good_count']}회, 부족 {s['poor_count']}회)"
@@ -135,4 +168,5 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
             "데이터가 너무 많을 수 있습니다."
         )
 
-    return response.choices[0].message.content.strip()
+    _require_choice(response)
+    return (response.choices[0].message.content or "").strip()

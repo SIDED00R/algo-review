@@ -9,6 +9,9 @@ from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
 
+# CF API 는 2초에 1회를 넘기면 429 를 준다 — 여유를 두고 쉰다.
+_CF_RATE_LIMIT_SEC = 2.1
+
 
 @router.post("/api/import-codeforces")
 def import_codeforces_history(req: CodeforcesImportRequest):
@@ -23,7 +26,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
 
     try:
         user = api_client.get_codeforces_user_info(handle)
-        time.sleep(2.1)
+        time.sleep(_CF_RATE_LIMIT_SEC)
         submissions = api_client.get_codeforces_user_submissions(
             handle,
             count=req.count,
@@ -59,7 +62,9 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             ext = api_client._get_file_extension(sub.get("language", ""))
             ref = sub["problem_ref"]
             folder, msg = build_solution_target("codeforces", ref, sub["title"])
-            cf_url = sub.get("problem_url", api_client.get_problem_url("codeforces", ref))
+            # get_codeforces_user_submissions 가 항상 채운다 — .get 기본값은 도달 불가인데
+            # 파이썬이 기본값 표현식을 먼저 평가하므로 제출마다 정규식+URL 조립이 헛돌았다.
+            cf_url = sub["problem_url"]
             readme = build_readme(ref, sub["title"],
                                   sub.get("tier_name", ""), sub.get("tags", []),
                                   sub.get("language", ""), cf_url)

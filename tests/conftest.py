@@ -17,8 +17,9 @@ from sqlalchemy import text
 import db
 from db.connection import dispose_engine, session_scope
 
-_TABLES = ["reviews", "tag_stats", "solved_history", "github_settings", "api_cache"]
-_IS_POSTGRES = os.environ.get("DB_TYPE", "sqlite").lower() == "postgres"
+# 다른 테스트 모듈도 참조한다 — 목록을 두 곳에 적으면 테이블 추가 시 한쪽만 고쳐진다.
+TABLES = ["reviews", "tag_stats", "solved_history", "github_settings", "api_cache"]
+IS_POSTGRES = os.environ.get("DB_TYPE", "sqlite").lower() == "postgres"
 
 # IS_DEMO 는 모듈 import 시점에 한 번 결정된다 — 환경에 DEMO_MODE=true 가 있으면
 # 비-데모를 전제한 테스트들이 조기 반환에 걸려 원인 불명으로 깨진다(배포 워크플로가
@@ -34,7 +35,7 @@ _DEMO_AWARE_MODULES = [
 
 def _truncate_all():
     with session_scope(commit=True) as session:
-        for table in _TABLES:
+        for table in TABLES:
             session.execute(text(f"DELETE FROM {table}"))
 
 
@@ -50,7 +51,7 @@ def not_demo(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def fresh_db(tmp_path, monkeypatch):
-    if _IS_POSTGRES:
+    if IS_POSTGRES:
         dispose_engine()
         db.run_migrations()
         _truncate_all()

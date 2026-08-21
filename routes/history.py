@@ -1,6 +1,6 @@
 import db
 from fastapi import APIRouter, HTTPException
-from routes.models import _normalize_platform
+from routes.models import validate_platform
 
 router = APIRouter()
 
@@ -13,7 +13,7 @@ def list_reviews_grouped():
 @router.get("/api/reviews/problem/{platform}/{problem_ref}")
 def get_reviews_by_problem(platform: str, problem_ref: str):
     try:
-        platform = _normalize_platform(platform)
+        platform = validate_platform(platform)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"reviews": db.get_reviews_by_problem(platform, problem_ref)}

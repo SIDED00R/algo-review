@@ -33,6 +33,7 @@
 │  github_settings · migrate   │       └──────────────────────────────────┘
 │  normalize                   │
 └────────┬────────────────────┘
+         │   (단순 상수는 constants.py — 레이어 간 상호 import 없이 어느 쪽에서도 참조)
          │
 ┌────────▼──────────────────────┐
 │  SQLite / PostgreSQL          │   (스키마: Alembic 마이그레이션)
@@ -53,13 +54,14 @@
 |------|----------|
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /health`, 전역 예외 핸들러 |
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/CORS 등 |
+| `constants.py` | 플랫폼 화이트리스트·티어 이름·`normalize_platform()` — 레이어 어디서나 참조하는 순수 값. 예전에는 `db/normalize.py` 가 `clients.solved_ac` 에서 `TIER_NAMES` 를 가져와, `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이었다. 플랫폼 화이트리스트도 세 곳에 흩어져 있었다 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 | `backfill_statements.py` | 기존 기록의 `problem_statement` 백필(일회성 CLI). BOJ 는 GitHub README, CF 는 codeforces.com 재수집. dry-run 기본, `--apply` 로만 기록 |
 
 ### 서비스 레이어
 | 파일 | 단일 책임 |
 |------|----------|
-| `analyzer.py` | OpenAI GPT를 이용한 코드 분석 |
+| `analyzer.py` | LLM 코드 분석. 클라이언트는 모듈 레벨 싱글턴(호출마다 만들면 커넥션 풀과 TLS 핸드셰이크를 매번 버린다)이고 `max_retries` 를 명시한다 — timeout 만 줄이면 실효 상한이 3×timeout + 백오프가 된다 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
 | `cf_translator.py` | OpenAI를 이용한 Codeforces 문제 본문 한국어 번역 |
@@ -90,7 +92,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 ### 외부 클라이언트 레이어 (`clients/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑, TIER_NAMES 상수 |
+| `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 는 `constants.py` 가 정본이고 여기서 재수출한다(기존 import 경로 유지). `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑 |
@@ -167,7 +169,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
 | `routes/problem_resolve.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
 | `routes/problem_resolve.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
-| `routes/review.py` | `analyzer.analyze_code` | GPT-4o 코드 분석 |
+| `routes/review.py` | `analyzer.analyze_code` | LLM 코드 분석 (모델은 `OPENAI_MODEL`, 기본 gpt-4o — `.env.example` 은 Gemini 호환 엔드포인트도 안내한다) |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
 | `routes/pending_review.py` | `db.save_review` | 리뷰 대기 행 저장 (push 성공 후에만) |
 | `routes/rereview.py` | `analyzer.analyze_code` | 대기 행 재리뷰 — LLM 을 호출하는 두 번째 경로 |
@@ -178,7 +180,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
-| `routes/report.py` | `analyzer.get_cumulative_analysis` | GPT-4o 종합 리포트 생성 |
+| `routes/report.py` | `analyzer.get_cumulative_analysis` | LLM 종합 리포트 생성 |
 | `routes/import_boj.py` | `clients.get_user_submissions` | BOJ 제출 목록 크롤링 |
 | `routes/import_boj.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
@@ -209,7 +211,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | # | 위치 | 조치 내용 |
 |---|------|----------|
-| 1 | `routes/execute.py` | subprocess 실행 시 `_SAFE_ENV_KEYS`만 허용 → API 키 환경변수 노출 차단 |
+| 1 | `routes/execute.py` | subprocess 실행 시 `_SAFE_ENV_KEYS`만 허용 + `cwd`를 임시 디렉터리로 격리 + 파이썬은 `-I`(isolated) → 환경변수와 **작업 디렉터리**를 둘 다 끊는다. 환경변수만 막으면 제출 코드가 `import config` 로 .env 를 읽을 수 있다(`config` 의 `env_file` 은 CWD 상대 경로다). `tests/test_execute_isolation.py` 가 고정 |
 | 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |

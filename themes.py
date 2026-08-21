@@ -16,7 +16,6 @@ THEMES = [
     {"id": "math",            "label": "수학",                "cf_tag": "math",            "boj_tag": "math"},
 ]
 
-PLATFORMS = ("codeforces", "boj")
 
 PER_BAND = 8               # 응답에 담는 밴드당 문제 수 (테마당 최대 24개)
 POOL_PER_BAND = 20         # 캐시하는 밴드당 풀 크기 — 푼 문제 제외 후에도 PER_BAND를 채울 여유분

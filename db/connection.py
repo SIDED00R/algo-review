@@ -4,6 +4,7 @@
   앱 기동을 막지 않는다(#67).
 - pool_pre_ping 으로 Cloud SQL 온디맨드 재시작 후의 stale 커넥션을 자동 복구한다.
 """
+import threading
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, make_url
@@ -12,26 +13,33 @@ from sqlalchemy.orm import Session
 from config import Settings
 
 _engine = None
+# 기동 직후 warmup 스레드와 첫 HTTP 요청이 동시에 `_engine is None` 을 통과하면 엔진이
+# 두 개 생기고 한쪽 풀이 dispose 없이 누수된다.
+_engine_lock = threading.Lock()
 
 
 def get_engine():
     global _engine
-    if _engine is None:
-        url = Settings().sqlalchemy_url  # 매 생성마다 환경변수를 새로 읽는다(테스트에서 URL 교체 가능).
-        kwargs = {"pool_pre_ping": True}
-        if make_url(url).get_backend_name() == "sqlite":
-            # FastAPI 동기 라우트는 스레드풀에서 돌고 커넥션이 스레드를 넘나든다.
-            kwargs["connect_args"] = {"check_same_thread": False}
-        _engine = create_engine(url, **kwargs)
+    if _engine is not None:
+        return _engine
+    with _engine_lock:
+        if _engine is None:
+            url = Settings().sqlalchemy_url  # 매 생성마다 환경변수를 새로 읽는다(테스트에서 URL 교체 가능).
+            kwargs = {"pool_pre_ping": True}
+            if make_url(url).get_backend_name() == "sqlite":
+                # FastAPI 동기 라우트는 스레드풀에서 돌고 커넥션이 스레드를 넘나든다.
+                kwargs["connect_args"] = {"check_same_thread": False}
+            _engine = create_engine(url, **kwargs)
     return _engine
 
 
 def dispose_engine():
     """엔진 싱글턴을 폐기한다 — 테스트에서 DB URL 을 바꿀 때 사용."""
     global _engine
-    if _engine is not None:
-        _engine.dispose()
-        _engine = None
+    with _engine_lock:
+        if _engine is not None:
+            _engine.dispose()
+            _engine = None
 
 
 @contextmanager

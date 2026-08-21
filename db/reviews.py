@@ -241,12 +241,13 @@ def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
 def get_problems_missing_statement(platform: str | None = None) -> list:
     """problem_statement 가 빈 행이 있는 문제를 (platform, problem_ref) 단위로 모아 반환한다.
 
-    본문은 문제 단위로 같으므로 회차마다 다시 수집하지 않는다. 폴더명 재현에 쓸
-    title·tier_name 은 회차마다 다를 수 있어(제목이 바뀐 문제) 후보를 모두 넘긴다.
+    본문은 문제 단위로 같으므로 회차마다 다시 수집하지 않는다. `empty_rows` 는 dry-run 이
+    "몇 행을 채울 예정" 을 보여주는 데 쓴다.
+
+    최근 회차 순으로 정렬해 그룹핑하므로 결과도 그 순서를 유지한다.
     """
     with session_scope() as session:
-        stmt = (select(Review.platform, Review.problem_ref, Review.problem_id,
-                       Review.title, Review.tier_name)
+        stmt = (select(Review.platform, Review.problem_ref)
                 .where(Review.problem_statement == "")
                 .order_by(Review.created_at.desc()))
         if platform:
@@ -257,13 +258,9 @@ def get_problems_missing_statement(platform: str | None = None) -> list:
     for r in rows:
         key = (r["platform"], r["problem_ref"])
         g = grouped.setdefault(key, {
-            "platform": r["platform"], "problem_ref": r["problem_ref"],
-            "problem_id": r["problem_id"], "empty_rows": 0, "name_candidates": [],
+            "platform": r["platform"], "problem_ref": r["problem_ref"], "empty_rows": 0,
         })
         g["empty_rows"] += 1
-        candidate = (r["title"], r["tier_name"])
-        if candidate not in g["name_candidates"]:
-            g["name_candidates"].append(candidate)
     return list(grouped.values())
 
 
@@ -375,7 +372,10 @@ def get_tag_weakness_data(platform: str) -> list:
         tag_eff = _tally_tag_efficiency(review_rows)
         for tag, counts in tag_eff.items():
             if counts["total_count"] > 0:
-                poor_map[tag] = 1 - counts["good_count"] / counts["total_count"]
+                # tag_stats 경로와 같은 식으로 쓴다 — _tally_tag_efficiency 가 pending 을
+                # 건너뛰어 good + poor == total 이므로 수학적으로 동치지만, 읽는 사람이
+                # 그 동치성을 매번 증명해야 하는 부채를 없앤다.
+                poor_map[tag] = counts["poor_count"] / counts["total_count"]
 
     return [
         {

@@ -7,15 +7,8 @@ logger = logging.getLogger("uvicorn.error")
 
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
 
-TIER_NAMES = {
-    0: "Unrated",
-    1: "Bronze V", 2: "Bronze IV", 3: "Bronze III", 4: "Bronze II", 5: "Bronze I",
-    6: "Silver V", 7: "Silver IV", 8: "Silver III", 9: "Silver II", 10: "Silver I",
-    11: "Gold V", 12: "Gold IV", 13: "Gold III", 14: "Gold II", 15: "Gold I",
-    16: "Platinum V", 17: "Platinum IV", 18: "Platinum III", 19: "Platinum II", 20: "Platinum I",
-    21: "Diamond V", 22: "Diamond IV", 23: "Diamond III", 24: "Diamond II", 25: "Diamond I",
-    26: "Ruby V", 27: "Ruby IV", 28: "Ruby III", 29: "Ruby II", 30: "Ruby I",
-}
+# 정본은 constants.py 다 — DB 레이어가 이 모듈을 import 하던 역의존을 없앴다.
+from constants import TIER_NAMES  # noqa: F401  (기존 import 경로 유지)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -149,9 +142,13 @@ def get_boj_problem_sections(problem_id: int) -> dict | None:
 
 def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
                            exclude_ids: set[int]) -> list[dict]:
-    tier_map_inv = _build_tier_key_map()
-    min_key = tier_map_inv.get(min_tier, "b1")
-    max_key = tier_map_inv.get(max_tier, "p5")
+    tier_code_by_level = _build_tier_key_map()
+    # 직접 인덱싱한다 — 맵이 1~30 을 다 채우고 호출처가 모두 그 범위로 클램프하므로
+    # 기본값은 도달 불가였다. .get 으로 삼키면 범위를 벗어난 tier 가 조용히 엉뚱한 검색이
+    # 되는데(예전 기본값은 "b1"=tier 5, "p5"=tier 16 로 의미와도 어긋났다), 직접
+    # 인덱싱하면 KeyError 로 즉시 드러난다.
+    min_key = tier_code_by_level[min_tier]
+    max_key = tier_code_by_level[max_tier]
 
     query = f"tag:{tag_key} tier:{min_key}..{max_key} solved:1000.."
     url = f"{SOLVED_AC_BASE}/search/problem"
