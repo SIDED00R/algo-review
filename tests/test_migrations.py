@@ -17,13 +17,16 @@ def _table_names():
 
 def test_migration_creates_all_tables():
     # fresh_db 픽스처가 이미 run_migrations 를 돌렸다.
-    assert _EXPECTED_TABLES <= _table_names()
+    # 부분집합이 아니라 **등가**로 본다 — 부분집합이면 새 모델을 추가하고 마이그레이션을
+    # 빠뜨려도 통과한다(그러면 postgres 다리에서 그 테이블만 truncate 되지 않아
+    # 테스트 간 조용한 오염이 생긴다).
+    assert _table_names() - {"alembic_version"} == _EXPECTED_TABLES
     assert "alembic_version" in _table_names()
 
 
 def test_migration_is_idempotent():
     db.run_migrations()  # 두 번째 실행이 실패 없이 no-op
-    assert _EXPECTED_TABLES <= _table_names()
+    assert _table_names() - {"alembic_version"} == _EXPECTED_TABLES
 
 
 @pytest.mark.skipif(

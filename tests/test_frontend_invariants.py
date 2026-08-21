@@ -16,6 +16,25 @@ _FILES = ("problem-modal.js", "import-history.js", "tier-chart.js", "review.js",
           "utils.js", "history.js", "report.js", "stats.js", "github.js", "tabs.js")
 
 
+def _js_function_body(src, signature):
+    """`signature` 로 시작하는 함수의 본문을 중괄호 균형으로 잘라낸다.
+
+    문자 수 윈도우로 찾으면 함수에 한두 줄만 추가돼도 "호출이 사라졌다"는 틀린 메시지로
+    빨강이 난다(실측 여유가 41자·137자밖에 없었다). 이 파일 docstring 이 경계하는 패턴이다.
+    """
+    start = src.index(signature)
+    brace = src.index("{", start)
+    depth = 0
+    for i in range(brace, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[brace:i + 1]
+    raise AssertionError(f"{signature} 의 닫는 괄호를 찾지 못했다")
+
+
 @pytest.fixture(scope="module")
 def js():
     """static/js 파일 본문을 이름으로 읽는다.
@@ -38,14 +57,25 @@ def test_run_samples_restores_the_button_in_a_finally_block(js):
     탈출하고, 버튼이 disabled + '실행 중...' 으로 영구 고착됐다(새로고침 외 복구 불가).
     """
     src = js["problem-modal.js"]
-    assert re.search(r"\}\s*finally\s*\{\s*(//[^\n]*\n\s*)*resetRunButton\(\)", src), \
-        "runSamples 가 finally 로 버튼을 복원해야 한다"
     assert re.search(r"function\s+resetRunButton\s*\(", src)
+
+    # finally 로 복원한다 — 다만 **내 세대일 때만**. 무조건 되돌리면 무효화된 옛 실행의
+    # 늦은 응답이 새로 진행 중인 실행의 버튼을 활성으로 만들고, 그 상태에서 다시 누르면
+    # 진행 중인 결과가 지워진다.
+    run_samples = _js_function_body(src, "async function runSamples")
+    assert "finally" in run_samples, "runSamples 에 finally 가 없다"
+    finally_block = run_samples.split("finally", 1)[1]
+    assert "resetRunButton()" in finally_block
+    assert re.search(r"runToken\s*===\s*_runToken", finally_block), \
+        "세대 확인 없이 되돌리면 진행 중인 실행의 버튼을 되살린다"
+
     # 모달을 열 때·닫을 때도 진행 중인 실행을 무효화하고 버튼을 되돌린다.
-    # count 로 세면 `function resetRunButton()` 선언이 부분문자열로 포함돼 헐거워진다 —
-    # 세 호출 지점을 각각 고정한다.
-    assert re.search(r"function\s+closeProblemModal[\s\S]{0,200}?resetRunButton\(\)", src)
-    assert re.search(r"async function\s+openProblemModal[\s\S]{0,1200}?resetRunButton\(\)", src)
+    # 문자 수 윈도우로 찾으면 함수에 한두 줄만 추가돼도 거짓 빨강이 난다 —
+    # 함수 본문을 잘라내고 그 안에서 찾는다.
+    for fn in ("function closeProblemModal", "async function openProblemModal"):
+        body = _js_function_body(src, fn)
+        assert "resetRunButton()" in body, f"{fn} 이 버튼을 복원하지 않는다"
+        assert "_runToken++" in body, f"{fn} 이 진행 중인 실행을 무효화하지 않는다"
 
 
 def test_run_samples_guards_the_result_node_before_writing(js):

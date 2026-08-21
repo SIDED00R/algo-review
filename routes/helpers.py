@@ -5,6 +5,7 @@ push 함수가 둘인 이유: push_solution 은 파일별 PUT(가져오기처럼
 한 커밋으로 묶는다(단건 등록은 저장소 이력이 문제 단위로 남는 게 낫다).
 """
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 import db
@@ -69,6 +70,17 @@ def _review_section_lines(review: dict) -> list[str]:
     return lines
 
 
+def _readme_exists(repo: str, token: str, folder: str) -> bool:
+    """저장소에 이 문제의 README 가 이미 있는지. 조회 실패는 "있다" 로 본다 —
+    확실하지 않을 때 덮어쓰는 쪽으로 기울면 지켜야 할 문서를 지울 수 있다."""
+    try:
+        return api_client.get_github_file_sha(repo, f"{folder}/README.md", token) is not None
+    except Exception as e:
+        logger.warning("README 존재 확인 실패 (repo=%s, folder=%s) — 보수적으로 '있다'로 본다: %s",
+                       repo, folder, e)
+        return True
+
+
 def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str, title: str,
                        tier_name: str, tags: list, language: str, code: str, url: str = "",
                        review: dict | None = None, description: str = "",
@@ -79,10 +91,14 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     description 이 비어 있으면 플랫폼별 문제 본문을 자동 수집한다 — LLM 이 아니라 스크래핑이라
     리뷰 없이 올리는 경로에서도 그대로 동작한다.
 
-    require_sections: 스크래핑 실패 시 502로 막을지 여부. 기존 문서를 덮어쓰는 갱신
-    경로(재리뷰·재푸시)는 본문 없이 재생성하면 이미 올라간 문제 설명을 지우므로 True(기본값)로
-    막는다. 아직 문서가 없는 최초 등록 경로(리뷰 없이 등록)는 지울 기존 문서가 없으므로
-    False 로 넘겨 스크래핑 실패에도 등록이 진행되게 한다.
+    require_sections: 스크래핑 실패 시 막을지 여부. 기존 문서를 본문 없이 재생성하면
+    이미 올라간 문제 설명을 지우므로 True(기본값)로 막는다. 단 **저장소에 그 README 가
+    실제로 있을 때만** 막는다 — 지킬 문서가 없으면 502 는 최초 등록을 이유 없이 차단한다
+    (acmicpc.net 종료로 BOJ 수집이 상시 실패하므로 BOJ push 가 전부 막혀 있었다).
+    False 로 넘기면 확인조차 하지 않는다(이미 문서가 없음이 확실한 경로).
+
+    description 을 직접 주면 input/output 은 호출자 책임이다. `【문제】/【입력】/【출력】`
+    마커가 들어 있으면 build_readme 가 세 섹션으로 되쪼갠다.
     """
     ext = api_client._get_file_extension(language)
     url = url or api_client.get_problem_url(platform, problem_ref)
@@ -98,13 +114,20 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
         else:
             sections = api_client.get_cf_problem_sections(problem_ref)
         if not sections or not any(sections.values()):
-            if require_sections:
-                # 스크래핑 실패를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해
-                # 이미 잘 올라가 있던 문제 설명을 지워버린다 — push 자체를 중단해 유지한다.
-                # None 뿐 아니라 "200 인데 본문이 비었다"도 막는다(수집기가 실패를 어떻게
-                # 표현하든 결과가 같아야 한다).
-                raise HTTPException(status_code=502, detail="문제 본문을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
-            # 최초 등록 경로: 지킬 기존 문서가 없으므로 본문 없이 진행한다.
+            # 스크래핑 실패를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해 이미 잘
+            # 올라가 있던 문제 설명을 지워버린다. None 뿐 아니라 "200 인데 본문이 비었다"도
+            # 실패로 본다(수집기가 실패를 어떻게 표현하든 결과가 같아야 한다).
+            #
+            # 다만 무조건 막으면 안 된다 — 지킬 문서가 없는데 502 를 내면 최초 등록이
+            # 이유 없이 차단된다. acmicpc.net 종료로 BOJ 수집이 상시 실패하므로 실제로
+            # BOJ 의 "GitHub에 올리기" 가 전부 502 였고, 메시지("잠시 후 다시 시도")는
+            # 절대 성공하지 않는 재시도를 유도했다.
+            if require_sections and _readme_exists(repo, token, folder):
+                raise HTTPException(
+                    status_code=502,
+                    detail="문제 본문을 불러오지 못해 기존 README 를 덮어쓰지 않았습니다. "
+                           "문제 설명을 직접 붙여 넣은 뒤 다시 올려주세요.")
+            # 지킬 기존 문서가 없다 — 본문 없이 진행한다.
             sections = {}
         description = sections.get("description", "")
         input_desc = sections.get("input", "")
@@ -152,10 +175,37 @@ def _format_kst(moment: datetime) -> str:
     return f"{moment.year}년 {moment.month}월 {moment.day}일 {moment.strftime('%H:%M:%S')}"
 
 
+# 백필·스크래핑이 만든 본문은 세 섹션을 이 마커로 묶은 한 덩어리다
+# (backfill_statements.parse_readme_sections·clients.get_problem_statement 참조).
+_STATEMENT_MARKERS = re.compile(r"【(문제|입력|출력)】\s*")
+
+
+def split_statement_markers(description: str) -> tuple[str, str, str]:
+    """`【문제】…【입력】…【출력】` 한 덩어리를 (문제, 입력, 출력) 으로 되쪼갠다.
+
+    마커가 없으면 전체를 문제 설명으로 본다. 재푸시 경로는 저장된 problem_statement
+    하나만 갖고 있어서, 쪼개지 않으면 README 의 `## 입력`·`## 출력` 섹션이 사라진다.
+    """
+    if not description or "【" not in description:
+        return description, "", ""
+    parts = _STATEMENT_MARKERS.split(description)
+    # parts = [머리말, 라벨1, 본문1, 라벨2, 본문2, ...]
+    found = {}
+    for i in range(1, len(parts) - 1, 2):
+        found[parts[i]] = parts[i + 1].strip()
+    if not found:
+        return description, "", ""
+    return found.get("문제", parts[0].strip()), found.get("입력", ""), found.get("출력", "")
+
+
 def build_readme(problem_ref: str, title: str,
                  tier_name: str, tags: list, language: str, url: str,
                  description: str = "", input_desc: str = "", output_desc: str = "",
                  review: dict | None = None, submitted_at: str = "") -> str:
+    # 호출자가 입력/출력을 따로 주지 않았고 본문에 마커가 있으면 되쪼갠다 — 재푸시가
+    # 저장된 본문 하나만 넘겨 세 섹션이 한 덩어리로 뭉치던 문제.
+    if description and not (input_desc or output_desc):
+        description, input_desc, output_desc = split_statement_markers(description)
     date_str = _submitted_at_str(submitted_at)
     tags_str = ", ".join(f"`{t}`" for t in tags) if tags else "없음"
 

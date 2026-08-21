@@ -119,5 +119,8 @@ def test_empty_solved_title_does_not_overwrite_resolved_title(client, monkeypatc
     resp = client.post("/api/review-imported/codeforces/4A")
 
     assert resp.status_code == 200
+    # 응답(=저장된 값)을 본다. seen["info"] 는 analyze_code 호출 시점 스냅샷이라
+    # 그 뒤에 있는 가드(routes/solved.py 의 `if problem.get("tags")`)를 검증하지 못한다 —
+    # 무조건 대입으로 바꿔도 스냅샷은 그대로여서 거짓 초록이었다.
     assert resp.json()["title"] == "Watermelon"  # 빈 문자열로 덮이지 않았다
-    assert seen["info"]["tags"] == ["math"]      # 빈 태그도 덮지 않는다
+    assert resp.json()["tags"] == ["math"]       # 빈 태그도 덮지 않는다

@@ -211,7 +211,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | # | 위치 | 조치 내용 |
 |---|------|----------|
-| 1 | `routes/execute.py` | 임의 코드 실행은 **기본 비활성**(`EXECUTE_ENABLED`)이다. 자식 프로세스가 앱과 같은 uid·같은 네트워킬 네임스페이스에서 돌기 때문에, `_SAFE_ENV_KEYS` 필터·`cwd` 겪리·`-I` 를 다 걸어도 다음 둘은 남는다 — ① 네트워킬 egress → GCE 메타데이타 서버 → 런타임 SA 토큰, ② `/proc/1/environ` → 앱 환경변수 전지. 둘 다 콘테이너 안에선 막을 수 없다(네트워킬 차단은 `NET_ADMIN` 필수). 켜려면 실행 전용 신뢰 경계가 선행되어야 한다(권한 0 SA + 시횬립 미주입 + egress 제한). `tests/test_execute_isolation.py` 가 게이트와 겪리를 함게 고정 |
+| 1 | `routes/execute.py` | 임의 코드 실행은 **기본 비활성**(`EXECUTE_ENABLED`)이다. 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 돌기 때문에, `_SAFE_ENV_KEYS` 필터·`cwd` 격리·`-I` 를 다 걸어도 다음 둘은 남는다 — ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 토큰, ② `/proc/1/environ` → 앱 환경변수 전체(`USER` 가 `CMD` 앞이라 uvicorn 도 같은 uid 로 뜬다). 둘 다 컨테이너 안에선 막을 수 없다(네트워크 차단은 `NET_ADMIN` 필수). 켜려면 실행 전용 신뢰 경계가 선행되어야 한다(권한 0 서비스 계정 + 시크릿 미주입 + egress 제한). `tests/test_execute_isolation.py` 가 게이트와 격리를 함께 고정 |
 | 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
@@ -256,6 +256,12 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | JS 구문 게이트 | `node --check static/js/*.js` 는 **첫 파일만** 검사한다 — Node 는 스크립트를 하나만 받고 나머지 위치 인자는 `argv` 가 된다. 20개 중 1개만 보호되고 있었다 | `scripts/check_js.sh` 가 파일별로 돌린다. 중복 선언 검사는 렉시컬 선언(`let`/`const`/`class`)만 본다 — `var`/`function` 재선언은 합법이라 게이트에 넣으면 거짓 빨강이 난다 |
 | 환경변수 필터 검증 | import 시점 상수로 두면 그 필터를 실효 검증할 수 없다 — 테스트가 센티넬을 심어도 이미 만들어진 dict 에는 반영되지 않아, 필터를 통째로 지워도 스위트가 초록이었다(변이로 확인) | `safe_env()` 가 호출 시점에 필터한다. 회귀 테스트가 실제 센티넬을 심어 5개 키를 각각 검증 |
 | 파이썬 테스트는 JS 를 파싱하지 않는다 | 스크립트로 JS 를 편집하다 개행 이스케이프가 실제 개행으로 치환되면 문자열이 끊겨 **그 파일 전체가 SyntaxError** 가 되고, 전역 스코프를 공유하므로 해당 기능이 통째로 사라진다. pytest 는 이걸 못 잡는다 | CI 의 node 게이트(`scripts/check_js.sh`) 또는 헤드리스 브라우저 실측이 유일한 방어선이다. 파이썬으로 JS 렉서를 흉내 내는 검사는 정규식 리터럴에 걸려 거짓 빨강이 난다 — 시도했다가 되돌렸다 |
+| 테스트 DB 격리 | `conftest` 가 `os.environ["DB_TYPE"]` 으로 방언을 판정하면 안 된다 — 실제 접속 대상은 `Settings.sqlalchemy_url` 이고 그것은 `.env` 의 `DATABASE_URL` 을 최우선으로 쓴다. 판정과 접속이 갈리면 sqlite 분기(`DB_PATH` 격리)를 타면서 실DB 에 붙고, `test_migrations` 의 `DROP TABLE` 이 그 DB 로 나간다 | 방언을 **해석된 URL** 에서 유도하고, sqlite 분기는 `.env` 값을 눌러 격리를 확실히 한다. `_assert_disposable_target()` 이 임시 sqlite 파일 / 로컬 CI postgres 가 아니면 즉시 중단한다 |
+| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "20개 파일 검사 완료" 가 실제 검사 수다 |
+| 늦은 응답의 정리 코드 | `finally` 에서 무조건 상태를 되돌리면, 무효화된 옛 실행이 **새로 진행 중인** 실행의 상태를 되살린다(예제 실행 버튼이 활성으로 바뀌고, 다시 누르면 진행 중인 결과가 지워진다) | 세대 토큰을 확인한 뒤에만 되돌린다. 열기·닫기 경로가 이미 복원을 부르므로 "고착 방지" 는 유지된다 |
+| 스냅샷 시점 | 테스트가 보는 값이 검증 대상 코드보다 **앞** 시점의 스냅샷이면 그 코드를 지워도 통과한다(`analyze_code` 호출 시점 dict 를 보면 그 뒤의 가드를 검증하지 못한다) | 응답 본문이나 DB 재조회로 확인한다 |
+| 필터를 겨냥한 픽스처 | 여러 필터가 순차로 걸리는 함수에서, 픽스처가 **앞선 필터**에 먼저 걸리면 뒤 필터를 지워도 결과가 같다(`4A. Watermelon` 은 루트 필터가 아니라 번호 경계에 걸렸다) | 각 필터마다 그 필터**만**이 이유가 되는 입력을 둔다 |
+| 문자 수 윈도우 정규식 | `[\s\S]{0,1200}` 로 함수 안을 찾으면 한두 줄만 추가돼도 "호출이 사라졌다" 는 틀린 메시지로 빨강이 난다(실측 여유 41자·137자) | 중괄호 균형으로 함수 본문을 잘라내고 그 안에서 찾는다(`_js_function_body`) |
 
 ---
 

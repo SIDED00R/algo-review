@@ -84,3 +84,109 @@ def test_stored_description_skips_scraping(monkeypatch, _label, kw, fetcher, _fa
     assert len(calls) == 1
     readme = next(f["content"] for f in calls[0][0][2] if f["path"].endswith("README.md"))
     assert "저장된 본문" in readme
+
+
+# ── 지킬 문서가 없으면 막지 않는다 (회귀) ──
+#
+# 가드를 "수집 실패면 무조건 502" 로 두면 최초 등록이 이유 없이 차단된다. acmicpc.net
+# 종료로 BOJ 수집이 상시 실패하므로, 실제로 BOJ 의 "GitHub에 올리기"(POST /api/push-review)가
+# 전부 502 였고 메시지("잠시 후 다시 시도")는 절대 성공하지 않는 재시도를 유도했다.
+# 같은 최초 등록 상황인 pending 경로는 require_sections=False 라 성공하는 비대칭이었다.
+
+def _patch_missing_sections(monkeypatch, fetcher, readme_exists):
+    monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: None)
+    monkeypatch.setattr(helpers.api_client, "get_github_file_sha",
+                        lambda repo, path, token: "sha123" if readme_exists else None)
+    calls = []
+    monkeypatch.setattr(helpers.api_client, "push_files_to_github",
+                        lambda *a, **k: calls.append((a, k)) or True)
+    return calls
+
+
+@pytest.mark.parametrize("_label,kw,fetcher,_failure,folder", _CASES, ids=_IDS)
+def test_first_time_push_proceeds_when_no_readme_exists(monkeypatch, _label, kw, fetcher,
+                                                        _failure, folder):
+    calls = _patch_missing_sections(monkeypatch, fetcher, readme_exists=False)
+
+    result = helpers.push_review_bundle("owner/repo", "token", **kw)   # 기본값 True
+
+    assert result == folder
+    assert len(calls) == 1, "지킬 문서가 없으면 본문 없이도 push 해야 한다"
+
+
+@pytest.mark.parametrize("_label,kw,fetcher,_failure,_folder", _CASES, ids=_IDS)
+def test_existing_readme_is_still_protected(monkeypatch, _label, kw, fetcher, _failure, _folder):
+    calls = _patch_missing_sections(monkeypatch, fetcher, readme_exists=True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        helpers.push_review_bundle("owner/repo", "token", **kw)
+
+    assert exc_info.value.status_code == 502
+    assert calls == []
+    # 메시지가 실행 가능한 안내여야 한다 — "잠시 후 다시 시도" 는 절대 성공하지 않는다.
+    assert "붙여 넣" in exc_info.value.detail
+
+
+@pytest.mark.parametrize("_label,kw,fetcher,_failure,folder", _CASES, ids=_IDS)
+def test_readme_check_failure_is_treated_as_existing(monkeypatch, _label, kw, fetcher,
+                                                     _failure, folder):
+    """확인 자체가 실패하면 '있다'로 본다 — 불확실할 때 덮어쓰면 지켜야 할 문서를 지운다."""
+    monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: None)
+
+    def _boom(repo, path, token):
+        raise RuntimeError("network")
+
+    monkeypatch.setattr(helpers.api_client, "get_github_file_sha", _boom)
+    monkeypatch.setattr(helpers.api_client, "push_files_to_github",
+                        lambda *a, **k: pytest.fail("확인 실패 시 push 하면 안 된다"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        helpers.push_review_bundle("owner/repo", "token", **kw)
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.parametrize("_label,kw,fetcher,_failure,_folder", _CASES, ids=_IDS)
+def test_require_sections_false_skips_the_existence_check(monkeypatch, _label, kw, fetcher,
+                                                          _failure, _folder):
+    """이미 문서가 없음이 확실한 경로는 확인조차 하지 않는다(요청 1회 절약)."""
+    monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: None)
+    monkeypatch.setattr(helpers.api_client, "get_github_file_sha",
+                        lambda repo, path, token: pytest.fail("확인할 필요가 없다"))
+    monkeypatch.setattr(helpers.api_client, "push_files_to_github", lambda *a, **k: True)
+
+    helpers.push_review_bundle("owner/repo", "token", require_sections=False, **kw)
+
+
+# ── 저장된 본문의 세 섹션 구조를 유지한다 (회귀) ──
+
+def test_stored_statement_markers_restore_three_readme_sections(monkeypatch):
+    """재푸시는 problem_statement 하나만 갖고 있어서, 쪼개지 않으면 ## 입력·## 출력 이 사라진다.
+
+    백필·스크래핑이 만든 본문은 【문제】/【입력】/【출력】 을 한 덩어리로 묶고 있다.
+    """
+    stored = "【문제】\n두 정수 A와 B.\n\n【입력】\n첫 줄에 A와 B.\n\n【출력】\nA+B."
+    calls = []
+    monkeypatch.setattr(helpers.api_client, "push_files_to_github",
+                        lambda *a, **k: calls.append(a) or True)
+    monkeypatch.setattr(helpers.api_client, "get_boj_problem_sections",
+                        lambda pid: pytest.fail("본문을 줬으면 수집하면 안 된다"))
+
+    helpers.push_review_bundle("owner/repo", "token", description=stored, **_BOJ_KW)
+
+    readme = next(f["content"] for f in calls[0][2] if f["path"].endswith("README.md"))
+    assert "## 문제 설명" in readme and "## 입력" in readme and "## 출력" in readme
+    assert "첫 줄에 A와 B." in readme.split("## 입력")[1].split("##")[0]
+    assert "【입력】" not in readme, "마커가 그대로 남으면 라벨이 이중으로 보인다"
+
+
+def test_caller_supplied_sections_are_not_resplit(monkeypatch):
+    """호출자가 입력/출력을 직접 주면 그 값을 그대로 쓴다."""
+    calls = []
+    monkeypatch.setattr(helpers.api_client, "push_files_to_github",
+                        lambda *a, **k: calls.append(a) or True)
+
+    helpers.push_review_bundle("owner/repo", "token", description="본문",
+                              input_desc="입력부", output_desc="출력부", **_CF_KW)
+
+    readme = next(f["content"] for f in calls[0][2] if f["path"].endswith("README.md"))
+    assert "입력부" in readme and "출력부" in readme

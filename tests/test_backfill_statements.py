@@ -285,11 +285,15 @@ def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
         {"type": "blob", "path": "boj/Bronze/1000. A＋B/README.md"},
         # 번호 경계 — `.` 이 없으면 문제 폴더가 아니다
         {"type": "blob", "path": "백준/Gold/2024 대회 후기/README.md"},
-        # 깊이가 4 가 아닌 항목은 제외
-        {"type": "blob", "path": "백준/Gold/9999. 제목/sub/README.md"},
+        # 깊이가 4 가 아닌 항목은 제외. `.../sub/README.md` 는 parts[3]=="sub" 라
+        # README 위치 규칙에 먼저 걸리므로, 깊이만이 이유인 경로를 따로 둔다.
+        {"type": "blob", "path": "백준/Gold/9999. 제목/README.md/x"},
+        {"type": "blob", "path": "백준/Gold/9998. 제목/sub/README.md"},
         {"type": "blob", "path": "백준/README.md"},
-        # BOJ 루트가 아닌 것은 제외
-        {"type": "blob", "path": "Codeforces/Div2/4A. Watermelon/README.md"},
+        # BOJ 루트가 아닌 것은 제외. 번호 파싱이 **성공하는** 폴더명을 써야 루트 필터를
+        # 실제로 검증한다 — `4A. Watermelon` 은 번호 경계 규칙에 먼저 걸려(4 뒤에 A)
+        # 루트 필터를 지워도 결과가 같았다(거짓 초록).
+        {"type": "blob", "path": "Codeforces/Div2/777. Watermelon/README.md"},
         # blob 이 아닌 항목은 제외
         {"type": "tree", "path": "백준/Gold/8888. 제목/README.md"},
     ]
@@ -301,9 +305,10 @@ def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
     assert len(paths[1182]) == 2  # 두 폴더 모두 후보로 돌려준다
     assert all(p.endswith("README.md") for refs in paths.values() for p in refs)
     assert 2024 not in paths   # `2024 대회 후기`
-    assert 9999 not in paths   # 깊이 5
+    assert 9999 not in paths   # 깊이 5 (parts[3]=="README.md" 인데 길이가 5)
+    assert 9998 not in paths   # README 가 문제 폴더 직하위가 아니다
     assert 8888 not in paths   # tree
-    assert 4 not in paths      # Codeforces
+    assert 777 not in paths    # BOJ 루트가 아니다
 
 
 def test_truncated_tree_raises_instead_of_returning_partial_results():

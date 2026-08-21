@@ -270,8 +270,11 @@ async function runSamples() {
       if (cell) cell.outerHTML = html;
     }
   } finally {
-    // 세대가 갈렸어도 버튼은 반드시 되돌린다.
-    resetRunButton();
+    // 내 세대일 때만 되돌린다. 무조건 되돌리면, 무효화된 옛 실행의 응답이 늦게 도착해
+    // **새로 진행 중인 실행**의 버튼을 활성으로 만든다(그 상태에서 다시 누르면 진행 중인
+    // 결과가 지워진다). 모달 열기·닫기가 이미 resetRunButton() 을 부르므로 "버튼 고착"
+    // 방지는 그대로 유지된다.
+    if (runToken === _runToken) resetRunButton();
   }
 
   const reviewBtn = document.getElementById('pm-review-btn');
