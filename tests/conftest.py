@@ -41,7 +41,7 @@ IS_POSTGRES = _resolved_url().get_backend_name().startswith("postgresql")
 _DEMO_AWARE_MODULES = [
     # server 도 넣는다 — client 픽스처가 lifespan 을 실제로 태우므로, 빠뜨리면
     # DEMO_MODE=true 환경에서 demo_seed.seed() 가 테스트 DB 에 행을 심고 마이그레이션이
-    # 스킵된다(이 주석이 막으려는 바로 그 상황이 서버 모듈에서만 열려 있었다).
+    # 스킵된다.
     "server",
     "routes.auth", "routes.execute", "routes.github_push", "routes.import_boj",
     "routes.import_codeforces", "routes.import_github", "routes.pending_review",
@@ -118,9 +118,8 @@ def minimal_app():
     """라우터만 얹은 최소 앱 팩토리 — `client` 와 **다른 것**임을 이름으로 구분한다.
 
     아래 `client` 는 server.app 전체라 전역 예외 핸들러가 걸려 있다(OperationalError
-    → 503, 미처리 예외 → 500 + 고정 문구). 최소 앱에는 그것이 없다. 예전에는 6개 파일이
-    같은 `client` 라는 이름으로 이 최소 앱을 재정의해서, 테스트 본문만 보고는 어느 쪽인지
-    알 수 없었다.
+    → 503, 미처리 예외 → 500 + 고정 문구). 최소 앱에는 그것이 없다. 두 픽스처가 같은
+    이름이면 테스트 본문만 보고는 어느 쪽인지 알 수 없다.
     """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -137,7 +136,7 @@ def minimal_app():
 @pytest.fixture
 def client(monkeypatch):
     """server.app 전체를 얹은 TestClient. lifespan 의 warmup 백그라운드 태스크(외부 API)를
-    no-op 으로 막는다. 세 파일이 이 픽스처를 글자 그대로 복제하고 있었다."""
+    no-op 으로 막는다."""
     import server
     import warmup
     from fastapi.testclient import TestClient

@@ -1,6 +1,5 @@
 // 모달 접근성 — Esc 닫기 · 포커스 트랩 · 초기 포커스 · 복원을 한 곳에 둔다.
-// 예전에는 #cmdk 만 초기 포커스·복원을 갖고, #problem-modal 은 Esc 만, #review-modal 은
-// 둘 다 없었다. 규약을 세 곳에 복제하면 새 모달을 추가할 때 또 빠진다.
+// 모달마다 복제하면 새 모달을 추가할 때 일부가 빠진다.
 (function () {
   const FOCUSABLE = [
     'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -66,20 +65,22 @@
       }
     });
 
-    // 포커스가 모달 밖(대개 <body>)으로 새면 되돌린다. 진행 중 버튼을 disabled 로
-    // 만들거나(setLoading) 목록을 innerHTML 로 교체하면 브라우저가 포커스를 <body> 로
-    // 옮기는데, 그 순간 keydown 리스너가 이 root 에 걸려 있어 **Esc 로 모달을 닫을 수
-    // 없고 Tab 트랩도 무효**가 된다. 10~20초짜리 작업에서 실제로 발생한다.
+    // 포커스가 **아무 데도 가지 않은** 경우에만 모달 안으로 되돌린다.
+    // 이 모달의 keydown 리스너는 root 에 걸려 있으므로, 포커스가 <body> 에 있으면
+    // Esc 도 Tab 트랩도 이 모달에 도달하지 않는다. 포커스를 가진 요소가 disabled 되거나
+    // (setLoading) DOM 에서 사라지면 브라우저가 포커스를 <body> 로 옮긴다.
+    //
+    // 다른 요소로 이동한 포커스는 건드리지 않는다. 위에 다른 모달이 열려 자기 입력에
+    // 포커스를 주면, 두 모달이 서로 회수하며 microtask 루프에 빠져 탭이 정지한다.
     root.addEventListener('focusout', e => {
+      if (root.classList.contains('hidden')) return;
+      if (e.relatedTarget) return;   // 갈 곳이 있는 이동이다
+      // focusout 시점에는 새 포커스가 아직 확정되지 않는다 — 마이크로태스크로 미룬다.
+      queueMicrotask(() => {
         if (root.classList.contains('hidden')) return;
-        // relatedTarget 이 null 이면 포커스가 문서 밖·body 로 간 것이다.
-        if (e.relatedTarget && root.contains(e.relatedTarget)) return;
-        // 마이크로태스크로 미룬다 — focusout 시점에는 새 포커스가 아직 확정되지 않는다.
-        queueMicrotask(() => {
-          if (root.classList.contains('hidden')) return;
-          if (root.contains(document.activeElement)) return;
-          (focusables(root)[0] || root).focus();
-        });
+        if (document.activeElement && document.activeElement !== document.body) return;
+        (focusables(root)[0] || root).focus();
+      });
     });
 
     // 열림/닫힘은 .hidden 토글로 표현된다 — 그 변화를 감시해 포커스를 다룬다.

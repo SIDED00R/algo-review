@@ -1,4 +1,4 @@
-"""추천 검색 실패가 "기록 없음"으로 위장되지 않는지 (회귀, #113).
+"""추천 검색 실패가 "기록 없음"으로 위장되지 않는지.
 
 운영에서 solved.ac 가 Cloud Run 을 403 으로 막는 동안 /api/recommend?platform=boj 는
 `recommendations: []` 를 돌려주고, 프론트는 "아직 추천 데이터가 없습니다. 먼저 코드
@@ -75,8 +75,10 @@ def test_no_records_still_short_circuits(minimal_client):
 
 
 def test_one_tag_failure_does_not_discard_the_others(minimal_client, monkeypatch):
-    """태그별로 실패를 격리한다 — 예전에는 첫 실패에서 던져 이미 성공한 태그까지 버렸다.
-    themes.py 는 밴드별로 부분 성공을 살리는데 같은 예외에 두 소비처 정책이 반대였다."""
+    """태그별로 실패를 격리한다 — 첫 실패에서 던지면 이미 성공한 태그의 결과까지 버린다.
+
+    태그마다 별도 HTTP 호출이므로 한 태그의 실패가 나머지를 무효로 만들 이유가 없다.
+    """
     db.save_review(**_BOJ)
     # 취약 태그 목록은 이 테스트의 관심사가 아니다 — 두 개로 고정한다.
     monkeypatch.setattr(recommend.recommender, "get_weak_tags_scored",

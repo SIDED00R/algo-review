@@ -203,7 +203,7 @@ def test_problem_statement_defaults_to_empty():
     assert rows[0]["problem_statement"] == ""
 
 
-# ── LLM 이 null 을 준 필드 (회귀) ──
+# ── LLM 이 null 을 준 필드 ──
 #
 # `.get(key, default)` 는 **키가 있고 값이 None** 이면 default 를 적용하지 않는다.
 # reviews.complexity·feedback 은 NOT NULL 이라 그 None 이 그대로 흘러가면 저장이
@@ -254,9 +254,9 @@ def test_analyzer_normalizes_null_string_fields():
     assert normalized["better_algorithm"] == ""
 
 
-def test_tag_stats_falls_back_to_reviews_when_the_table_is_empty():
+def test_tag_stats_rebuilds_the_table_when_it_is_empty():
     """tag_stats 는 BOJ 첫 제출에서만 채워지는 비정규화 테이블이라, 그 경로를 타지 않고
-    들어온 행(마이그레이션·백필·직접 INSERT)만 있으면 비어 있다. 폴백이 없으면 BOJ 리뷰가
+    들어온 행(마이그레이션·백필·직접 INSERT)만 있으면 비어 있다. 복원이 없으면 BOJ 리뷰가
     아무리 많아도 /api/report 가 "아직 저장된 기록이 없습니다"(400)를 낸다."""
     mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
     mk_review(problem_id=2, problem_ref="2", tags=["dp"], efficiency="poor")
@@ -266,6 +266,45 @@ def test_tag_stats_falls_back_to_reviews_when_the_table_is_empty():
     stats = {s["tag"]: s for s in db.get_tag_stats()}
     assert stats["dp"]["total_count"] == 2
     assert stats["dp"]["good_count"] == 1 and stats["dp"]["poor_count"] == 1
+
+    # 읽기마다 계산하는 폴백이 아니라 **테이블을 복원**해야 한다.
+    with session_scope() as session:
+        assert session.query(db.models.TagStat).count() == 1
+
+
+def test_a_new_review_after_rebuild_does_not_collapse_the_numbers(at_time):
+    """복원 뒤 새 리뷰가 들어와도 숫자가 이어져야 한다.
+
+    읽을 때마다 폴백을 계산하는 방식은 스위치가 all-or-nothing 이다 — 빈 tag_stats +
+    BOJ 리뷰 다수 상태에서 새 리뷰 1건이 들어오면 그 1건짜리 TagStat 행 때문에 폴백을
+    건너뛰어 통계가 붕괴한다.
+    """
+    at_time("2024-01-01T00:00:00")
+    for i in range(5):
+        mk_review(problem_id=i, problem_ref=str(i), tags=["dp"], efficiency="good")
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+
+    before = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
+    assert before["dp"] == 5
+
+    at_time("2024-02-01T00:00:00")
+    mk_review(problem_id=99, problem_ref="99", tags=["dp"], efficiency="poor")
+
+    after = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
+    assert after["dp"] == 6, f"복원 후 새 리뷰 1건에 통계가 {before['dp']} → {after['dp']} 로 튀었다"
+
+
+def test_rebuild_counts_first_submissions_only():
+    """복원 기준이 _bump_tag_stats 와 달라지면 두 경로가 뒤집힐 때 숫자가 튄다."""
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="poor")   # 재제출
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert stats["dp"]["total_count"] == 1, "재제출까지 세면 _bump_tag_stats 와 어긋난다"
+    assert stats["dp"]["good_count"] == 1
 
 
 def test_tag_stats_fallback_ignores_codeforces_and_pending_rows():

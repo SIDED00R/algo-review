@@ -120,11 +120,10 @@ def get_problem_statement(problem_id: int) -> str:
 
 
 def get_boj_problem_sections(problem_id: int) -> dict | None:
-    """실패 시 None — get_cf_problem_sections 와 같은 계약이다. 호출부(push_review_bundle)가
-    빈 섹션으로 착각해 기존 README 본문을 지우지 않도록 구분해야 한다. 예전에는 실패에도
-    빈 문자열 dict 를 돌려줘서 `sections is None` 가드가 BOJ 에서 영원히 거짓이었고,
-    acmicpc.net 종료 이후 BOJ 재푸시가 이미 올라간 문제 설명을 지우고 있었다.
+    """실패 시 None — get_cf_problem_sections 와 같은 계약이다.
 
+    호출부(push_review_bundle)가 "수집 실패" 와 "본문이 비어 있음" 을 구분해야 한다.
+    구분하지 못하면 본문 없는 README 로 덮어써 이미 올라간 문제 설명을 지운다.
     200 응답인데 세 섹션이 모두 없는 경우(페이지 구조 변경)도 실패로 본다."""
     try:
         sections = _fetch_boj_sections(problem_id)
@@ -144,10 +143,9 @@ def get_boj_problem_sections(problem_id: int) -> dict | None:
 def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
                            exclude_ids: set[int]) -> list[dict]:
     tier_code_by_level = _build_tier_key_map()
-    # 직접 인덱싱한다 — 맵이 1~30 을 다 채우고 호출처가 모두 그 범위로 클램프하므로
-    # 기본값은 도달 불가였다. .get 으로 삼키면 범위를 벗어난 tier 가 조용히 엉뚱한 검색이
-    # 되는데(예전 기본값은 "b1"=tier 5, "p5"=tier 16 로 의미와도 어긋났다), 직접
-    # 인덱싱하면 KeyError 로 즉시 드러난다.
+    # 직접 인덱싱한다. 맵이 1~30 을 다 채우고 호출처가 모두 그 범위로 클램프하므로
+    # 기본값을 둘 자리가 없다 — .get 으로 삼키면 범위 밖 tier 가 조용히 엉뚱한 검색이
+    # 되고, 직접 인덱싱하면 KeyError 로 즉시 드러난다.
     min_key = tier_code_by_level[min_tier]
     max_key = tier_code_by_level[max_tier]
 
@@ -186,13 +184,23 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
     return results
 
 
+# 성공 조회로 얻은 키만 담는다. 만료가 없는 캐시이므로 실패 폴백을 섞으면 solved.ac 가
+# 잠깐 막힌 사이에 만들어진 틀린 키가 프로세스 수명 동안 남는다. 그 키로 검색하면
+# 200 + 빈 목록이라 ProblemSearchError 도 나지 않아, 추천이 error 없이 비어 버린다.
 _TAG_KEY_CACHE: dict[str, str] = {}
+# 폴백은 짧은 TTL 로 따로 둔다 — solved.ac 가 복구되면 다음 조회가 진짜 키를 받아온다.
+_TAG_KEY_FALLBACK_TTL = 60
+_TAG_KEY_FALLBACK: dict[str, tuple[str, float]] = {}
 
 
 def get_tag_key_by_name(tag_name: str) -> str:
-    cached = _TAG_KEY_CACHE.get(tag_name.lower())
+    key_lower = tag_name.lower()
+    cached = _TAG_KEY_CACHE.get(key_lower)
     if cached is not None:
         return cached
+    stale = _TAG_KEY_FALLBACK.get(key_lower)
+    if stale is not None and time.time() - stale[1] < _TAG_KEY_FALLBACK_TTL:
+        return stale[0]
 
     url = f"{SOLVED_AC_BASE}/tag/list"
     try:
@@ -216,8 +224,10 @@ def get_tag_key_by_name(tag_name: str) -> str:
         logger.warning("solved.ac 태그 목록 조회 실패 (%s): %s", tag_name, e)
     # 폴백도 캐시한다 — 캐시하지 않으면 목록에 없는 태그가 호출마다 전체 태그 목록을
     # 다시 내려받는다(취약 태그 순회에서 최악 3회 풀 페치).
-    fallback = tag_name.lower().replace(" ", "_")
-    _TAG_KEY_CACHE[tag_name.lower()] = fallback
+    # 단 **성공 캐시와 섞지 않는다**. 섞으면 일시 장애 중 만든 틀린 키가 프로세스 수명
+    # 동안 남아, 복구된 뒤에도 그 태그의 추천이 조용히 비어 버린다.
+    fallback = key_lower.replace(" ", "_")
+    _TAG_KEY_FALLBACK[key_lower] = (fallback, time.time())
     return fallback
 
 

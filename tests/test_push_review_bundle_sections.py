@@ -1,13 +1,12 @@
-"""push_review_bundle 의 require_sections 계약 (회귀).
+"""push_review_bundle 의 require_sections 계약.
 
 수집이 실패했을 때:
 - 갱신 경로(require_sections=True, 기본값)는 502 로 막고 GitHub push 를 아예 시도하지 않는다
   — 이미 올라간 문제 설명을 본문 없이 덮어써 지우지 않기 위해서다.
 - 아직 문서가 없는 최초 등록 경로(require_sections=False)는 본문 없이도 정상 저장된다.
 
-**두 플랫폼을 모두 돌린다.** 예전에는 CF 만 덮었고, 그 사이 BOJ 의 수집 함수는 실패에도
-빈 문자열 dict 를 반환해 `sections` 판정이 BOJ 에서 영원히 거짓이었다 — 가드가 CF 전용인 채로
-테스트는 초록이었다. 실패 표현이 None 이든 빈 섹션이든 결과가 같아야 한다.
+**두 플랫폼을 모두 돌린다.** 한 플랫폼만 덮으면 다른 쪽 수집 함수가 실패를 빈 섹션으로
+표현할 때 가드가 무효인 채로 통과한다. 실패 표현이 None 이든 빈 섹션이든 결과가 같아야 한다.
 """
 import pytest
 from fastapi import HTTPException
@@ -44,7 +43,7 @@ def _patch(monkeypatch, fetcher, failure_value, readme_exists=True):
     `get_github_file_sha` 도 반드시 패치한다 — 빼먹으면 `_readme_exists()` 가 실제
     api.github.com 으로 나가고(배포 게이트에서 파라미터×매트릭스만큼 외부 호출),
     그 401 예외가 "있다" 로 삼켜져 **틀린 이유로** 초록이 된다. 그러면 가드에서
-    `_readme_exists` 호출을 빼버리는 회귀(=최초 등록을 이유 없이 차단)도 통과한다.
+    `_readme_exists` 호출을 빼도(=최초 등록을 이유 없이 차단) 통과한다.
     """
     monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: failure_value)
     monkeypatch.setattr(helpers.api_client, "get_github_file_sha",
@@ -95,12 +94,12 @@ def test_stored_description_skips_scraping(monkeypatch, _label, kw, fetcher, _fa
     assert "저장된 본문" in readme
 
 
-# ── 지킬 문서가 없으면 막지 않는다 (회귀) ──
+# ── 지킬 문서가 없으면 막지 않는다 ──
 #
 # 가드를 "수집 실패면 무조건 502" 로 두면 최초 등록이 이유 없이 차단된다. acmicpc.net
-# 종료로 BOJ 수집이 상시 실패하므로, 실제로 BOJ 의 "GitHub에 올리기"(POST /api/push-review)가
-# 전부 502 였고 메시지("잠시 후 다시 시도")는 절대 성공하지 않는 재시도를 유도했다.
-# 같은 최초 등록 상황인 pending 경로는 require_sections=False 라 성공하는 비대칭이었다.
+# 종료로 BOJ 수집이 상시 실패하므로, BOJ 의 "GitHub에 올리기"(POST /api/push-review)가
+# 전부 502 가 되고 메시지("잠시 후 다시 시도")는 절대 성공하지 않는 재시도를 유도한다.
+# 같은 최초 등록 상황인 pending 경로(require_sections=False)와도 결과가 어긋난다.
 
 def _patch_missing_sections(monkeypatch, fetcher, readme_exists):
     monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: None)
@@ -166,7 +165,7 @@ def test_require_sections_false_skips_the_existence_check(monkeypatch, _label, k
     helpers.push_review_bundle("owner/repo", "token", require_sections=False, **kw)
 
 
-# ── 저장된 본문의 세 섹션 구조를 유지한다 (회귀) ──
+# ── 저장된 본문의 세 섹션 구조를 유지한다 ──
 
 def test_stored_statement_markers_restore_three_readme_sections(monkeypatch):
     """재푸시는 problem_statement 하나만 갖고 있어서, 쪼개지 않으면 ## 입력·## 출력 이 사라진다.

@@ -9,10 +9,10 @@ router = APIRouter()
 
 @router.post("/api/push-review")
 def push_review_to_github(req: PushReviewRequest):
+    language = require_language(req.language)
     if IS_DEMO:
         return {"pushed": True, "repo": "demo_user/algorithm-solutions",
                 "path": f"demo/{req.problem_ref}"}
-    require_language(req.language)
     github_repo, github_token = require_github_target()
 
     # 저장된 최신 리뷰를 README 에 함께 싣는다 — 리뷰 직후 push 이므로 방금 결과가 최신 행이다.
@@ -24,7 +24,7 @@ def push_review_to_github(req: PushReviewRequest):
     folder = push_review_bundle(
         github_repo, github_token,
         platform=req.platform, problem_ref=req.problem_ref, title=req.title,
-        tier_name=req.tier_name, tags=req.tags, language=req.language, code=req.code,
+        tier_name=req.tier_name, tags=req.tags, language=language, code=req.code,
         url=req.url, review=latest,
         description=description, input_desc=req.input_desc, output_desc=req.output_desc,
     )

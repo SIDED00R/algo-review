@@ -19,7 +19,7 @@ _PENDING_REVIEW = {"efficiency": db.PENDING_EFFICIENCY}
 def push_without_review(req: ReviewRequest):
     if not req.code.strip():
         raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
-    require_language(req.language)
+    language = require_language(req.language)
 
     if IS_DEMO:
         # 데모는 외부 API·GitHub 를 치지 않는다 — mock 문제 정보로 기록만 남긴다.
@@ -33,7 +33,7 @@ def push_without_review(req: ReviewRequest):
         folder = push_review_bundle(
             github_repo, github_token,
             platform=info["platform"], problem_ref=info["problem_ref"], title=info["title"],
-            tier_name=info["tier_name"], tags=info["tags"], language=req.language,
+            tier_name=info["tier_name"], tags=info["tags"], language=language,
             code=req.code, url=info.get("url", ""), review=_PENDING_REVIEW,
             # 아직 저장소에 문서가 없는 최초 등록 경로 — 스크래핑이 실패해도 본문 없이 등록을 진행한다.
             require_sections=False,
@@ -45,7 +45,7 @@ def push_without_review(req: ReviewRequest):
         tier_name=info["tier_name"], tags=info["tags"], code=req.code,
         feedback="", efficiency=db.PENDING_EFFICIENCY,
         strengths=[], weaknesses=[], platform=info["platform"],
-        problem_ref=info["problem_ref"], language=req.language,
+        problem_ref=info["problem_ref"], language=language,
         problem_statement=req.problem_statement or "",
     )
     return {"pushed": True, "repo": github_repo, "path": folder}

@@ -1,3 +1,14 @@
+/** 상태 조회 자체가 실패했음을 알린다. "연결 안 됨" 과 구분해야 사용자가 불필요한
+ *  재연결을 시도하지 않는다 — 서버가 503(온디맨드 DB 정지)일 때 이 경로를 탄다. */
+function showGithubStatusError(iconBtn, statusBadge, connectInner, message) {
+  showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
+  const msg = document.getElementById('github-repo-msg');
+  if (msg) {
+    msg.textContent = `GitHub 연결 상태를 확인하지 못했습니다: ${message}`;
+    msg.className = 'action-msg bad';
+  }
+}
+
 function showDisconnectedGithubUI(iconBtn, statusBadge, connectInner) {
   iconBtn.classList.remove('connected');
   iconBtn.setAttribute('aria-label', 'GitHub 연결');
@@ -10,9 +21,6 @@ async function loadGithubStatus() {
   const statusBadge = document.getElementById('github-status-badge');
   const connectInner = document.getElementById('github-connect-inner');
   try {
-    // fetchJsonOk 를 쓴다 — res.ok 를 안 보면 503(온디맨드 DB 정지)의 {"detail":...} 에서
-    // data.connected 가 undefined 가 되어 "연결 해제" 로 보인다. 사용자는 연결이 끊긴 줄
-    // 알고 재연결을 시도한다.
     const data = await fetchJsonOk('/auth/github/status', undefined, 'GitHub 상태 조회 실패');
     const usernameBadge = document.getElementById('github-username-badge');
     const repoSelect = document.getElementById('github-repo-select');
@@ -31,7 +39,7 @@ async function loadGithubStatus() {
             `<option value="${escapeHtml(r.full_name)}" ${r.full_name === data.target_repo ? 'selected' : ''}>${escapeHtml(r.full_name)}${r.private ? ' (비공개)' : ''}</option>`
           ).join('');
       } catch (e) {
-        // 예전에는 catch {} 로 삼켜 빈 select 만 남았다 — 사용자는 원인을 알 수 없다.
+        // 실패 이유를 option 으로 보인다 — 삼키면 빈 select 만 남아 원인을 알 수 없다.
         repoSelect.innerHTML = `<option value="">${escapeHtml(e.message)}</option>`;
       }
 
@@ -50,7 +58,7 @@ async function loadGithubStatus() {
             }, '저장소 변경 실패');
             if (msg) { msg.textContent = '저장소를 저장했습니다.'; msg.className = 'action-msg ok'; }
           } catch (e) {
-            // 예전에는 응답을 확인하지 않아 변경 실패가 무음이었다.
+            // 변경 실패를 사용자에게 알린다.
             if (msg) { msg.textContent = e.message; msg.className = 'action-msg bad'; }
           }
         });
@@ -58,8 +66,8 @@ async function loadGithubStatus() {
     } else {
       showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
     }
-  } catch {
-    showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
+  } catch (e) {
+    showGithubStatusError(iconBtn, statusBadge, connectInner, e.message);
   }
 }
 

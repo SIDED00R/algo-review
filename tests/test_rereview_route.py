@@ -61,8 +61,7 @@ def test_pending_row_is_filled_by_review(minimal_client, monkeypatch):
 
 
 def test_pending_row_without_api_key_returns_500(minimal_client, monkeypatch):
-    """설정 누락은 서버 문제다 — review·report·solved 와 같은 500 으로 맞췄다.
-    (예전에는 여기만 400 이라 같은 조건에 상태코드가 둘이었다.)"""
+    """설정 누락은 서버 문제다 — review·report·solved 와 같은 500 을 쓴다."""
     _save(db.PENDING_EFFICIENCY)
     monkeypatch.setattr(rereview.settings, "openai_api_key", "")
 
@@ -76,8 +75,8 @@ def test_stored_statement_reaches_the_llm(minimal_client, monkeypatch):
     """저장된 본문이 있으면 LLM 프롬프트에 그것이 들어가고 스크래핑을 타지 않는다.
 
     resolve_statement 를 통째로 patch 하면 인자 전달 여부를 검증할 수 없다 — 수집 함수를
-    pytest.fail 로 두어 "스크래핑을 타지 않았다"를 실제로 고정한다. 예전에는 같은 파일이
-    README push 에는 저장값을 쓰면서 LLM 호출에만 넘기지 않아, 백필한 본문이 버려졌다.
+    pytest.fail 로 두어 "스크래핑을 타지 않았다"를 실제로 고정한다. README push 와 LLM
+    호출이 같은 저장값을 써야 한다(한쪽만 쓰면 백필한 본문이 버려진다).
     """
     stored = "【문제】 두 정수 A와 B를 입력받아 A+B를 출력한다."
     _save(db.PENDING_EFFICIENCY, problem_statement=stored)

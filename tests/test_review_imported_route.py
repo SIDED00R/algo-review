@@ -1,9 +1,9 @@
-"""/api/review-imported 회귀.
+"""/api/review-imported 의 본문 해석과 데모 가드.
 
 가져온 기록 AI 리뷰는 리뷰·재리뷰와 **같은 해석기**로 문제 본문을 얻어야 한다.
-예전에는 수집 함수를 직접 불러, 실패 시 반환되는 문자열(`"크롤링 실패: 404 …"`)이 그대로
-LLM 프롬프트의 문제 설명 자리에 박혔다 — acmicpc.net 종료 이후 BOJ 는 상시 그 상태였고
-결과가 DB 에 영구 저장됐다.
+수집 함수를 직접 부르면 실패 시 반환되는 문자열(`"크롤링 실패: 404 …"`)이 그대로 LLM
+프롬프트의 문제 설명 자리에 박히고, 그 결과가 DB 에 영구 저장된다. BOJ 는 acmicpc.net
+종료로 수집이 상시 실패하므로 매 리뷰가 그 상태가 된다.
 """
 import pytest
 from fastapi import FastAPI
@@ -78,7 +78,7 @@ def test_successful_scrape_reaches_the_llm(minimal_client, monkeypatch):
 
 
 def test_demo_mode_blocks_the_route(monkeypatch):
-    """LLM 을 쓰는 라우터 중 이것만 데모 가드가 없었다 — 키가 있으면 방문자가 과금을 발생시킨다."""
+    """LLM 을 쓰는 라우터는 전부 데모 가드가 필요하다 — 키가 있으면 방문자가 과금을 발생시킨다."""
     monkeypatch.setattr(solved_route, "IS_DEMO", True)
     monkeypatch.setattr(solved_route.analyzer, "analyze_code",
                         lambda *a, **k: pytest.fail("데모에서 LLM 이 호출되면 안 된다"))
@@ -124,6 +124,6 @@ def test_empty_solved_title_does_not_overwrite_resolved_title(minimal_client, mo
     assert resp.status_code == 200
     # 응답(=저장된 값)을 본다. seen["info"] 는 analyze_code 호출 시점 스냅샷이라
     # 그 뒤에 있는 가드(routes/solved.py 의 `if problem.get("tags")`)를 검증하지 못한다 —
-    # 무조건 대입으로 바꿔도 스냅샷은 그대로여서 거짓 초록이었다.
+    # 그 가드를 무조건 대입으로 바꿔도 스냅샷은 그대로다.
     assert resp.json()["title"] == "Watermelon"  # 빈 문자열로 덮이지 않았다
     assert resp.json()["tags"] == ["math"]       # 빈 태그도 덮지 않는다

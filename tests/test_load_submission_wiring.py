@@ -57,8 +57,8 @@ def test_language_select_guards_unknown_values(client):
 def test_tab_switching_lives_only_in_tabs_js(client):
     """탭 전환 로직은 tabs.js 한 곳에만 둔다.
 
-    예전에는 problem-modal.js 가 같은 클래스 토글을 갖고 있어 탭별 lazy loader 와
-    모바일 메뉴 닫기를 건너뛰었다.
+    다른 모듈이 같은 클래스 토글을 갖고 있으면 탭별 lazy loader 와 모바일 메뉴 닫기를
+    건너뛴다.
     """
     tabs = _asset(client, "/static/js/tabs.js")
     assert "function activateTab(" in tabs

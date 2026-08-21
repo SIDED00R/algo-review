@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # JS 정적 검사 — 빌드 스텝이 없어 브라우저에서만 파싱되는 코드를 CI 가 대신 본다.
 #
-# 워크플로에 인라인으로 두지 않고 파일로 뺀 이유: `node --check static/js/*.js` 처럼
-# 한 줄로 쓰면 조용히 틀린다(Node 는 스크립트를 하나만 받고 나머지 위치 인자는 argv 가 된다
-# — 20개 중 1개만 검사됐다). 파일로 두면 로컬에서도 같은 검사를 돌려볼 수 있다.
+# 워크플로에 인라인으로 두지 않고 파일로 뺀다: `node --check static/js/*.js` 처럼 한 줄로
+# 쓰면 조용히 틀린다(Node 는 스크립트를 하나만 받고 나머지 위치 인자는 argv 가 된다).
+# 파일로 두면 로컬에서도 같은 검사를 돌려볼 수 있다.
 set -uo pipefail
 # nullglob 없이는 매치가 없을 때 glob 이 리터럴로 남아 루프가 1회 돈다 —
 # 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 검사 개수를 신뢰할 수 없다.
@@ -12,6 +12,7 @@ shopt -s nullglob
 JS_DIR="${1:-static/js}"
 # 로드 누락 검사가 볼 HTML — JS_DIR 을 바꿔 부르면 이것도 함께 바꿔야 한다.
 HTML_FILE="${2:-static/index.html}"
+CSS_DIR="${3:-static/css}"
 status=0
 
 # 파일 목록을 먼저 확정한다 — 아래 세 검사가 모두 이 목록에 의존한다.
@@ -45,7 +46,7 @@ if command -v node > /dev/null 2>&1; then
   # 무확장자 파일에는 ERR_UNKNOWN_FILE_EXTENSION 을 던진다(게이트 자체가 실패한다).
   # package.json 이 없으므로 `.js` 는 CommonJS 스크립트로 파싱된다 — 브라우저의
   # <script> 와 같은 조건이다.
-  tmpdir=$(mktemp -d)
+  tmpdir=$(mktemp -d) || { echo "  임시 디렉터리를 만들 수 없습니다"; exit 1; }
   combined="$tmpdir/_all.js"
   # 파일마다 개행을 덧붙인다 — 마지막 줄이 주석이면 다음 파일 첫 줄이 삼켜진다.
   for f in "${files[@]}"; do cat "$f"; echo; done > "$combined"
@@ -92,8 +93,8 @@ echo "== 최상위 선언 충돌 검사 =="
 #   let/const/class 끼리 중복            → SyntaxError
 #   let/const/class  ×  function/var     → SyntaxError  (교차 충돌)
 #   function 끼리 / var 끼리             → 합법 (재할당일 뿐)
-# 예전에는 렉시컬끼리만 봐서 **교차 충돌을 전부 놓쳤다** — 전역 함수 73개 × 렉시컬 36개
-# 조합이 게이트 밖이었다. `var` 도 교차 충돌을 만들므로 함께 본다.
+# 렉시컬끼리만 보면 교차 충돌(렉시컬 × function/var 조합)을 전부 놓친다.
+# `var` 도 교차 충돌을 만들므로 함께 본다.
 #
 # 이 grep 검사는 위 합본 파싱보다 약하다(첫 선언자만 본다). 남겨 두는 이유는 두 가지다 —
 # node 가 없어도 돌고, 충돌한 **이름을 짚어 준다**.
@@ -117,18 +118,20 @@ if [ -z "$lex_dupes" ] && [ -z "$cross" ]; then
   echo "  충돌 없음 (렉시컬 $(echo "$lexical" | uniq | grep -c .) 개 · function/var $(echo "$vars" | grep -c .) 개)"
 fi
 
-echo "== index.html 로드 누락 검사 =="
-# JS 파일이 조용히 고아가 되는 경로를 막는다 — 구문 검사는 통과하지만 페이지에 실리지 않는다.
+echo "== $HTML_FILE 로드 누락 검사 =="
+# 자산이 조용히 고아가 되는 경로를 막는다 — 구문 검사는 통과하지만 페이지에 실리지 않는다.
+# CSS 도 함께 본다: 로드 순서가 곧 캐스케이드 순서라 하나가 빠지면 화면이 통째로 바뀐다.
 missing=""
-for f in "${files[@]}"; do
+for f in "${files[@]}" "$CSS_DIR"/*.css; do
   name=$(basename "$f")
-  if ! grep -q "js/$name?v=" "$HTML_FILE"; then
-    missing="$missing$name
+  dir=$(basename "$(dirname "$f")")
+  if ! grep -q "$dir/$name?v=" "$HTML_FILE"; then
+    missing="$missing$dir/$name
 "
   fi
 done
 if [ -n "$missing" ]; then
-  echo "  $HTML_FILE 이 참조하지 않는 JS 파일이 있습니다:"
+  echo "  $HTML_FILE 이 참조하지 않는 자산이 있습니다:"
   printf "%b" "$missing" | sed 's/^/    /'
   status=1
 else

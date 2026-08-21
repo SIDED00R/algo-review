@@ -37,10 +37,9 @@ document.querySelectorAll('.btn-toggle[data-platform]').forEach(btn => {
     btn.classList.add('active');
     btn.setAttribute('aria-pressed', 'true');
     selectedStatsPlatform = btn.dataset.platform;
-    // 이미 결과가 떠 있으면 다시 받는다 — 예전에는 토글만 바뀌고 표는 옛 플랫폼 것이
-    // 그대로 남아, 사용자가 '통계 불러오기'를 다시 눌러야 맞았다(테마 탭은 재요청한다).
-    // loadStats 를 직접 부른다 — statsBtn.click() 은 setLoading 이 이미 disabled 로
-    // 만든 버튼에서 명세상 이벤트가 디스패치되지 않아 재요청이 조용히 무시됐다.
+    // 이미 결과가 떠 있으면 다시 받는다 — 토글과 표가 다른 플랫폼을 가리키면 안 된다.
+    // loadStats 를 직접 부른다. statsBtn.click() 은 setLoading 이 disabled 로 만든
+    // 버튼에서 명세상 이벤트를 디스패치하지 않아 재요청이 조용히 무시된다.
     if (document.getElementById('stats-result').innerHTML.trim()) loadStats();
   });
 });

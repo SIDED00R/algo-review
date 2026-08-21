@@ -20,9 +20,8 @@ _COMPILE_TIMEOUT = settings.compile_timeout
 def safe_env() -> dict:
     """subprocess 에 넘길 환경변수. **호출 시점에** os.environ 을 필터한다.
 
-    import 시점 상수로 두면 이 필터를 실효 검증할 수 없다 — 테스트가 센티넬 키를 심어도
-    이미 만들어진 dict 에는 반영되지 않아, 필터를 통째로 지워도 스위트가 초록이었다
-    (변이로 확인). 호출 시점 계산이면 회귀 테스트가 실제로 필터를 태운다.
+    import 시점 상수로 두면 테스트가 센티넬 키를 심어도 이미 만들어진 dict 에 반영되지
+    않아 이 필터를 실효 검증할 수 없다.
     """
     return {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
 # preexec_fn은 멀티스레드 서버(FastAPI threadpool)에서 fork 후 exec 전 deadlock 위험이 있어 사용하지 않는다.
@@ -31,8 +30,8 @@ def safe_env() -> dict:
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
     # UTF-8·무버퍼는 **커맨드라인 플래그**로 준다. -I 는 -E 를 포함해 모든 PYTHON* 환경변수를
-    # 무시하므로 PYTHONIOENCODING/PYTHONUTF8 를 넣어도 적용되지 않는다(실측: 비-ASCII 를
-    # 출력하는 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽었다).
+    # 무시하므로 PYTHONIOENCODING/PYTHONUTF8 로는 적용되지 않는다 — 플래그가 없으면
+    # 비-ASCII 를 출력하는 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽는다.
     env = safe_env()
     try:
         # 작업 디렉터리를 격리한다. cwd 를 지정하지 않으면 서버의 CWD 를 상속해
@@ -79,8 +78,8 @@ def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
         except subprocess.TimeoutExpired:
-            # 실행 단계는 이 예외를 잡는데 컴파일 단계는 잡지 않아, 과도한 템플릿 재귀 등으로
-            # 컴파일이 오래 걸리면 예외가 라우터를 탈출해 30초 뒤 원인 불명 500 이 됐다.
+            # 컴파일도 실행과 같이 시간 초과를 잡는다. 잡지 않으면 과도한 템플릿 재귀 등으로
+            # 컴파일이 길어질 때 예외가 라우터를 탈출해 원인 불명 500 이 된다.
             return {"stdout": "", "stderr": f"[컴파일 시간 초과 - {_COMPILE_TIMEOUT}초]",
                     "exit_code": -1}
         if compile_result.returncode != 0:
@@ -107,7 +106,7 @@ def execute_code(req: ExecuteRequest):
     # 데모는 공개 배포라 임의 코드 실행을 열어둘 수 없다(import 계열은 이미 차단돼 있다).
     if IS_DEMO:
         demo_block("코드 실행은 데모 버전에서 지원되지 않습니다.")
-    # 운영도 공개 배포다(allUsers) — 예전에는 데모만 막고 운영은 열려 있었다.
+    # 운영도 공개 배포다(allUsers).
     # 자식 프로세스는 앱과 같은 uid·같은 네트워크 네임스페이스에서 돌기 때문에,
     # 환경변수 필터·cwd 격리·-I 를 다 걸어도 두 경로가 남는다:
     #   ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 액세스 토큰

@@ -48,7 +48,7 @@ _last_force_refresh = 0.0
 #     정상 스냅샷까지 잃고, 그 뒤 CF 기능 전부가 요청마다 전체 다운로드를 재시도한다.
 #  ② lru_cache 는 사용자 함수 실행 중 락을 잡지 않아 **동시 miss 를 합치지 못한다** —
 #     스레드풀의 요청들이 각자 수 MB 를 내려받는다.
-_snapshot_lock = threading.RLock()
+_snapshot_lock = threading.Lock()
 _snapshot: tuple[list[dict], dict] | None = None
 _lookup: dict[tuple[int, str], dict] | None = None
 
@@ -58,9 +58,6 @@ def get_codeforces_problem_info(problem_ref: str) -> dict:
     contest_id, index = normalize_codeforces_problem_ref(problem_ref)
     problem = _get_codeforces_problem_lookup().get((contest_id, index))
     if not problem:
-        # 스냅샷은 프로세스 기동 시점에 한 번 고정된다 — 그 뒤 새로 열린 대회의 문제는
-        # miss가 난다. 주기적 TTL 대신 실제 miss가 났을 때만 강제 갱신 후 재조회하되,
-        # 쿨다운 중이면 곧바로 miss 처리한다(오타 반복이 매번 전체 재다운로드로 번지지 않도록).
         if _try_refresh_snapshot():
             problem = _get_codeforces_problem_lookup().get((contest_id, index))
     if not problem:
@@ -387,10 +384,18 @@ def _build_lookup(problems: list[dict]) -> dict[tuple[int, str], dict]:
 
 
 def _install_snapshot(fresh: tuple[list[dict], dict]) -> None:
-    """락을 잡은 상태에서만 부른다."""
+    """락을 잡은 상태에서만 부른다.
+
+    **`_snapshot` 대입이 "준비 완료" 신호이므로 반드시 마지막이어야 한다.**
+    `_get_cf_problemset_snapshot` 의 빠른 경로는 락을 잡지 않으므로, `_snapshot` 을 먼저
+    공개하면 그 사이 들어온 스레드가 아직 None 인 `_lookup` 을 받아
+    `AttributeError: 'NoneType' object has no attribute 'get'` 로 죽는다.
+    창이 열리는 시점이 하필 "프로세스당 한 번, 수 초짜리 다운로드 직후" 라
+    콜드 스타트에 요청이 몰리는 정확히 그 순간이다.
+    """
     global _snapshot, _lookup
-    _snapshot = fresh
     _lookup = _build_lookup(fresh[0])
+    _snapshot = fresh
 
 
 def _get_cf_problemset_snapshot() -> tuple[list[dict], dict]:
@@ -418,7 +423,13 @@ def _try_refresh_snapshot() -> bool:
     """
     global _last_force_refresh
     now = time.time()
-    with _snapshot_lock:
+    # 락 밖에서 먼저 본다 — 다른 스레드가 갱신 중이면 락에서 최대 30초(다운로드 timeout)
+    # 블록된 뒤 어차피 쿨다운에 걸려 False 를 받는다. 요청 스레드를 헛되이 묶지 않는다.
+    if now - _last_force_refresh < _FORCE_REFRESH_COOLDOWN:
+        return False
+    if not _snapshot_lock.acquire(blocking=False):
+        return False   # 이미 다른 스레드가 갱신 중이다
+    try:
         if now - _last_force_refresh < _FORCE_REFRESH_COOLDOWN:
             return False
         _last_force_refresh = now
@@ -430,6 +441,8 @@ def _try_refresh_snapshot() -> bool:
             return False
         _install_snapshot(fresh)
         return True
+    finally:
+        _snapshot_lock.release()
 
 
 def get_codeforces_user_info(handle: str) -> dict:

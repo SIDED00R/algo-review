@@ -20,7 +20,7 @@ function tierInGroup(tier, key, platform) {
 }
 
 /** 난이도 필터 <option> 목록. 두 벌로 두면 갈린다 — 실제로 리뷰 기록 탭에는 Ruby·Unrated
- *  가 빠져 있어 그 두 그룹을 난이도로 걸러낼 수 없었다. */
+ *  두 벌로 두면 갈린다. */
 function tierFilterOptionsHtml() {
   return ['<option value="">전체 난이도</option>']
     .concat(Object.keys(TIER_GROUPS).map(
@@ -149,7 +149,7 @@ function errorDetail(data) {
 }
 
 /** 마크다운을 안전한 HTML 로 만든다. CDN(marked·DOMPurify)이 막히면 평문으로 폴백한다 —
- *  예전에는 무가드라 ReferenceError 가 나고, 서버가 이미 저장·과금한 리뷰 결과가
+ *  가드가 없으면 ReferenceError 가 나고, 서버가 이미 저장·과금한 리뷰 결과가
  *  화면에서 통째로 사라졌다. Chart·KaTeX 는 이미 같은 가드가 있다. */
 function renderMarkdown(text) {
   const raw = text || '';
@@ -160,7 +160,7 @@ function renderMarkdown(text) {
 }
 
 /** div 를 버튼처럼 쓰는 곳에 키보드 접근을 준다. role/tabindex 만 붙여도 Enter/Space 가
- *  동작하지 않으므로 핸들러까지 함께 건다 — 예전에는 마우스로만 열 수 있었다. */
+ *  동작하지 않으므로 키보드 핸들러까지 함께 건다. */
 function makeRowActivatable(el, onActivate) {
   el.setAttribute('role', 'button');
   el.setAttribute('tabindex', '0');
@@ -182,22 +182,32 @@ function makeRowActivatable(el, onActivate) {
   });
 }
 
+// 코드 본문에서 제출 언어를 추론한다. 반환값의 도메인은 #code-language 의 option value
+// 와 같다 — 어느 것도 맞지 않으면 '' 를 돌려주고, 호출부가 사용자에게 직접 선택을 요구한다.
+//
+// 순서가 곧 규칙이다: **언어 고유 마커를 먼저**, 여러 언어가 공유하는 마커를 나중에 본다.
+// `import`·`print(`·`std::` 같은 마커는 여러 언어에 공통이라, 먼저 두면 그 마커를 함께
+// 쓰는 다른 언어를 전부 흡수한다.
+const _LANG_PATTERNS = [
+  // 1) 한 언어에만 있는 선언 형태
+  ['Kotlin', /\bfun\s+main\s*\(/],
+  ['Rust', /\bfn\s+main\s*\(/],
+  ['Go', /\bpackage\s+main\b|\bfmt\s*\./],
+  ['C#', /\busing\s+System\b|\bConsole\s*\.\w/],
+  ['Java', /\bpublic\s+class\b|\bSystem\s*\.\s*out\b|\bBufferedReader\b|\bScanner\b/],
+  ['Swift', /\bimport\s+Foundation\b|readLine\(\)!|\bfunc\s+\w+\s*\([^)]*\)\s*(->|\{)/],
+  // 2) C 계열 — C++ 고유 마커가 있으면 C++, 없으면 C
+  ['GNU C++17', /\bstd::|\bcout\b|\bcin\b|\busing\s+namespace\s+std\b|\bvector\s*<|\bendl\b/],
+  ['C', /#include\b|\bprintf\s*\(|\bscanf\s*\(/],
+  // 3) 여러 언어가 공유하는 마커
+  ['JavaScript', /\bconsole\s*\.\s*log\b|\brequire\s*\(/],
+  ['Python 3', /\bdef\s+\w|\bprint\s*\(|\binput\s*\(|\brange\s*\(|\bimport\s+\w/],
+];
+
 function detectLanguage(code) {
-  if (/#include/.test(code) || /\bstd::/.test(code) || /\bcout\b/.test(code) ||
-      /\bcin\b/.test(code) || /\bint\s+main\s*\(/.test(code) || /\bvector\s*</.test(code) ||
-      /\busing\s+namespace\s+std/.test(code)) return 'GNU C++17';
-  if (/\bdef\s+\w/.test(code) || /\bimport\s+\w/.test(code) ||
-      /\bprint\s*\(/.test(code) || /\binput\s*\(/.test(code) ||
-      /\brange\s*\(/.test(code)) return 'Python 3';
-  if (/\bpublic\s+class\b/.test(code) || /\bSystem\.out\b/.test(code) ||
-      /\bScanner\b/.test(code) || /\bBufferedReader\b/.test(code)) return 'Java';
-  if (/\bfun\s+main\b/.test(code) || /\bprintln\b/.test(code) ||
-      /\breadLine\b/.test(code)) return 'Kotlin';
-  if (/\busing\s+System\b/.test(code) || /\bConsole\.\w/.test(code)) return 'C#';
-  if (/\bfn\s+main\s*\(/.test(code) || /\buse\s+std::io/.test(code) ||
-      /\blet\s+mut\b/.test(code)) return 'Rust';
-  if (/\bpackage\s+main\b/.test(code) || /\bfmt\./.test(code)) return 'Go';
-  if (/\brequire\s*\(/.test(code) || /\bconsole\.log\b/.test(code)) return 'JavaScript';
-  if (/\bprintf\s*\(/.test(code) || /\bscanf\s*\(/.test(code)) return 'C';
+  const src = code || '';
+  for (const [language, pattern] of _LANG_PATTERNS) {
+    if (pattern.test(src)) return language;
+  }
   return '';
 }

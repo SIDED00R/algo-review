@@ -1,6 +1,6 @@
 // 지난 제출을 편집 가능한 상태로 리뷰 폼에 채운다.
-// 진입점 셋이 이 파일을 쓴다 — 메인 탭 버튼, 리뷰 기록 모달, ⌘K 팔레트.
-// problem-modal.js 의 '코드 리뷰 진행' 도 fillReviewForm 위로 재작성됐다.
+// 진입점 넷이 이 파일의 fillReviewForm 을 쓴다 — 메인 탭 버튼, 리뷰 기록 모달,
+// ⌘K 팔레트, 문제 뷰어의 '코드 리뷰 진행'.
 
 const loadSubmissionBtn = document.getElementById('load-submission-btn');
 const loadSubmissionMsg = document.getElementById('load-submission-msg');

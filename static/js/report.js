@@ -19,7 +19,10 @@ document.querySelectorAll('[data-report-platform]').forEach(btn => {
     // 남겨 두면 "토글=CF, 화면=BOJ 리포트" 라는 조용한 불일치가 된다.
     const result = document.getElementById('report-result');
     if (result.innerHTML.trim()) {
-      _reportToken++;   // 진행 중인 이전 플랫폼 요청도 무효화한다
+      // 진행 중인 이전 플랫폼 요청을 무효화한다. 그 요청의 finally 는 토큰이 갈려
+      // 버튼을 되돌리지 않으므로, 무효화한 쪽에서 버튼 상태도 함께 되돌린다.
+      _reportToken++;
+      setLoading(reportBtn, false);
       result.innerHTML =
         '<div class="alert alert-info">플랫폼을 바꿨습니다. \'리포트 생성\'을 눌러주세요.</div>';
     }

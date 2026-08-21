@@ -1,14 +1,14 @@
-"""상류 장애의 상태코드와 응답 본문 (회귀).
+"""상류 장애의 상태코드와 응답 본문.
 
 두 가지를 함께 고정한다.
 
-1. **상태코드** — 5회차에서 CF 연결 실패를 `ValueError` 로 치환했더니, 입력 형식 오류와
-   같은 타입이 되어 라우터가 400 으로 매핑했다. 사용자는 "Codeforces API 연결 실패
-   (ConnectTimeout)" 를 400 과 함께 보고 **자기 입력을 고치려 한다**. 상류 장애는 502 다.
+1. **상태코드** — 상류 장애는 502 다. 연결 실패를 입력 형식 오류와 같은 타입으로 두면
+   라우터가 400 으로 매핑하고, 사용자는 "Codeforces API 연결 실패 (ConnectTimeout)" 를
+   400 과 함께 보고 **자기 입력을 고치려 한다**.
 2. **본문** — openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답
    본문}` 형태로 제공자 본문을 그대로 싣는다. `.env.example` 이 OpenAI 호환 서드파티
    엔드포인트를 1급 대안으로 안내하므로 그 본문 형태를 통제할 수 없고, `base_url` 이
-   내부 프록시면 그 주소도 함께 나간다. clients.codeforces 의 자격증명 유출과 같은 계열이다.
+   내부 프록시면 그 주소도 함께 나간다.
 """
 import httpx
 import openai
@@ -50,7 +50,7 @@ def test_upstream_unavailable_is_still_a_value_error():
 
 
 def test_cf_problem_lookup_failure_maps_to_502(monkeypatch):
-    """예전에는 400 이었다 — 사용자가 자기 입력을 고치려 하게 만든다."""
+    """상류 장애는 502 다 — 400 은 사용자가 자기 입력을 고치려 하게 만든다."""
     from fastapi import HTTPException
 
     def _boom(_ref):

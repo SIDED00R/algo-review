@@ -1,10 +1,10 @@
-"""push_files_to_github 의 기본 브랜치 결정 (회귀).
+"""push_files_to_github 의 기본 브랜치 결정.
 
-GET 으로 main→master 폴백을 해서 브랜치를 이미 알아낸 뒤, 마지막 PATCH 에서 **다시
-main 부터 추측**하고 있었다. 두 가지가 걸린다.
+GET 으로 알아낸 브랜치를 마지막 PATCH 까지 그대로 쓴다. PATCH 에서 다시 추측하면
+두 가지가 걸린다.
 
 1. master 저장소에서 매 push 마다 실패 PATCH 를 1회 낭비한다.
-2. 폴백 조건이 422 **한 값에만** 걸려 있어, 없는 ref 에 대한 PATCH 가 404 로 오면
+2. 폴백 조건을 특정 상태코드(422)에만 걸면, 없는 ref 에 대한 PATCH 가 404 로 올 때
    raise_for_status() 가 터진다 — 그 시점엔 tree·commit 객체가 이미 만들어져 고아로
    남고, 사용자에게는 "GitHub push에 실패했습니다" 만 보인다.
 """
@@ -46,7 +46,7 @@ def _fake_api(default_branch: str, calls: list):
     def _patch(url, **kwargs):
         calls.append(("PATCH", url))
         branch = url.rsplit("/", 1)[1]
-        # 없는 ref 에 대한 PATCH 는 404 다 — 예전 폴백은 422 만 보고 있었다.
+        # 없는 ref 에 대한 PATCH 는 404 다 — 422 만 보는 폴백은 여기서 터진다.
         return _Resp(200 if branch == default_branch else 404)
 
     return _get, _post, _patch

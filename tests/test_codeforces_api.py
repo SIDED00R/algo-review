@@ -1,4 +1,4 @@
-"""CF API 응답 파싱 — comment 우선 처리 및 자격증명 비노출 회귀 (네트워크 불필요)."""
+"""CF API 응답 파싱 — comment 우선 처리와 자격증명 비노출 (네트워크 불필요)."""
 from urllib.parse import urlencode
 
 import pytest
@@ -40,7 +40,7 @@ def test_api_request_surfaces_cf_comment_without_leaking_credentials(monkeypatch
     message = str(exc_info.value)
     assert message == "handle: User with handle nope not found"
     assert "AK" not in message  # apiKey 값이 메시지에 새지 않는다
-    assert captured["params"].get("apiSig")  # 실제로는 서명돼 있었다 — raise_for_status를 탔다면 샜을 것
+    assert captured["params"].get("apiSig")  # 쿼리에 서명이 실린다 — 예외 원문이 새면 함께 나간다
 
 
 def test_signed_request_error_never_leaks_the_api_signature(monkeypatch):

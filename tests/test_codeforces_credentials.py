@@ -1,4 +1,4 @@
-"""Codeforces 자격증명이 예외 메시지로 새어 나가지 않는지 (회귀).
+"""Codeforces 자격증명이 예외 메시지로 새어 나가지 않는지.
 
 `_codeforces_api_request` 는 서명 호출에서 apiKey·apiSig 를 **쿼리스트링**에 넣는다.
 requests 계열 예외 메시지는 요청 URL 전문을 포함하므로, 그 예외가 그대로 라우터의

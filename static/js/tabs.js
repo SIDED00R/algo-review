@@ -1,4 +1,4 @@
-// 탭 전환은 여기 한 곳에만 둔다 — 예전에는 problem-modal.js 가 같은 클래스 토글을
+// 탭 전환은 여기 한 곳에만 둔다 — 다른 모듈이 같은 클래스 토글을
 // 따로 갖고 있어서 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛰었다.
 function activateTab(name) {
   const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
@@ -36,7 +36,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // role="tablist" 를 선언했으면 화살표 키 이동이 있어야 한다 — 보조기술 사용자는 그것을
-// 기대하는데 예전에는 click 리스너만 있었다(선언과 동작 불일치).
+// 기대한다 — 선언만 있고 동작이 없으면 없는 것보다 나쁘다.
 document.getElementById('main-nav')?.addEventListener('keydown', e => {
   const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
   const tabs = [...document.querySelectorAll('.tab-btn')];

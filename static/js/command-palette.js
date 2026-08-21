@@ -44,10 +44,12 @@
       b.addEventListener('click', () => run(Number(b.dataset.idx)));
     });
     listEl.querySelector('.cmdk-item.active')?.scrollIntoView({ block: 'nearest' });
-    // 목록을 통째로 교체하므로, 마우스로 항목을 클릭해 포커스를 가진 버튼이 여기서
-    // 사라진다. 포커스가 <body> 로 떨어지면 keydown 리스너가 overlay·root 에 걸려 있어
-    // ↑↓·Enter·Esc 가 전부 무반응이 되고 Tab 이 트랩을 벗어난다.
-    if (!overlay.classList.contains('hidden') && !overlay.contains(document.activeElement)) {
+    // 목록을 통째로 교체하므로 항목 버튼에 있던 포커스가 <body> 로 떨어진다.
+    // keydown 리스너가 overlay 에 걸려 있어 그 상태로는 ↑↓·Enter·Esc 가 무반응이 된다.
+    // 포커스가 실제로 사라진 경우에만 되돌린다 — 다른 요소로 옮겨간 포커스를 뺏으면
+    // modal-a11y 가 기억하는 "열기 전 포커스" 가 #cmdk-input 자신이 되어 복원이 깨진다.
+    if (!overlay.classList.contains('hidden')
+        && (!document.activeElement || document.activeElement === document.body)) {
       input.focus();
     }
   }
@@ -183,7 +185,9 @@
   overlay.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); cursor++; render(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); cursor--; render(); }
-    else if (e.key === 'Enter') { e.preventDefault(); run(cursor); }
+    // 버튼에서 올라온 Enter 는 그 버튼의 기본 활성화에 맡긴다 — 여기서 취소하면
+    // 포커스한 항목 대신 cursor 항목이 실행되고, 닫기 버튼은 Enter 로 눌리지 않는다.
+    else if (e.key === 'Enter' && e.target === input) { e.preventDefault(); run(cursor); }
     else if (e.key === 'Escape') { e.preventDefault(); if (!back()) close(); }
     else if (e.key === 'Backspace' && !input.value) { if (back()) e.preventDefault(); }
   });

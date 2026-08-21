@@ -1,11 +1,10 @@
 """플랫폼·티어 상수 — 레이어 어디서나 참조하는 순수 값만 둔다.
 
-`db/normalize.py` 가 `clients.solved_ac` 에서 `TIER_NAMES` 를 가져오던 것을 여기로 옮겼다.
-ARCHITECTURE.md 의 레이어 다이어그램에서 DB 레이어와 외부 클라이언트는 형제인데,
-`import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 역의존이었다.
+DB 레이어와 외부 클라이언트는 레이어 다이어그램에서 형제다. 이 값들을 `clients` 에 두면
+`import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 역의존이 생긴다.
 
-플랫폼 화이트리스트도 세 곳(`routes/models.py`·`routes/recommend.py`·`routes/themes.py`)에
-따로 있었다 — 새 플랫폼을 붙일 때 한 곳만 고치면 조용히 어긋난다.
+플랫폼 화이트리스트도 여기 하나뿐이다 — 여러 곳에 두면 새 플랫폼을 붙일 때 한 곳만
+고쳐 조용히 어긋난다.
 """
 
 PLATFORMS = ("codeforces", "boj")

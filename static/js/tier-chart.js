@@ -33,8 +33,8 @@ function hexToRgba(hex, alpha) {
 let tierChartInstance = null;
 
 // 기본 안내 문구는 index.html 이 정본이다 — 여기에 복제하면 둘이 갈린다. 처음 덮어쓰기
-// 전에 한 번 붙잡아 두고, 인자 없이 부르면 그것으로 되돌린다(예전에는 라이브러리 안내문으로
-// 덮은 뒤 되돌리지 않아 "기록 없음" 자리에 그 문구가 남았다).
+// 전에 한 번 붙잡아 두고, 인자 없이 부르면 그것으로 되돌린다 — 되돌리지 않으면
+// 라이브러리 안내문이 "기록 없음" 자리에 그대로 남는다.
 let _defaultEmptyText = null;
 
 /** 차트를 숨기고 안내 문구를 띄운다. text 를 생략하면 기본 문구로 되돌린다. */
@@ -214,7 +214,6 @@ async function loadTierChart() {
     });
   } catch (e) {
     if (token !== _chartToken) return;
-    // 예전에는 console.error 만 남겨 사용자에게 아무 반응이 없었다.
     showChartMessage(e.message || '성장 곡선을 불러오지 못했습니다.');
   }
 }
@@ -239,8 +238,7 @@ function recolorTierChart() {
   chart.update('none');
 }
 
-// editor.js 와 같은 방식으로 테마 변경을 감시한다. 예전에는 감시자가 없어
-// 테마를 토글해도 축·그리드·범례 색이 그대로 남았다(통계 탭을 다시 눌러야 갱신).
+// editor.js 와 같은 방식으로 테마 변경을 감시해 축·그리드·범례 색을 갱신한다.
 // 색만 갱신한다 — loadTierChart() 를 다시 부르면 색을 바꾸려고 /api/tier-history 를
 // 재요청하고(editor.js 는 setOption 만 한다), 통계 탭이 비활성일 때는 0×0 canvas 에
 // 차트를 재생성한다.

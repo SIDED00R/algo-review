@@ -107,8 +107,14 @@ def get_solved_cf_refs() -> set:
 
 def get_solved_problem_ids() -> set:
     with session_scope() as session:
-        ids = set(session.scalars(select(Review.problem_id).distinct()).all())
-        ids |= set(session.scalars(select(SolvedHistory.problem_id)).all())
+        # BOJ 전용이다 — 호출처 4곳이 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
+        # 지금은 CF 행의 problem_id 가 0 이라 우연히 맞지만, demo_seed 처럼 실제 값이
+        # 들어가면 그 번호의 BOJ 문제가 조용히 제외된다.
+        # 형제 함수 get_solved_cf_refs 는 이미 플랫폼을 명시한다.
+        ids = set(session.scalars(
+            select(Review.problem_id).where(Review.platform == "boj").distinct()).all())
+        ids |= set(session.scalars(
+            select(SolvedHistory.problem_id).where(SolvedHistory.platform == "boj")).all())
     return ids
 
 

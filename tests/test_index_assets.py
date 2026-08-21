@@ -1,4 +1,4 @@
-"""index.html 자산 캐시 버전 치환 — `?v=` 를 손으로 고치던 방식의 갱신 누락 재발 방지."""
+"""index.html 자산 캐시 버전 치환 — 모든 로컬 자산이 배포마다 같은 `?v=` 로 갱신되는지."""
 import re
 
 def test_asset_urls_share_one_version(client):
@@ -30,9 +30,8 @@ def test_every_referenced_asset_is_actually_served(client):
     """참조가 실제로 200 인지 본다 — 버전 검사만으로는 파일이 없어도 통과한다.
 
     CSS 5개는 index.html 의 로드 순서가 곧 캐스케이드 순서라, 하나를 지우거나 이름을
-    바꾸면 페이지가 통째로 무스타일이 된다. 그런데 scripts/check_js.sh 의 고아 파일
-    검사에는 CSS 대응물이 없고(JS 만 본다), 이 파일의 나머지 검사는 존재 여부를
-    보지 않아 전 게이트가 초록인 채로 배포될 수 있었다.
+    바꾸면 페이지가 통째로 무스타일이 된다. scripts/check_js.sh 의 고아 파일 검사는
+    JS 만 보고, 이 파일의 나머지 검사는 존재 여부를 보지 않는다.
     """
     missing = []
     for ref in _local_asset_refs(client):

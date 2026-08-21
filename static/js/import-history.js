@@ -1,15 +1,21 @@
+// 요청 세대 토큰. 이 로더는 탭 전환(화살표 키 이동마다 발생)과 가져오기 3종 완료에서
+// 불려 겹쳐 실행된다. 늦게 끝난 호출이 목록을 다시 그리면 그때 붙는 핸들러가 자기
+// 클로저의 allProblems 를 잡고, 이후 삭제가 화면에 남은 다른 클로저에 반영되지 않는다.
+let _importToken = 0;
+
 async function loadImportedHistory() {
   const list = document.getElementById('import-history-list');
   if (!list) return;
+  const token = ++_importToken;
   let data;
   try {
-    // fetchJsonOk 를 쓴다 — res.ok 를 안 보면 503(온디맨드 DB 정지)이 "기록이 없습니다"로
-    // 표시돼 사용자가 장애를 알 수 없다.
     data = await fetchJsonOk('/api/solved-history', undefined, '가져온 기록 로딩 실패');
   } catch (e) {
+    if (token !== _importToken) return;
     showError(list, e.message);
     return;
   }
+  if (token !== _importToken) return;
 
   if (!data.problems || data.problems.length === 0) {
     list.innerHTML = '<div class="alert alert-info">가져온 기록이 없습니다.</div>';

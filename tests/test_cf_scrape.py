@@ -100,7 +100,7 @@ def test_xpath_text_drops_section_title_and_script():
 
 
 def test_tex_span_superscript_becomes_latex():
-    # 구형 문제의 핵심 회귀: 예전에는 "10  - 6"(=10 빼기 6)으로 읽혀 의미가 뒤바뀌었다.
+    # 구형 문제의 범위 표기: 마커를 잃으면 "10  - 6" 처럼 읽혀 의미가 뒤바뀐다.
     tree = _parse(
         '<div id="d"><span class="tex-span">10<sup class="upper-index"> - 6</sup></span></div>'
     )
