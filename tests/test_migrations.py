@@ -48,4 +48,5 @@ def test_legacy_db_without_alembic_version_converges(tmp_path, monkeypatch):
     # baseline 이후 리비전도 이미 반영된 상태를 덮어쓰지 않고 통과해야 한다.
     columns = {c["name"] for c in inspect(get_engine()).get_columns("reviews")}
     assert "language" in columns
+    assert "problem_statement" in columns
     dispose_engine()

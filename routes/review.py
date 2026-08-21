@@ -15,7 +15,8 @@ def review_code(req: ReviewRequest):
         raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
 
     if IS_DEMO:
-        return save_and_build_response(DEMO_PROBLEM_INFO, req.code, DEMO_REVIEW_RESULT, req.language)
+        return save_and_build_response(DEMO_PROBLEM_INFO, req.code, DEMO_REVIEW_RESULT,
+                                      req.language, req.problem_statement or "")
 
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
@@ -28,4 +29,7 @@ def review_code(req: ReviewRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"코드 분석 실패: {e}")
 
-    return save_and_build_response(problem_info, req.code, result, req.language)
+    # 저장하는 것은 사용자가 붙여 넣은 원문(req.problem_statement)이다 — 위 statement 는
+    # 스크래핑 결과가 섞여 있고, 재제출 때 resolve_statement 가 다시 해석한다.
+    return save_and_build_response(problem_info, req.code, result, req.language,
+                                   req.problem_statement or "")

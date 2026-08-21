@@ -4,7 +4,8 @@ from routes.models import ReviewResponse
 
 
 def save_and_build_response(problem_info: dict, code: str, result: dict,
-                            language: str = "") -> ReviewResponse:
+                            language: str = "",
+                            problem_statement: str = "") -> ReviewResponse:
     """리뷰 결과로 응답을 조립·검증한 뒤 저장한다. review/solved 라우터 공용.
 
     검증을 저장보다 먼저 해야 한다 — 순서가 반대면 LLM 응답이 스키마와 어긋나 검증이 실패했을 때
@@ -46,5 +47,6 @@ def save_and_build_response(problem_info: dict, code: str, result: dict,
         platform=problem_info["platform"],
         problem_ref=problem_info["problem_ref"],
         language=language,
+        problem_statement=problem_statement,
     )
     return response

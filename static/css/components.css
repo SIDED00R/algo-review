@@ -45,9 +45,19 @@
 .btn-review { background: var(--ink); color: var(--ink-fg); border-color: var(--ink); }
 .btn-review:hover:not(:disabled) { background: var(--fg-muted); border-color: var(--fg-muted); }
 
+/* 텍스트만 있는 조용한 버튼 — 화면당 primary 는 하나로 유지하고, 부수 동작은 여기로 */
+.btn-ghost {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  color: var(--fg-muted); font-size: var(--fs-sm); padding: 0;
+  text-decoration: underline; text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  transition: color var(--dur) var(--ease), text-decoration-color var(--dur) var(--ease);
+}
+.btn-ghost:hover:not(:disabled) { color: var(--fg); text-decoration-color: var(--fg); }
+
 /* 비활성 — opacity 로 흐리면 대비가 1.5~2:1 로 붕괴한다. 토큰으로 표현한다. */
 .btn-primary:disabled, .btn-secondary:disabled, .btn-sm:disabled,
-.page-btn[disabled] {
+.btn-ghost:disabled, .page-btn[disabled] {
   background: var(--surface-2);
   color: var(--fg-dim);
   border-color: var(--line);

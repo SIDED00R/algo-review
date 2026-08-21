@@ -171,3 +171,19 @@ def test_total_review_count_distinct_by_problem_ref():
     mk_review(problem_id=1, problem_ref="1")  # 재제출 — 중복 문제
     mk_review(problem_id=2, problem_ref="2")
     assert db.get_total_review_count("boj") == 2
+
+
+def test_problem_statement_roundtrips():
+    """붙여 넣은 문제 설명이 그대로 돌아와야 한다 — 불러오기가 이 값으로 폼을 복원한다."""
+    body = "첫 줄에 N 이 주어진다.\n1 <= N <= 100"
+    mk_review(problem_id=1, problem_ref="1", problem_statement=body)
+    rows = db.get_reviews_by_problem("boj", "1")
+    assert rows[0]["problem_statement"] == body
+
+
+def test_problem_statement_defaults_to_empty():
+    """저장 시 넘기지 않으면 빈 문자열이다 — 불러오기는 이 값을 조건 없이 대입해
+    이전 문제의 본문이 폼에 남지 않게 한다(resolve_statement 가 붙여 넣은 본문을 우선한다)."""
+    mk_review(problem_id=2, problem_ref="2")
+    rows = db.get_reviews_by_problem("boj", "2")
+    assert rows[0]["problem_statement"] == ""

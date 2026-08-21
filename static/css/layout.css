@@ -45,6 +45,24 @@ header {
 .header-actions { display: flex; align-items: center; gap: var(--s-2);
   flex-shrink: 0; margin-left: auto; }
 
+/* ⌘K 어피던스 — 팔레트가 있다는 걸 알려야 쓰인다. 좁은 화면에서는 감춘다
+   (⌘K 자체는 키보드가 있는 환경에서만 의미가 있다). */
+.kbd-hint {
+  display: none; align-items: center; gap: var(--s-2);
+  font-family: inherit; font-size: var(--fs-xs); color: var(--fg-dim);
+  background: transparent; border: 1px solid var(--line);
+  border-radius: var(--r); padding: 4px var(--s-2); cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.kbd-hint:hover { color: var(--fg); border-color: var(--line-strong); }
+@media (min-width: 980px) { .kbd-hint { display: inline-flex; } }
+
+kbd {
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  color: var(--fg-muted); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 3px; padding: 0 4px;
+}
+
 /* 햄버거 */
 .menu-btn {
   display: none; flex-direction: column; justify-content: center; gap: 4px;

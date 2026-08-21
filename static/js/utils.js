@@ -49,6 +49,15 @@ function problemLabel(problem) {
   return String(problem.problem_id ?? problem.problem_ref ?? '');
 }
 
+// 리뷰 기록 검색과 ⌘K 팔레트가 같은 판정을 쓴다 — 술어를 두 벌로 만들면
+// 한쪽만 고쳐졌을 때 같은 질의가 다른 결과를 준다.
+function matchesProblemQuery(problem, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return true;
+  const hay = `${problemLabel(problem)} ${problem.title || ''} ${(problem.tags || []).join(' ')}`;
+  return hay.toLowerCase().includes(q);
+}
+
 function compareProblemLabel(a, b) {
   return problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true });
 }

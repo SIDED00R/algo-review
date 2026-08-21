@@ -48,5 +48,6 @@ def push_without_review(req: ReviewRequest):
         feedback="", efficiency=db.PENDING_EFFICIENCY,
         strengths=[], weaknesses=[], platform=info["platform"],
         problem_ref=info["problem_ref"], language=req.language,
+        problem_statement=req.problem_statement or "",
     )
     return {"pushed": True, "repo": github_repo, "path": folder}
