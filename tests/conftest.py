@@ -65,6 +65,22 @@ def fresh_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def client(monkeypatch):
+    """server.app 전체를 얹은 TestClient. lifespan 의 warmup 백그라운드 태스크(외부 API)를
+    no-op 으로 막는다. 세 파일이 이 픽스처를 글자 그대로 복제하고 있었다."""
+    import server
+    import warmup
+    from fastapi.testclient import TestClient
+
+    async def _noop():
+        return None
+
+    monkeypatch.setattr(warmup, "warm_theme_caches", _noop)
+    with TestClient(server.app) as c:
+        yield c
+
+
+@pytest.fixture
 def at_time(monkeypatch):
     """save_review·save_solved_problem 이 기록하는 created_at·imported_at 을 고정 시각으로 강제한다.
 

@@ -23,23 +23,36 @@ async function loadGithubStatus() {
       usernameBadge.textContent = `@${data.username}`;
 
       try {
-        const repoRes = await fetch('/auth/github/repos');
-        const repoData = await repoRes.json();
+        const repoData = await fetchJsonOk('/auth/github/repos', undefined, '저장소 목록 로딩 실패');
         repoSelect.innerHTML = '<option value="">저장소 선택...</option>' +
           (repoData.repos || []).map(r =>
-            `<option value="${r.full_name}" ${r.full_name === data.target_repo ? 'selected' : ''}>${r.full_name}${r.private ? ' (비공개)' : ''}</option>`
+            `<option value="${escapeHtml(r.full_name)}" ${r.full_name === data.target_repo ? 'selected' : ''}>${escapeHtml(r.full_name)}${r.private ? ' (비공개)' : ''}</option>`
           ).join('');
-      } catch {}
+      } catch (e) {
+        // 예전에는 catch {} 로 삼켜 빈 select 만 남았다 — 사용자는 원인을 알 수 없다.
+        repoSelect.innerHTML = `<option value="">${escapeHtml(e.message)}</option>`;
+      }
 
-      repoSelect.addEventListener('change', async () => {
-        const repo = repoSelect.value;
-        if (!repo) return;
-        await fetch('/auth/github/repo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ repo }),
+      if (!repoSelect.dataset.bound) {
+        // 데이터 로딩 함수 안에서 리스너를 걸면 재호출 시 누적된다.
+        repoSelect.dataset.bound = '1';
+        repoSelect.addEventListener('change', async () => {
+          const repo = repoSelect.value;
+          if (!repo) return;
+          const msg = document.getElementById('github-repo-msg');
+          try {
+            await fetchJsonOk('/auth/github/repo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ repo }),
+            }, '저장소 변경 실패');
+            if (msg) { msg.textContent = '저장소를 저장했습니다.'; msg.className = 'action-msg ok'; }
+          } catch (e) {
+            // 예전에는 응답을 확인하지 않아 변경 실패가 무음이었다.
+            if (msg) { msg.textContent = e.message; msg.className = 'action-msg bad'; }
+          }
         });
-      });
+      }
     } else {
       showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
     }

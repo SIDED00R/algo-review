@@ -1,22 +1,7 @@
 """헬스체크 엔드포인트 + 전역 예외 핸들러 (server.app 전체를 통해 검증)."""
-import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 
 import db
-import server
-import warmup
-
-
-@pytest.fixture
-def client(monkeypatch):
-    # lifespan 의 warmup 백그라운드 태스크(외부 API)를 no-op 으로 막는다.
-    async def _noop():
-        return None
-
-    monkeypatch.setattr(warmup, "warm_theme_caches", _noop)
-    with TestClient(server.app) as c:
-        yield c
 
 
 def test_health_returns_200_with_db_ok(client):

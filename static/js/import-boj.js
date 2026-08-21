@@ -1,5 +1,6 @@
 const importBtn = document.getElementById('import-btn');
 importBtn.dataset.label = '가져오기';
+importBtn.dataset.loadingLabel = '가져오는 중...';
 
 importBtn.addEventListener('click', async () => {
   const bojId = document.getElementById('import-boj-id').value.trim();

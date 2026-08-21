@@ -18,6 +18,7 @@ syncProblemInputUI();
 
 const reviewBtn = document.getElementById('review-btn');
 reviewBtn.dataset.label = '분석 시작';
+reviewBtn.dataset.loadingLabel = '분석 중...';
 
 // 코드 에디터 + 언어 선택 값 — 리뷰 요청과 GitHub push 가 함께 쓴다.
 function currentCodeAndLanguage() {
@@ -117,7 +118,7 @@ function renderReview(container, d) {
   const tagsHtml = d.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
   const strengthsHtml = (d.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('') || '<li>-</li>';
   const weaknessesHtml = (d.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('') || '<li>-</li>';
-  const feedbackHtml = DOMPurify.sanitize(marked.parse(d.feedback || ''));
+  const feedbackHtml = renderMarkdown(d.feedback);
   const label = escapeHtml(problemLabel(d));
   const title = escapeHtml(d.title);
   const tierName = escapeHtml(d.tier_name);
@@ -188,7 +189,10 @@ function renderReview(container, d) {
           language,
           url: d.problem_url,
           ...(d.platform === 'codeforces' ? {
-            description: cfSections?.statement || pastedStatement,
+            // 붙여넣은 본문이 먼저다 — 서버 resolve_statement 와 같은 우선순위여야
+            // LLM 리뷰와 README 의 문제 설명이 갈리지 않는다. 뷰어를 닫아도
+            // _currentProblem 이 남으므로, 뒤집으면 옛 번역본이 새 입력을 이긴다.
+            description: pastedStatement || cfSections?.statement || '',
             input_desc: cfSections?.input || '',
             output_desc: cfSections?.output || '',
           } : {}),

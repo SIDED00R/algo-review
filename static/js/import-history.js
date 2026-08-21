@@ -1,16 +1,17 @@
 async function loadImportedHistory() {
   const list = document.getElementById('import-history-list');
   if (!list) return;
-  let res, data;
+  let data;
   try {
-    res = await fetch('/api/solved-history');
-    data = await res.json();
+    // fetchJsonOk 를 쓴다 — res.ok 를 안 보면 503(온디맨드 DB 정지)이 "기록이 없습니다"로
+    // 표시돼 사용자가 장애를 알 수 없다.
+    data = await fetchJsonOk('/api/solved-history', undefined, '가져온 기록 로딩 실패');
   } catch (e) {
     showError(list, e.message);
     return;
   }
 
-  if (!res.ok || !data.problems || data.problems.length === 0) {
+  if (!data.problems || data.problems.length === 0) {
     list.innerHTML = '<div class="alert alert-info">가져온 기록이 없습니다.</div>';
     return;
   }
@@ -58,13 +59,15 @@ async function loadImportedHistory() {
   let importPerPage = 20;
 
   function getFiltered() {
-    const q = (document.getElementById('import-search').value || '').trim().toLowerCase();
+    const q = document.getElementById('import-search').value;
     const platform = document.getElementById('import-platform-filter').value;
     const tierKey = document.getElementById('import-tier-filter').value;
     const sort = document.getElementById('import-sort').value;
 
-    let result = allProblems.filter(p => {
-      if (q && !problemLabel(p).toLowerCase().includes(q) && !p.title.toLowerCase().includes(q)) return false;
+    const result = allProblems.filter(p => {
+      // 리뷰 기록 검색·⌘K 팔레트와 같은 술어를 쓴다 — 세 벌로 만들면 한쪽만 고쳐졌을 때
+      // 같은 질의가 탭마다 다른 결과를 준다. (solved 행에는 tags 가 없어도 안전하다)
+      if (!matchesProblemQuery(p, q)) return false;
       if (platform && (p.platform || 'boj') !== platform) return false;
       if (tierKey && !tierInGroup(p.tier, tierKey)) return false;
       return true;
@@ -75,6 +78,8 @@ async function loadImportedHistory() {
       if (sort === 'id-desc') return compareProblemLabel(b, a);
       if (sort === 'tier-desc') return b.tier - a.tier;
       if (sort === 'tier-asc') return a.tier - b.tier;
+      // 기본값 date-desc — 서버가 imported_at 내림차순으로 주고 Array.sort 가 안정적이라
+      // 0 을 돌려주면 그 순서가 유지된다(의도를 코드에 남긴다).
       return 0;
     });
     return result;
@@ -129,7 +134,7 @@ async function loadImportedHistory() {
            <button class="btn-sm btn-ai btn-review-imported" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">AI 리뷰</button>`
         : `<span class="hint">코드 없음</span>`;
       return `
-        <div class="row" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">
+        <div class="row row-static">
           <div class="row-main">
             <div class="row-title">
               <a href="${escapeHtml(problemUrl(p))}" target="_blank" rel="noopener noreferrer">
@@ -173,15 +178,18 @@ async function loadImportedHistory() {
     box.classList.remove('hidden');
 
     try {
-      const res = await fetch(`/api/solved-history/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`);
-      const data = await res.json();
+      const data = await fetchJsonOk(
+        `/api/solved-history/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`,
+        undefined, '코드 불러오기 실패');
       const code = data.code || '';
+      // loaded 는 성공했을 때만 세운다 — 실패에도 세우면 오류 상태가 영구 캐시돼
+      // 다시 눌러도 재시도되지 않는다.
       box.dataset.loaded = '1';
       box.innerHTML = code
         ? `<pre class="code-block code-inline-view">${escapeHtml(code)}</pre>`
         : `<div class="hint pad-y">저장된 코드가 없습니다.</div>`;
     } catch (e) {
-      box.innerHTML = `<div class="hint hint-bad pad-y">불러오기 실패</div>`;
+      box.innerHTML = `<div class="hint hint-bad pad-y">${escapeHtml(e.message)}</div>`;
     }
   }
 
@@ -190,6 +198,39 @@ async function loadImportedHistory() {
     importPage = 1;
     renderImportCards(getFiltered());
   });
+
+  // 클로저 안에 둔다 — 톱레벨에 있으면 allProblems 에 접근할 수 없어 DOM 만 지우게 되고,
+  // 서버는 행을 실제로 삭제하므로 필터를 한 번 만지면 삭제된 항목이 되살아났다.
+  async function requestImportedReview(btn) {
+    const platform = btn.dataset.platform;
+    const problemRef = btn.dataset.problemRef;
+    const card = btn.closest('.row');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      await fetchJsonOk(
+        `/api/review-imported/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`,
+        { method: 'POST' }, 'AI 리뷰 실패');
+    } catch (e) {
+      btn.textContent = 'AI 리뷰';
+      btn.disabled = false;
+      alert('오류: ' + e.message);
+      return;
+    }
+
+    // 서버가 지운 행을 목록 데이터에서도 뺀다. 그 뒤 재렌더로 개수·페이지가 함께 맞는다.
+    const key = `${platform}-${problemRef}`;
+    const idx = allProblems.findIndex(p => `${p.platform || 'boj'}-${p.problem_ref || p.problem_id}` === key);
+    if (idx !== -1) allProblems.splice(idx, 1);
+
+    if (!allProblems.length) {
+      list.innerHTML = '<div class="alert alert-info">가져온 기록이 없습니다.</div>';
+      return;
+    }
+    card.nextElementSibling?.remove();  // 코드 보기 패널
+    renderImportCards(getFiltered());
+  }
 
   renderImportCards(getFiltered());
 
@@ -200,22 +241,4 @@ async function loadImportedHistory() {
     });
   });
 
-}
-
-async function requestImportedReview(btn) {
-  const platform = btn.dataset.platform;
-  const problemRef = btn.dataset.problemRef;
-  const card = btn.closest('.row');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
-
-  try {
-    const data = await fetchJsonOk(`/api/review-imported/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, { method: 'POST' }, '실패');
-    card.nextElementSibling?.remove();  // 코드 보기 패널
-    card.remove();
-  } catch (e) {
-    btn.textContent = 'AI 리뷰';
-    btn.disabled = false;
-    alert('오류: ' + e.message);
-  }
 }

@@ -1,5 +1,6 @@
 const cfImportBtn = document.getElementById('cf-import-btn');
 cfImportBtn.dataset.label = 'Codeforces에서 가져오기';
+cfImportBtn.dataset.loadingLabel = '가져오는 중...';
 
 cfImportBtn.addEventListener('click', async () => {
   const handle = document.getElementById('cf-handle').value.trim();

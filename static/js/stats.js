@@ -2,12 +2,21 @@ let selectedStatsPlatform = 'boj';
 
 const statsBtn = document.getElementById('stats-btn');
 statsBtn.dataset.label = '통계 불러오기';
+statsBtn.dataset.loadingLabel = '집계 중...';
 
 document.querySelectorAll('.btn-toggle[data-platform]').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.btn-toggle[data-platform]').forEach(b => b.classList.remove('active'));
+    if (btn.dataset.platform === selectedStatsPlatform) return;
+    document.querySelectorAll('.btn-toggle[data-platform]').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     selectedStatsPlatform = btn.dataset.platform;
+    // 이미 결과가 떠 있으면 다시 받는다 — 예전에는 토글만 바뀌고 표는 옛 플랫폼 것이
+    // 그대로 남아, 사용자가 '통계 불러오기'를 다시 눌러야 맞았다(테마 탭은 재요청한다).
+    if (document.getElementById('stats-result').innerHTML.trim()) statsBtn.click();
   });
 });
 

@@ -32,34 +32,52 @@ function hexToRgba(hex, alpha) {
 
 let tierChartInstance = null;
 
+// 기본 안내 문구는 index.html 이 정본이다 — 여기에 복제하면 둘이 갈린다. 처음 덮어쓰기
+// 전에 한 번 붙잡아 두고, 인자 없이 부르면 그것으로 되돌린다(예전에는 라이브러리 안내문으로
+// 덮은 뒤 되돌리지 않아 "기록 없음" 자리에 그 문구가 남았다).
+let _defaultEmptyText = null;
+
+/** 차트를 숨기고 안내 문구를 띄운다. text 를 생략하면 기본 문구로 되돌린다. */
+function showChartMessage(text) {
+  const emptyEl = document.getElementById('tier-chart-empty');
+  if (_defaultEmptyText === null) _defaultEmptyText = emptyEl.textContent.trim();
+  document.getElementById('tier-chart').classList.add('hidden');
+  emptyEl.textContent = text || _defaultEmptyText;
+  emptyEl.classList.remove('hidden');
+}
+
 async function loadTierChart() {
   if (tierChartInstance) {
     tierChartInstance.destroy();
     tierChartInstance = null;
   }
   try {
-    const res = await fetch('/api/tier-history');
-    const data = await res.json();
+    // fetchJsonOk 를 쓴다 — res.ok 를 안 보면 503(온디맨드 DB 정지)이 빈 배열로 흘러
+    // "기록이 없습니다"로 표시되고 사용자가 장애를 알 수 없다.
+    const data = await fetchJsonOk('/api/tier-history', undefined, '성장 곡선 로딩 실패');
     const history = data.history || [];
 
     if (!history.length) {
-      document.getElementById('tier-chart').classList.add('hidden');
-      document.getElementById('tier-chart-empty').classList.remove('hidden');
+      showChartMessage();
       return;
     }
 
     document.getElementById('tier-chart').classList.remove('hidden');
     document.getElementById('tier-chart-empty').classList.add('hidden');
 
+    // 문제당 한 점만 쓴다. **첫 등장**을 남긴다 — tier 는 회차가 아니라 문제의 속성이라
+    // 값은 어느 회차를 골라도 같고, 바뀌는 건 그 문제가 시계열에 놓이는 날짜뿐이다.
+    // 마지막 회차를 남기면 예전 문제를 재제출할 때 그 점이 과거에서 사라져 오늘로 옮겨가고,
+    // 이미 지나간 구간의 레이팅이 소급 변한다.
+    // 서버가 created_at 오름차순으로 주므로 정순 1패스면 dedupe 와 정렬이 함께 끝난다.
     const seenPids = new Set();
     const deduped = [];
-    [...history].reverse().forEach(r => {
+    history.forEach(r => {
       if (!seenPids.has(r.problem_id)) {
         seenPids.add(r.problem_id);
         deduped.push(r);
       }
     });
-    deduped.sort((a, b) => a.created_at.localeCompare(b.created_at));
 
     const byDate = {};
     deduped.forEach(r => {
@@ -120,10 +138,7 @@ async function loadTierChart() {
     const tickLabels = Object.fromEntries(RATING_TIERS.map(t => [t.min, t.label]));
 
     if (typeof Chart === 'undefined') {
-      document.getElementById('tier-chart').classList.add('hidden');
-      const emptyEl = document.getElementById('tier-chart-empty');
-      emptyEl.textContent = '차트 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.';
-      emptyEl.classList.remove('hidden');
+      showChartMessage('차트 라이브러리를 불러오지 못했습니다. 새로고침해 주세요.');
       return;
     }
 
@@ -190,7 +205,8 @@ async function loadTierChart() {
       },
     });
   } catch (e) {
-    console.error('tier chart error', e);
+    // 예전에는 console.error 만 남겨 사용자에게 아무 반응이 없었다.
+    showChartMessage(e.message || '성장 곡선을 불러오지 못했습니다.');
   }
 }
 

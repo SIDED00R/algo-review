@@ -165,6 +165,8 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
   transition: background var(--dur) var(--ease);
 }
 .row:hover { background: var(--surface-2); }
+/* 클릭 핸들러가 없는 행(가져오기 목록) — 포인터 커서는 거짓 어포던스가 된다. */
+.row-static { cursor: default; }
 .row:first-child { border-top: 1px solid var(--line); }
 
 .toolbar { display: flex; gap: var(--s-2); flex-wrap: wrap;

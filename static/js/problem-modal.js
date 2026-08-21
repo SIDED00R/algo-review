@@ -32,6 +32,16 @@ function bindCfProblemClicks(rootEl) {
 }
 
 let _currentProblem = null;
+// 예제 실행 세대. 실행 중 모달을 닫거나 다른 문제를 열면 결과 노드가 사라지므로,
+// 진행 중인 루프가 자기 세대가 지났는지 확인해 멈춘다.
+let _runToken = 0;
+
+function resetRunButton() {
+  const btn = document.getElementById('pm-run-btn');
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = '예제 실행';
+}
 
 async function openProblemModal(ref, title, tierName) {
   _currentProblem = { ref, samples: [] };
@@ -50,6 +60,9 @@ async function openProblemModal(ref, title, tierName) {
   document.getElementById('pm-test-results').innerHTML = '';
   document.getElementById('pm-custom-cases').innerHTML = '';
   _customCaseCount = 0;
+  // 진행 중인 예제 실행을 무효화하고 버튼을 되돌린다.
+  _runToken++;
+  resetRunButton();
   const _rb = document.getElementById('pm-review-btn');
   _rb.classList.add('hidden');
   _rb.textContent = '코드 리뷰 진행';
@@ -127,6 +140,9 @@ async function openProblemModal(ref, title, tierName) {
 
 function closeProblemModal() {
   document.getElementById('problem-modal').classList.add('hidden');
+  // 진행 중인 예제 실행이 사라진 노드를 건드리지 않게 세대를 넘긴다.
+  _runToken++;
+  resetRunButton();
 }
 
 let _customCaseCount = 0;
@@ -196,48 +212,60 @@ async function runSamples() {
   document.getElementById('pm-review-btn').classList.add('hidden');
 
   let allPassed = true;
+  // 이 실행이 아직 유효한지 판단하는 세대 토큰. 실행 중(케이스당 최대 5초) 모달을 닫고
+  // 다른 문제를 열면 결과 노드가 사라지므로, 갈렸으면 루프를 멈춘다.
+  const runToken = ++_runToken;
 
-  for (let i = 0; i < allCases.length; i++) {
-    const sample = allCases[i];
-    const tcId = `tc-${i}`;
-    const label = sample.isCustom ? `커스텀 ${i - builtinSamples.length + 1}` : `테스트 ${i + 1}`;
-    resultsEl.innerHTML += `<div class="test-case pending" id="${tcId}"><span class="spinner spinner-sm"></span> ${label} 실행 중...</div>`;
+  try {
+    for (let i = 0; i < allCases.length; i++) {
+      if (runToken !== _runToken) return;
+      const sample = allCases[i];
+      const tcId = `tc-${i}`;
+      const label = sample.isCustom ? `커스텀 ${i - builtinSamples.length + 1}` : `테스트 ${i + 1}`;
+      resultsEl.insertAdjacentHTML('beforeend',
+        `<div class="test-case pending" id="${tcId}"><span class="spinner spinner-sm"></span> ${label} 실행 중...</div>`);
 
-    try {
-      const res = await fetch('/api/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language, stdin: sample.input, timeout_sec: 5 }),
-      });
-      const result = await res.json();
+      let html;
+      try {
+        const result = await fetchJsonOk('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, language, stdin: sample.input, timeout_sec: 5 }),
+        }, '실행 실패');
 
-      const actual = (result.stdout || '').trimEnd();
-      const expected = sample.output.trimEnd();
-      const passed = outputMatches(actual, expected) && result.exit_code === 0;
-      if (!passed) allPassed = false;
+        const actual = (result.stdout || '').trimEnd();
+        const expected = sample.output.trimEnd();
+        const passed = outputMatches(actual, expected) && result.exit_code === 0;
+        if (!passed) allPassed = false;
 
-      const detailHtml = !passed ? `
-        <div class="tc-detail">
-          <div><b>입력</b><pre>${escapeHtml(sample.input)}</pre></div>
-          <div><b>예상 출력</b><pre>${escapeHtml(expected)}</pre></div>
-          <div><b>실제 출력</b><pre>${escapeHtml(actual || result.stderr || '(없음)')}</pre></div>
-        </div>` : '';
+        const detailHtml = !passed ? `
+          <div class="tc-detail">
+            <div><b>입력</b><pre>${escapeHtml(sample.input)}</pre></div>
+            <div><b>예상 출력</b><pre>${escapeHtml(expected)}</pre></div>
+            <div><b>실제 출력</b><pre>${escapeHtml(actual || result.stderr || '(없음)')}</pre></div>
+          </div>` : '';
 
-      document.getElementById(tcId).outerHTML = `
-        <div class="test-case ${passed ? 'pass' : 'fail'}">
-          <span class="tc-badge">${passed ? '통과' : '실패'}</span>${label}
-          <span class="tc-time">${result.time_ms}ms</span>
-          ${detailHtml}
-        </div>`;
-    } catch (e) {
-      allPassed = false;
-      document.getElementById(tcId).outerHTML =
-        `<div class="test-case fail"><span class="tc-badge">실패</span>${label} — 오류: ${escapeHtml(e.message)}</div>`;
+        html = `
+          <div class="test-case ${passed ? 'pass' : 'fail'}">
+            <span class="tc-badge">${passed ? '통과' : '실패'}</span>${label}
+            <span class="tc-time">${result.time_ms}ms</span>
+            ${detailHtml}
+          </div>`;
+      } catch (e) {
+        allPassed = false;
+        html = `<div class="test-case fail"><span class="tc-badge">실패</span>${label} — 오류: ${escapeHtml(e.message)}</div>`;
+      }
+
+      if (runToken !== _runToken) return;
+      // 노드가 사라졌을 수 있다 — 예전에는 catch 안에서도 같은 null 을 다시 참조해
+      // 예외가 함수를 탈출하고, 아래 버튼 복원에 도달하지 못해 버튼이 영구 고착됐다.
+      const cell = document.getElementById(tcId);
+      if (cell) cell.outerHTML = html;
     }
+  } finally {
+    // 세대가 갈렸어도 버튼은 반드시 되돌린다.
+    resetRunButton();
   }
-
-  btn.disabled = false;
-  btn.textContent = '예제 실행';
 
   const reviewBtn = document.getElementById('pm-review-btn');
   reviewBtn.classList.remove('hidden');
@@ -255,6 +283,9 @@ async function runSamples() {
 // #code-language 에 change 를 발생시키지 않아 CodeMirror 모드가 파이썬으로 남았다.
 function proceedToReview() {
   if (!_currentProblem) return;
+  // fillReviewForm 진입점 넷이 같은 규약을 따른다 — 여기만 확인을 건너뛰어
+  // 메인 에디터에 작성 중이던 코드가 무경고로 날아갔다.
+  if (!confirmEditorOverwrite()) return;
   closeProblemModal();
   fillReviewForm({
     platform: 'codeforces',

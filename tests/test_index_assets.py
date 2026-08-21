@@ -1,21 +1,7 @@
 """index.html 자산 캐시 버전 치환 — `?v=` 를 손으로 고치던 방식의 갱신 누락 재발 방지."""
 import re
 
-import pytest
-from fastapi.testclient import TestClient
 
-import server
-import warmup
-
-
-@pytest.fixture
-def client(monkeypatch):
-    async def _noop():
-        return None
-
-    monkeypatch.setattr(warmup, "warm_theme_caches", _noop)
-    with TestClient(server.app) as c:
-        yield c
 
 
 def test_asset_urls_share_one_version(client):

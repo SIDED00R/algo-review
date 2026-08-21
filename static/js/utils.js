@@ -87,9 +87,15 @@ function escapeHtml(str) {
 
 function setLoading(btn, loading) {
   btn.disabled = loading;
-  btn.innerHTML = loading
-    ? `<span class="spinner spinner-sm"></span> ${btn.dataset.loadingLabel || '분석 중...'}`
-    : btn.dataset.label;
+  if (loading) {
+    // 기본 문구를 '분석 중...' 으로 두면 기록 불러오기·추천받기 같은 버튼에도 그게 뜬다.
+    btn.innerHTML =
+      `<span class="spinner spinner-sm"></span> ${escapeHtml(btn.dataset.loadingLabel || '처리 중...')}`;
+  } else {
+    // textContent 로 되돌린다 — dataset.label 은 이미 평문이라 innerHTML 로 넣으면
+    // escapeHtml → 속성 → 디코드 → 재주입이라는 불필요한 왕복이 생긴다.
+    btn.textContent = btn.dataset.label;
+  }
 }
 
 function showError(container, msg) {
@@ -99,7 +105,15 @@ function showError(container, msg) {
 
 async function fetchJsonOk(url, options, fallbackMsg) {
   const res = await fetch(url, options);
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    // 프록시 오류 페이지·게이트웨이 HTML 처럼 JSON 이 아닌 응답 — 본문 앞머리를 보여주지
+    // 않으면 "실패" 한 마디만 남아 원인을 알 수 없다.
+    throw new Error(`응답 형식 오류(${res.status}): ${text.slice(0, 100)}`);
+  }
   // pydantic 검증 실패(422)는 detail 이 객체 배열이라 그대로 쓰면 "[object Object]" 가 보인다.
   if (!res.ok) throw new Error(errorDetail(data) || fallbackMsg);
   return data;
@@ -109,6 +123,17 @@ function errorDetail(data) {
   const d = data && data.detail;
   if (Array.isArray(d)) return d.map(e => (e && e.msg) || '').filter(Boolean).join(' / ');
   return typeof d === 'string' ? d : '';
+}
+
+/** 마크다운을 안전한 HTML 로 만든다. CDN(marked·DOMPurify)이 막히면 평문으로 폴백한다 —
+ *  예전에는 무가드라 ReferenceError 가 나고, 서버가 이미 저장·과금한 리뷰 결과가
+ *  화면에서 통째로 사라졌다. Chart·KaTeX 는 이미 같은 가드가 있다. */
+function renderMarkdown(text) {
+  const raw = text || '';
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+    return `<pre class="code-block">${escapeHtml(raw)}</pre>`;
+  }
+  return DOMPurify.sanitize(marked.parse(raw));
 }
 
 function detectLanguage(code) {

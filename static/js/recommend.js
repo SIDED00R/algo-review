@@ -1,5 +1,6 @@
 const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
+recommendBtn.dataset.loadingLabel = '추천 계산 중...';
 
 // 현재 세션에서 이미 본 문제 ID 목록 (페이지 이탈 시 자동 초기화)
 const _shownIds = new Set();
