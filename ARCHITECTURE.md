@@ -92,7 +92,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 |------|----------|
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑, TIER_NAMES 상수 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
-| `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import |
+| `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑 |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
@@ -227,6 +227,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `reviews.language` | 자유 문자열이다 — import 경로가 CF/BOJ 원문(`"GNU G++17 7.3.0"`)을 그대로 저장한다. `select.value` 에 없는 값을 넣으면 조용히 실패해 빈 select 가 된다 | `submissionLanguageOption()` 이 option 존재를 확인하고, 없으면 `detectLanguage(code)` 로 재추론한다(반환 도메인이 option value 와 같다) |
 | 탭 전환 | 전환 로직을 복제하면 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛴다 | `activateTab()` 한 곳만 둔다. 배선 테스트가 다른 JS 에 `.tab-content` 토글이 없음을 확인 |
 | 본문 수집 함수 | `get_problem_statement()`·`get_codeforces_problem_statement()` 는 예외를 던지지 않고 **실패 문자열**을 반환한다. acmicpc.net 종료 후 BOJ 리뷰는 프롬프트의 문제 설명 자리에 `"크롤링 실패: 404 …"` 를 넣고 있었다 | `resolve_statement()` 가 `is_scrape_failure()` 로 걸러 빈 본문을 준다. 백필도 저장 직전에 같은 검사를 한다 — 저장하면 그 문제의 리뷰가 영구히 오염된다 |
+| BOJ README 경로 |  저장소 폴더명은 BaekjoonHub 규칙이라 공백이 `U+2005`, 특수문자가 전각(`A＋B`)이고 `번` 이 없다. 티어 폴더도 저장 당시 값이라 DB 와 다르다(acmicpc 종료 후 조회 실패로 `Unrated` 인 행이 많다) → 경로를 조립하면 거의 다 404 다 | `get_boj_readme_paths()` 로 트리를 한 번 받아 번호로 찾는다. 번호 경계를 느슨하게 보면 `2024 대회 후기` 를 2024번 문제로 오인한다 |
 | BOJ README 재푸시 | `get_boj_problem_sections()` 는 실패 시 `None` 이 아니라 빈 문자열 dict 를 반환해 `push_review_bundle` 의 `require_sections` 가드가 걸리지 않는다 → 본문 없는 README 로 덮어써 **이미 올라간 문제 설명이 지워진다** | `rereview`·`github_push` 가 저장된 `problem_statement` 를 `description` 으로 넘겨 스크래핑을 건너뛴다 |
 
 ---
