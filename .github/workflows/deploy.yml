@@ -8,6 +8,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# main 에 연속 머지되면 두 배포가 경쟁해 나중 커밋이 먼저 끝날 수 있다.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   PROJECT_ID: boj-code-review-2024
   REGION: asia-northeast3
@@ -80,7 +85,9 @@ jobs:
   deploy:
     name: Deploy ${{ matrix.service }}
     needs: [lint, lint-js, test]
-    if: github.event_name != 'pull_request'
+    # ref 도 본다 — 이벤트 종류만 보면 feature 브랜치에서 workflow_dispatch 로
+    # 그 브랜치 코드를 공개 운영 서비스에 배포할 수 있다(헤더 주석의 약속과 어긋남).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
