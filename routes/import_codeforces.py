@@ -4,11 +4,12 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from config import settings
+from clients import UpstreamUnavailable
 from routes.models import CodeforcesImportRequest
 from routes.helpers import build_readme, push_solution, build_solution_target, merged_github_target
 from demo_mode import IS_DEMO, demo_block
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 router = APIRouter()
 
 # CF API 는 2초에 1회를 넘기면 429 를 준다 — 여유를 두고 쉰다.
@@ -35,6 +36,9 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             api_key=api_key,
             api_secret=api_secret,
         )
+    except UpstreamUnavailable as e:
+        # 상류 장애다 — 400 으로 주면 사용자가 자기 입력을 고치려 한다.
+        raise HTTPException(status_code=502, detail=str(e))
     except ValueError as e:
         # ValueError 는 clients.codeforces 가 직접 만든 안전한 메시지만 담는다.
         raise HTTPException(status_code=400, detail=str(e))

@@ -11,7 +11,7 @@ from config import settings
 from routes.models import SetRepoRequest
 from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter()
 
@@ -53,7 +53,9 @@ def _consume_nonce(nonce: str) -> None:
     now = time.time()
     _USED_NONCES[nonce] = now + _STATE_TTL
     # 만료된 항목만 제거 — 일괄 삭제 금지 (삭제 직후 기존 nonce replay 가능해짐)
-    expired = [k for k, exp in _USED_NONCES.items() if exp <= now]
+    # 스냅샷을 뜬다 — 동시 콜백이 겹치면 순회 중 크기가 바뀌어 RuntimeError 가 난다.
+    # 이 시점은 토큰 저장 뒤라 사용자에게는 500 이 보이지만 연결은 이미 성공한 상태다.
+    expired = [k for k, exp in list(_USED_NONCES.items()) if exp <= now]
     for k in expired:
         del _USED_NONCES[k]
 

@@ -5,6 +5,7 @@ import requests
 import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
+from routes.helpers import upstream_failure
 from routes.models import GithubImportRequest
 from demo_mode import IS_DEMO, demo_block
 
@@ -26,9 +27,9 @@ def import_from_github(req: GithubImportRequest):
             raise HTTPException(status_code=404, detail="저장소를 찾을 수 없습니다. owner/repo 형식과 철자를 확인하세요.")
         if status == 401:
             raise HTTPException(status_code=401, detail="GitHub 토큰이 유효하지 않습니다.")
-        raise HTTPException(status_code=502, detail=f"GitHub API 오류: {e}")
+        raise HTTPException(status_code=502, detail=f"GitHub API 오류 ({type(e).__name__})") from None
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"GitHub API 오류: {e}")
+        raise upstream_failure("GitHub API 오류", e)
 
     if not problems:
         raise HTTPException(status_code=404, detail="백준 풀이 파일을 찾을 수 없습니다. BaekjoonHub 저장소가 맞는지 확인하세요.")

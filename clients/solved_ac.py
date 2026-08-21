@@ -3,13 +3,13 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
+# TIER_NAMES 의 정본은 constants.py 다 — DB 레이어가 이 모듈을 import 하던 역의존을 없앴다.
+from clients.utils import ProblemSearchError
+from constants import TIER_NAMES
+
 logger = logging.getLogger("uvicorn.error")
 
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
-
-# 정본은 constants.py 다 — DB 레이어가 이 모듈을 import 하던 역의존을 없앴다.
-from constants import TIER_NAMES
-from clients.utils import ProblemSearchError
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",

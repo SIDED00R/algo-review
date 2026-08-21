@@ -2,6 +2,8 @@
 from datetime import datetime, timedelta
 
 import db
+import db.models
+from db.connection import session_scope
 
 
 def mk_review(**kw):
@@ -224,7 +226,7 @@ def test_update_pending_review_survives_null_string_fields():
     row = db.get_reviews_by_problem("boj", "1000")[0]
     assert row["complexity"] == ""
     assert row["feedback"] == ""
-    assert row["better_algorithm"] in ("", None)
+    assert row["better_algorithm"] == ""
     assert row["efficiency"] == "ok"
     assert len(db.get_reviews_by_problem("boj", "1000")) == 1   # 회차가 늘지 않는다
 
@@ -250,3 +252,29 @@ def test_analyzer_normalizes_null_string_fields():
     assert normalized["complexity"] == ""
     assert normalized["feedback"] == ""
     assert normalized["better_algorithm"] == ""
+
+
+def test_tag_stats_falls_back_to_reviews_when_the_table_is_empty():
+    """tag_stats 는 BOJ 첫 제출에서만 채워지는 비정규화 테이블이라, 그 경로를 타지 않고
+    들어온 행(마이그레이션·백필·직접 INSERT)만 있으면 비어 있다. 폴백이 없으면 BOJ 리뷰가
+    아무리 많아도 /api/report 가 "아직 저장된 기록이 없습니다"(400)를 낸다."""
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
+    mk_review(problem_id=2, problem_ref="2", tags=["dp"], efficiency="poor")
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert stats["dp"]["total_count"] == 2
+    assert stats["dp"]["good_count"] == 1 and stats["dp"]["poor_count"] == 1
+
+
+def test_tag_stats_fallback_ignores_codeforces_and_pending_rows():
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
+    mk_review(problem_id=0, platform="codeforces", problem_ref="4A",
+              tags=["dp"], efficiency="poor", tier_name="Codeforces 800")
+    mk_review(problem_id=3, problem_ref="3", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert stats["dp"]["total_count"] == 1, "CF 행이나 대기 행이 BOJ 집계에 섞였다"

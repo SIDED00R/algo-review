@@ -4,7 +4,10 @@ from sqlalchemy import inspect, text
 
 import db
 from db.connection import dispose_engine, get_engine, session_scope
-from tests.conftest import IS_POSTGRES, TABLES
+# conftest 를 `tests.conftest` 로 임포트하면 pytest 가 이미 top-level `conftest` 로
+# 올려 둔 것과 **다른 모듈 객체**가 생긴다(Settings() 재평가 포함). 지금은 두 값이
+# 결정적이라 무해하지만, conftest 에 가변 상태가 생기면 두 사본이 갈린다.
+from conftest import IS_POSTGRES, TABLES
 
 # conftest 와 같은 목록을 쓴다 — 두 곳에 적으면 테이블 추가 시 한쪽만 고쳐져
 # truncate 누락으로 조용한 테스트 오염이 생긴다.

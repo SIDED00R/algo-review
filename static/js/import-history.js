@@ -20,7 +20,7 @@ async function loadImportedHistory() {
     <div class="card">
       <div class="toolbar">
         <h3 class="section-title section-title-flush">
-          가져온 풀이 기록 (<span id="import-count">${allProblems.length}</span>개)
+          가져온 풀이 기록 (<span id="import-count">${allProblems.length}</span>개 표시 중)
         </h3>
         <input id="import-search" class="input filter-grow" type="text" aria-label="가져온 기록 검색"
                placeholder="문제번호 또는 제목 검색..." />
@@ -63,7 +63,7 @@ async function loadImportedHistory() {
       // 같은 질의가 탭마다 다른 결과를 준다. (solved 행에는 tags 가 없어도 안전하다)
       if (!matchesProblemQuery(p, q)) return false;
       if (platform && (p.platform || 'boj') !== platform) return false;
-      if (tierKey && !tierInGroup(p.tier, tierKey)) return false;
+      if (tierKey && !tierInGroup(p.tier, tierKey, p.platform)) return false;
       return true;
     });
 

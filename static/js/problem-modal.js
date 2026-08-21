@@ -140,6 +140,9 @@ async function openProblemModal(ref, title, tierName) {
       });
     }
   } catch (e) {
+    // 성공 경로와 같은 가드가 필요하다 — 없으면 A 를 닫고 B 를 연 뒤 A 의 요청이
+    // 실패했을 때 B 의 스피너 자리에 A 의 오류가 그려진다(형제 모듈 5곳은 전부 있다).
+    if (_currentProblem?.ref !== ref) return;
     document.getElementById('pm-loading').innerHTML =
       `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
   }

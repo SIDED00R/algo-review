@@ -44,6 +44,12 @@
       b.addEventListener('click', () => run(Number(b.dataset.idx)));
     });
     listEl.querySelector('.cmdk-item.active')?.scrollIntoView({ block: 'nearest' });
+    // 목록을 통째로 교체하므로, 마우스로 항목을 클릭해 포커스를 가진 버튼이 여기서
+    // 사라진다. 포커스가 <body> 로 떨어지면 keydown 리스너가 overlay·root 에 걸려 있어
+    // ↑↓·Enter·Esc 가 전부 무반응이 되고 Tab 이 트랩을 벗어난다.
+    if (!overlay.classList.contains('hidden') && !overlay.contains(document.activeElement)) {
+      input.focus();
+    }
   }
 
   function rootRows(query) {
@@ -64,7 +70,11 @@
     return q ? items.filter(i => i.label.toLowerCase().includes(q)) : items;
   }
 
+  // 세대 토큰 — 목록 조회가 늦게 끝나면 이미 다른 모드로 넘어간 팔레트를 덮는다.
+  let _paletteToken = 0;
+
   async function showProblems() {
+    const token = ++_paletteToken;
     mode = 'problems';
     setCrumb('제출 불러오기');
     input.value = '';
@@ -76,8 +86,10 @@
         const data = await fetchJsonOk('/api/reviews/grouped', undefined, '기록 조회 실패');
         problems = data.problems || [];
       }
+      if (token !== _paletteToken) return;
       refresh();
     } catch (e) {
+      if (token !== _paletteToken) return;
       rows = [{ label: e.message, meta: '', run: () => {} }];
       render();
     }
@@ -95,6 +107,7 @@
   }
 
   async function showLedger(problem) {
+    const token = ++_paletteToken;
     mode = 'ledger';
     const platform = problem.platform || 'boj';
     const ref = problem.problem_ref || String(problem.problem_id || '');
@@ -107,6 +120,7 @@
       const data = await fetchJsonOk(
         `/api/reviews/problem/${encodeURIComponent(platform)}/${encodeURIComponent(ref)}`,
         undefined, '기록 조회 실패');
+      if (token !== _paletteToken) return;
       const reviews = data.reviews || [];
       const total = reviews.length;
       rows = reviews.map((r, i) => ({
@@ -121,6 +135,7 @@
       if (!rows.length) rows = [{ label: '기록이 없습니다.', meta: '', run: () => {} }];
       render();
     } catch (e) {
+      if (token !== _paletteToken) return;
       rows = [{ label: e.message, meta: '', run: () => {} }];
       render();
     }
@@ -158,7 +173,7 @@
 
   function back() {
     if (mode === 'ledger') { showProblems(); return true; }
-    if (mode === 'problems') { mode = 'root'; setCrumb(''); input.value = '';
+    if (mode === 'problems') { _paletteToken++; mode = 'root'; setCrumb(''); input.value = '';
       input.placeholder = '무엇을 할까요?'; refresh(); return true; }
     return false;
   }

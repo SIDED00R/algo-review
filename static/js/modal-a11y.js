@@ -40,6 +40,10 @@
   function registerModal(id, close, opts = {}) {
     const root = document.getElementById(id);
     if (!root) return;
+    // 마지막 수단으로 포커스를 받을 수 있어야 한다 — tabindex 가 없으면 root.focus() 가
+    // 조용히 무효라서, 안에 포커스 가능한 요소가 하나도 없을 때 회수에 실패한다
+    // (진행 중 버튼이 disabled 되면 `button:not([disabled])` 에서 빠져 실제로 그렇게 된다).
+    root.tabIndex = -1;
 
     root.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !opts.ownsEscape) {
@@ -60,6 +64,22 @@
         e.preventDefault();
         first.focus();
       }
+    });
+
+    // 포커스가 모달 밖(대개 <body>)으로 새면 되돌린다. 진행 중 버튼을 disabled 로
+    // 만들거나(setLoading) 목록을 innerHTML 로 교체하면 브라우저가 포커스를 <body> 로
+    // 옮기는데, 그 순간 keydown 리스너가 이 root 에 걸려 있어 **Esc 로 모달을 닫을 수
+    // 없고 Tab 트랩도 무효**가 된다. 10~20초짜리 작업에서 실제로 발생한다.
+    root.addEventListener('focusout', e => {
+        if (root.classList.contains('hidden')) return;
+        // relatedTarget 이 null 이면 포커스가 문서 밖·body 로 간 것이다.
+        if (e.relatedTarget && root.contains(e.relatedTarget)) return;
+        // 마이크로태스크로 미룬다 — focusout 시점에는 새 포커스가 아직 확정되지 않는다.
+        queueMicrotask(() => {
+          if (root.classList.contains('hidden')) return;
+          if (root.contains(document.activeElement)) return;
+          (focusables(root)[0] || root).focus();
+        });
     });
 
     // 열림/닫힘은 .hidden 토글로 표현된다 — 그 변화를 감시해 포커스를 다룬다.

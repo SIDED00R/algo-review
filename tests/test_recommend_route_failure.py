@@ -72,3 +72,46 @@ def test_no_records_still_short_circuits(minimal_client):
     """기록이 아예 없으면 취약 태그가 없어 검색 자체를 하지 않는다."""
     body = minimal_client.get("/api/recommend?platform=boj").json()
     assert body["weak_tags"] == [] and body["recommendations"] == []
+
+
+def test_one_tag_failure_does_not_discard_the_others(minimal_client, monkeypatch):
+    """태그별로 실패를 격리한다 — 예전에는 첫 실패에서 던져 이미 성공한 태그까지 버렸다.
+    themes.py 는 밴드별로 부분 성공을 살리는데 같은 예외에 두 소비처 정책이 반대였다."""
+    db.save_review(**_BOJ)
+    # 취약 태그 목록은 이 테스트의 관심사가 아니다 — 두 개로 고정한다.
+    monkeypatch.setattr(recommend.recommender, "get_weak_tags_scored",
+                        lambda *a, **k: ["math", "dp"])
+
+    calls = {"n": 0}
+
+    def _search(tag_key, min_tier, max_tier, exclude_ids):
+        calls["n"] += 1
+        # 첫 태그만 실패시킨다 — 실패하면 그 태그의 두 번째 구간 호출은 일어나지 않으므로
+        # `n <= 2` 로 쓰면 두 번째 태그의 첫 호출까지 막아 "전부 실패" 가 된다.
+        if calls["n"] == 1:
+            raise ProblemSearchError("일시적 실패")
+        return [{"id": 1000 + calls["n"], "title": "T", "tier": 5, "tier_name": "Bronze I"}]
+
+    monkeypatch.setattr(recommend.recommender, "search_problems_by_tag", _search)
+    monkeypatch.setattr(recommend.recommender, "get_tag_key_by_name", lambda t: t)
+
+    body = minimal_client.get("/api/recommend?platform=boj").json()
+
+    assert body["error"] == "", "일부 실패인데 전면 실패로 보고했다"
+    assert body["recommendations"], "성공한 태그의 결과까지 버렸다"
+
+
+def test_all_tags_failing_is_still_reported_as_failure(minimal_client, monkeypatch):
+    """부분 실패를 살리느라 전면 실패까지 조용해지면 안 된다."""
+    db.save_review(**_BOJ)
+
+    def _search(**kwargs):
+        raise ProblemSearchError("solved.ac 문제 검색에 실패했습니다.")
+
+    monkeypatch.setattr(recommend.recommender, "search_problems_by_tag", _search)
+    monkeypatch.setattr(recommend.recommender, "get_tag_key_by_name", lambda t: t)
+
+    body = minimal_client.get("/api/recommend?platform=boj").json()
+
+    assert body["error"], "전부 실패했는데 error 가 없다"
+    assert body["recommendations"] == []

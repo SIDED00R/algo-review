@@ -4,10 +4,11 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js)                                       │
-│  editor · utils · theme · github · tier-chart · tabs           │
+│  Browser (static/js/*.js — 20개)                                │
+│  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
-│  history · report                                               │
+│  history · report · load-submission · command-palette           │
+│  modal-a11y                                                     │
 │  import-history · import-github · import-boj · import-codeforces│
 └────────────────────────┬────────────────────────────────────────┘
                          │ HTTP (fetch)
@@ -96,7 +97,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 는 `constants.py` 에서 직접 가져온다(재수출 shim 은 소비처 3곳을 정본으로 옮기면서 제거했다). `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
-| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), `ProblemSearchError` — 문제 검색 **실패**를 빈 결과와 구분하는 신호 |
+| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), 예외 두 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
 ### API 라우터 (`routes/`)
@@ -276,6 +277,12 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 마지막 응답이 이긴다 | 목록·토글에서 요청을 연달아 보내면 늦게 온 이전 응답이 새 화면을 덮는다. 칩은 B 가 활성인데 제목은 A 인 상태가 된다 | `problem-modal.js` 의 세대 토큰 규약을 `themes`·`stats`·`history`·`report` 에 같이 적용한다. `setLoading` 이 버튼을 `disabled` 로 만들면 **프로그래매틱 `click()` 은 명세상 이벤트를 발생시키지 않으므로**(재요청이 조용히 무시된다) 핸들러 함수를 직접 부른다 |
 | 판정 토큰의 JS 소비 | `--eff-*` 사용처를 CSS 만 훑어 검사하면 절반을 못 본다 — 통계 바와 티어 차트 색은 JS 가 `getComputedStyle` 로 읽는다 | 데이터 시각화용 `--bar-*`/`--chart-line` 을 `--eff-*` 별칭으로 분리하고(초기값 동일이라 화면 무변경), 불변식 테스트가 CSS 와 JS 를 **둘 다** 훑는다 |
 | 상속되는 font-weight | `.mono` 가 weight 를 지정하지 않으면 부모(`.summary-value` = 600)를 상속한다. 웹폰트는 400/500 만 로드하므로 브라우저가 **합성 볼드**를 그린다. 규칙 블록 단위로 검사하는 테스트는 두 선언이 다른 블록에 있으면 못 잡는다 | `.mono` 에 weight 를 못박는다. 상속으로 결합되는 문제는 블록 단위 정적 검사의 구조적 한계이므로 computed style 실측이 필요하다 |
+| 예외 원문의 응답 노출 | openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로 **제공자 본문을 그대로** 싣는다(실측). `.env.example` 이 호환 서드파티 엔드포인트를 1급 대안으로 안내하므로 본문 형태를 통제할 수 없고, `base_url` 이 내부 프록시면 그 주소도 함께 나간다 | 라우터는 `upstream_failure()` 로 타입명만 노출하고 세부는 로그로 보낸다. LLM 이 직접 만든 사용자용 안내(`ValueError`)는 그대로 통과시킨다 |
+| 상류 장애의 상태코드 | 연결 실패를 입력 오류와 같은 예외 타입으로 치환하면 라우터가 400 으로 매핑한다 — 사용자는 "연결 실패 (ConnectTimeout)" 를 400 과 함께 보고 **자기 입력을 고치려 한다** | `UpstreamUnavailable` 을 따로 두고 502 로 매핑한다. `ValueError` 상속이라 기존 `except ValueError` 는 그대로 동작한다 |
+| 캐시 비우고 다시 받기 | `lru_cache.cache_clear()` 는 **먼저 버리고 나중에 받는다**. 재다운로드가 실패하면 정상 스냅샷까지 잃고, 그 뒤 그 기능 전부가 요청마다 재시도한다. `lru_cache` 는 사용자 함수 실행 중 락을 잡지 않아 **동시 miss 를 합치지도 못한다** | 새로 받아 **성공했을 때만 교체**하고, 갱신 구간을 락으로 감싼다(`_try_refresh_snapshot`) |
+| 부분 실패 정책 | 같은 예외에 소비처마다 정책이 반대면 한쪽이 틀린 것이다 — 테마는 밴드별로 부분 성공을 살리는데 추천은 첫 실패에서 던져 이미 성공한 태그의 결과까지 버렸다 | 태그별로 격리하고 **전부 실패했을 때만** 실패로 본다 |
+| 포커스가 body 로 이탈 | 포커스를 가진 요소가 disabled 되거나(`setLoading`) DOM 에서 사라지면 브라우저가 포커스를 `<body>` 로 옮긴다. keydown 리스너가 모달 root 에 걸려 있으므로 그 순간 **Esc 로 닫을 수 없고 Tab 트랩도 무효**가 된다(10~20초짜리 작업에서 실제로 발생) | `modal-a11y` 가 `focusout` 으로 이탈을 되돌린다. root 에 `tabIndex = -1` 이 필요하다 — 없으면 마지막 수단인 `root.focus()` 가 **조용히 무효**다(안의 버튼이 전부 disabled 면 실제로 그 상황이 된다) |
+| 테스트 픽스처의 범위 | "전 파일" 이라 적어 놓고 목록을 고정하면, 그 밖의 파일에는 무엇을 넣어도 초록이다 — JS 20개 중 10개만 읽으면서 "전 파일에서 원시 fetch 를 막는다" 고 적혀 있었다 | glob 으로 읽고 **개수 하한**을 함께 둔다(경로가 틀리면 빈 dict 로 모든 루프가 조용히 통과한다) |
 | 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 20개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
 
 ---

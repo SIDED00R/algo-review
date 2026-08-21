@@ -10,6 +10,8 @@ set -uo pipefail
 shopt -s nullglob
 
 JS_DIR="${1:-static/js}"
+# 로드 누락 검사가 볼 HTML — JS_DIR 을 바꿔 부르면 이것도 함께 바꿔야 한다.
+HTML_FILE="${2:-static/index.html}"
 status=0
 
 # 파일 목록을 먼저 확정한다 — 아래 세 검사가 모두 이 목록에 의존한다.
@@ -35,7 +37,10 @@ if command -v node > /dev/null 2>&1; then
   # 전역 렉시컬 환경에서 평가하므로, 전부 이어 붙여 한 번 더 파싱하면 실제 실행 조건과
   # 같아진다 — 아래 grep 검사가 놓치는 다중 선언자(`const a = 1, b = 2`)와 구조 분해
   # (`const {a, b} = x`)까지 사양대로 잡힌다.
-  # 이어 붙여도 새로 생기는 오류는 없다(function 끼리·var 끼리 재선언은 합법).
+  # 이어 붙여도 새로 생기는 오류는 없다 — function 끼리·var 끼리 재선언은 합법이다.
+  # (엄밀히는 파일 경계가 ASI 경계이기도 해서, 앞 파일이 세미콜론 없이 끝나고 뒤 파일이
+  #  `(`·`[`·백틱 등으로 시작하면 합본에서만 의미가 달라질 수 있다. 현재 20개 파일은
+  #  전부 `;` 또는 `}` 로 끝나 해당 없다.)
   # 확장자가 `.js` 여야 한다 — Node 22 는 확장자로 모듈 타입을 판정하고, mktemp 의
   # 무확장자 파일에는 ERR_UNKNOWN_FILE_EXTENSION 을 던진다(게이트 자체가 실패한다).
   # package.json 이 없으므로 `.js` 는 CommonJS 스크립트로 파싱된다 — 브라우저의
@@ -49,17 +54,21 @@ if command -v node > /dev/null 2>&1; then
     sed 's/^/    /' "$combined.err"
     # 오류 줄번호를 원래 파일로 되돌려 준다.
     bad_line=$(grep -oE ":[0-9]+$" <<< "$(head -1 "$combined.err")" | tr -d ':')
+    mapped=""
     if [ -n "$bad_line" ]; then
       offset=0
       for f in "${files[@]}"; do
         n=$(( $(wc -l < "$f") + 1 ))
         if [ "$bad_line" -le $(( offset + n )) ]; then
           echo "    → $f 부근 (합본 ${bad_line}행)"
+          mapped=1
           break
         fi
         offset=$(( offset + n ))
       done
     fi
+    # 매핑이 조용히 빠지면 "어느 파일인지 모른 채 exit 1" 이 된다 — 실패했다고 말한다.
+    [ -n "$mapped" ] || echo "    → 원본 파일 매핑 실패 (합본 ${bad_line:-?}행, node 출력 형식 확인)"
     status=1
   else
     echo "  전역 스코프 합본 파싱도 통과"
@@ -113,13 +122,13 @@ echo "== index.html 로드 누락 검사 =="
 missing=""
 for f in "${files[@]}"; do
   name=$(basename "$f")
-  if ! grep -q "js/$name?v=" static/index.html; then
+  if ! grep -q "js/$name?v=" "$HTML_FILE"; then
     missing="$missing$name
 "
   fi
 done
 if [ -n "$missing" ]; then
-  echo "  index.html 이 참조하지 않는 JS 파일이 있습니다:"
+  echo "  $HTML_FILE 이 참조하지 않는 JS 파일이 있습니다:"
   printf "%b" "$missing" | sed 's/^/    /'
   status=1
 else

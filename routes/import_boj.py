@@ -2,7 +2,7 @@ import db
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.models import ImportRequest
-from routes.helpers import build_readme, push_solution, build_solution_target, merged_github_target
+from routes.helpers import upstream_failure, build_readme, push_solution, build_solution_target, merged_github_target
 from demo_mode import IS_DEMO, demo_block
 
 router = APIRouter()
@@ -18,7 +18,7 @@ def import_history(req: ImportRequest):
     except api_client.BojCrawlError as e:
         raise HTTPException(status_code=502, detail=f"BOJ 제출 목록을 불러오지 못했습니다({e}). 잠시 후 다시 시도해주세요.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"제출 기록 크롤링 실패: {e}")
+        raise upstream_failure("제출 기록 크롤링 실패", e)
 
     existing_ids = db.get_solved_problem_ids()
     new_subs = [s for s in submissions if s["problem_id"] not in existing_ids]

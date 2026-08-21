@@ -1,5 +1,6 @@
 from datetime import datetime
-from clients import search_problems_by_tag, search_cf_problems_by_tag, get_tag_key_by_name
+from clients import (ProblemSearchError, get_tag_key_by_name,
+                     search_cf_problems_by_tag, search_problems_by_tag)
 from constants import TIER_NAMES
 import db
 
@@ -45,7 +46,7 @@ def _score_tags(tag_data: list) -> list:
     return tag_data
 
 
-def get_weak_tags_scored(top_n: int = 5, platform: str | None = None) -> list[str]:
+def get_weak_tags_scored(top_n: int = 5, platform: str = "boj") -> list[str]:
     tag_data = db.get_tag_weakness_data(platform=platform)
     scored = _score_tags(tag_data)
     return [d["tag"] for d in scored[:top_n]]
@@ -70,16 +71,22 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
     solved_ids = db.get_solved_problem_ids() | (extra_exclude or set())
 
     recommendations = []
+    failures = 0
     for tag_name in weak_tags:
         tag_key = get_tag_key_by_name(tag_name)
 
-        same_problems = search_problems_by_tag(
-            tag_key=tag_key, min_tier=same_min, max_tier=same_max, exclude_ids=solved_ids,
-        )[:SAME_PER_TAG]
-
-        hard_problems = search_problems_by_tag(
-            tag_key=tag_key, min_tier=hard_min, max_tier=hard_max, exclude_ids=solved_ids,
-        )[:HARD_PER_TAG]
+        # 태그별로 실패를 격리한다 — 예전에는 첫 실패에서 던져 이미 성공한 태그의 결과까지
+        # 버렸다(themes.py 는 밴드별로 부분 성공을 살린다). 전부 실패했을 때만 실패로 본다.
+        try:
+            same_problems = search_problems_by_tag(
+                tag_key=tag_key, min_tier=same_min, max_tier=same_max, exclude_ids=solved_ids,
+            )[:SAME_PER_TAG]
+            hard_problems = search_problems_by_tag(
+                tag_key=tag_key, min_tier=hard_min, max_tier=hard_max, exclude_ids=solved_ids,
+            )[:HARD_PER_TAG]
+        except ProblemSearchError:
+            failures += 1
+            continue
 
         problems = same_problems + hard_problems
 
@@ -92,6 +99,8 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
                 "problems": problems,
             })
 
+    if failures == len(weak_tags):
+        raise ProblemSearchError("solved.ac 문제 검색에 실패했습니다.")
     return recommendations
 
 

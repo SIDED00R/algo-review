@@ -133,13 +133,30 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
 
 
 def get_tag_stats() -> list:
+    """BOJ 태그별 good/poor 집계. tag_stats 가 비어 있으면 reviews 를 직접 집계한다.
+
+    tag_stats 는 `_bump_tag_stats` 가 **BOJ 첫 제출에서만** 채우는 비정규화 테이블이라,
+    그 경로를 타지 않고 들어온 행(마이그레이션·백필·직접 INSERT)만 있으면 비어 있다.
+    폴백이 없으면 BOJ 리뷰가 아무리 많아도 `/api/report` 가 "아직 저장된 기록이 없습니다"
+    (400)를 낸다. get_tag_weakness_data 는 이미 같은 폴백을 갖고 있었다.
+
+    두 경로의 셈이 정확히 같지는 않다 — tag_stats 는 **첫 제출만** 세고 폴백은 모든 회차를
+    센다. 폴백이 도는 상황은 애초에 그 집계가 없던 데이터라 복원할 "첫 제출" 기준이 없다.
+    """
     with session_scope() as session:
         rows = session.scalars(select(TagStat).order_by(TagStat.total_count.desc())).all()
-        return [
-            {"tag": r.tag, "good_count": r.good_count,
-             "poor_count": r.poor_count, "total_count": r.total_count}
-            for r in rows
-        ]
+        if rows:
+            return [
+                {"tag": r.tag, "good_count": r.good_count,
+                 "poor_count": r.poor_count, "total_count": r.total_count}
+                for r in rows
+            ]
+        review_rows = session.execute(
+            select(Review.tags, Review.efficiency).where(Review.platform == "boj")
+        ).mappings().all()
+
+    counts = _tally_tag_efficiency([dict(r) for r in review_rows])
+    return sorted(counts.values(), key=lambda c: c["total_count"], reverse=True)
 
 
 def get_total_review_count(platform: str | None = None) -> int:
@@ -225,9 +242,8 @@ def get_problems_grouped() -> list:
             "problem_ref": r["problem_ref"], "title": r["title"],
             "tier": r["tier"], "tier_name": r["tier_name"], "tags": r["tags"],
             "submission_count": 0, "last_submitted": r["created_at"],
-            # 예전에는 회차 판정을 CSV(`efficiencies`)로 내려보냈다. GROUP_CONCAT 을 쓰던
-            # 시절의 잔재로, 프론트가 받자마자 `.split(',')[0]` 으로 첫 값만 꺼내 썼다.
-            # 판정 문자열에 콤마가 들어가면 깨지는 잠재 결함까지 있어 값 하나로 좁혔다.
+            # 값 하나만 내려보낸다 — 소비처(history.js)가 최신 회차 배지에만 쓴다.
+            # 목록을 CSV 로 만들면 판정 문자열에 콤마가 들어갈 때 깨진다.
             "last_efficiency": r["efficiency"],
         })
         g["submission_count"] += 1

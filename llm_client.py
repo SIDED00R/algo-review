@@ -13,8 +13,9 @@ from config import settings
 
 # openai SDK 기본값은 read 600s·재시도 2회 — 제공자가 멎으면 워커 스레드가 수십 분 잡힌다.
 # timeout 만 줄이면 실효 상한이 3×timeout + 백오프가 되므로 재시도 횟수도 함께 못박는다.
+# 둘 다 설정으로 노출한다 — 한쪽만 환경변수면 운영에서 조절할 수 있는 축이 반쪽이다.
 _API_TIMEOUT = settings.openai_timeout
-_MAX_RETRIES = 1
+_MAX_RETRIES = settings.openai_max_retries
 
 # 클라이언트는 프로세스에 하나만 둔다 — 호출마다 새로 만들면 httpx 커넥션 풀과 TLS
 # 핸드셰이크를 매번 버린다. settings 는 기동 시 고정되므로 재생성할 이유가 없다.

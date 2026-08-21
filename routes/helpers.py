@@ -28,6 +28,18 @@ def push_solution(repo: str, token: str, folder: str, file_stem: str,
     return code_ok and readme_ok
 
 
+def upstream_failure(action: str, exc: Exception) -> HTTPException:
+    """예외 원문을 응답에 싣지 않는다 — 타입명만 노출하고 세부는 로그로 보낸다.
+
+    openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로
+    **제공자 본문을 그대로** 싣는다(실측). `.env.example` 이 OpenAI 호환 서드파티
+    엔드포인트를 1급 대안으로 안내하므로 그 본문 형태를 통제할 수 없고, `base_url` 이
+    내부 프록시면 그 주소도 함께 나간다. clients.codeforces 의 자격증명 유출과 같은 계열이다.
+    """
+    logger.exception("%s", action)
+    return HTTPException(status_code=502, detail=f"{action} ({type(exc).__name__})")
+
+
 def require_platform(value: str) -> str:
     """플랫폼 문자열을 검증해 400 으로 바꾼다.
 
@@ -135,7 +147,10 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     url = url or api_client.get_problem_url(platform, problem_ref)
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 
-    if not description:
+    # 호출자가 섹션을 하나라도 직접 줬으면 스크래핑하지 않는다 — 예전에는 description 만
+    # 보고 분기해서, description="" + input_desc/output_desc 조합에서 호출자가 넘긴 값을
+    # 스크래핑 결과로 덮어썼다(CF 뷰어에서 넘어오는 경로가 그 조합을 만든다).
+    if not (description or input_desc or output_desc):
         if platform == "boj":
             try:
                 boj_problem_id = int(problem_ref)

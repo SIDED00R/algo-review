@@ -98,8 +98,12 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
         branch = "main"
         ref_resp = requests.get(f"{base}/git/ref/heads/main", headers=headers, timeout=10)
         if ref_resp.status_code == 404:
-            branch = "master"
-            ref_resp = requests.get(f"{base}/git/ref/heads/master", headers=headers, timeout=10)
+            # main 이 없으면 저장소에 직접 물어본다 — main/master 만 가정하면 develop 등
+            # 다른 기본 브랜치에서 두 GET 이 모두 404 가 되어 원인 불명 실패로 끝난다.
+            repo_resp = requests.get(base, headers=headers, timeout=10)
+            repo_resp.raise_for_status()
+            branch = repo_resp.json().get("default_branch") or "master"
+            ref_resp = requests.get(f"{base}/git/ref/heads/{branch}", headers=headers, timeout=10)
         ref_resp.raise_for_status()
         head_sha = ref_resp.json()["object"]["sha"]
 

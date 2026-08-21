@@ -311,7 +311,7 @@ def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
     assert 777 not in paths    # BOJ 루트가 아니다
 
 
-def test_truncated_tree_raises_instead_of_returning_partial_results():
+def test_truncated_tree_raises_instead_of_returning_partial_results(monkeypatch):
     """GitHub 가 트리를 자르면(truncated) 부분 결과를 성공으로 취급하면 안 된다 —
     가져오기·백필이 조용히 일부 문제를 누락한다."""
     class _Resp:
@@ -322,14 +322,9 @@ def test_truncated_tree_raises_instead_of_returning_partial_results():
             return {"tree": [{"type": "blob", "path": "백준/Gold/1000. A+B/README.md"}],
                     "truncated": True}
 
-    import clients.github as gh
-    original = gh.requests.get
-    gh.requests.get = lambda *a, **k: _Resp()
-    try:
-        with pytest.raises(ValueError, match="잘렸"):
-            gh.fetch_repo_tree("me/solutions", "tok")
-    finally:
-        gh.requests.get = original
+    monkeypatch.setattr(github_client.requests, "get", lambda *a, **k: _Resp())
+    with pytest.raises(ValueError, match="잘렸"):
+        github_client.fetch_repo_tree("me/solutions", "tok")
 
 
 # ── main() 의 저장 가드 (회귀) ──
