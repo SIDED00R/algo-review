@@ -32,6 +32,25 @@ def _get_client() -> OpenAI:
     return _client
 
 
+_STRING_FIELDS = ("complexity", "better_algorithm", "feedback")
+
+
+def normalize_review_result(result: dict) -> dict:
+    """LLM 응답을 저장 가능한 형태로 정규화한다(생산자 한 곳에서 끝낸다).
+
+    `.get(key, default)` 는 **키가 있고 값이 None** 이면 default 를 적용하지 않는다.
+    LLM 이 `"complexity": null` 을 주면 그 None 이 NOT NULL 컬럼으로 흘러가 저장이
+    IntegrityError 로 죽고, 이미 과금된 응답과 tag_stats 첫 집계가 롤백으로 함께 사라진다.
+    저장 경로가 둘이라(save_review / update_pending_review) 소비처마다 막으면 한쪽이
+    빠진다 — 실제로 update_pending_review 만 빠져 있었다.
+    """
+    if result.get("efficiency") not in ("good", "ok", "poor"):
+        result["efficiency"] = "ok"
+    for key in _STRING_FIELDS:
+        result[key] = result.get(key) or ""
+    return result
+
+
 def _require_choice(response) -> None:
     """choices 가 비면 아래 인덱싱이 IndexError 로 새어 "코드 분석 실패: list index out of
     range" 라는 해독 불가 500 이 된다. .env.example 이 Gemini 호환 엔드포인트를 1급 대안으로
@@ -115,10 +134,7 @@ efficiency 기준:
         raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
     result = json.loads(raw)
 
-    if result.get("efficiency") not in ("good", "ok", "poor"):
-        result["efficiency"] = "ok"
-
-    return result
+    return normalize_review_result(result)
 
 
 def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -> str:

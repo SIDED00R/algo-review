@@ -187,3 +187,54 @@ def test_problem_statement_defaults_to_empty():
     mk_review(problem_id=2, problem_ref="2")
     rows = db.get_reviews_by_problem("boj", "2")
     assert rows[0]["problem_statement"] == ""
+
+
+# ── LLM 이 null 을 준 필드 (회귀) ──
+#
+# `.get(key, default)` 는 **키가 있고 값이 None** 이면 default 를 적용하지 않는다.
+# reviews.complexity·feedback 은 NOT NULL 이라 그 None 이 그대로 흘러가면 저장이
+# IntegrityError 로 죽고, 이미 과금된 LLM 응답과 tag_stats 첫 집계가 롤백으로 함께 사라진다.
+# 저장 경로가 둘이라(save_review / update_pending_review) 한쪽만 막으면 다른 쪽에서 터진다.
+
+_NULL_RESULT = {
+    "efficiency": "ok", "complexity": None, "better_algorithm": None,
+    "feedback": None, "strengths": None, "weaknesses": None,
+}
+
+
+def test_update_pending_review_survives_null_string_fields():
+    db.save_review(problem_id=1000, title="A+B", tier=1, tags=["math"],
+                   code="print(1)", feedback="", efficiency=db.PENDING_EFFICIENCY,
+                   problem_ref="1000", language="Python 3")
+
+    db.update_pending_review("boj", "1000", _NULL_RESULT)
+
+    row = db.get_reviews_by_problem("boj", "1000")[0]
+    assert row["complexity"] == ""
+    assert row["feedback"] == ""
+    assert row["better_algorithm"] in ("", None)
+    assert row["efficiency"] == "ok"
+    assert len(db.get_reviews_by_problem("boj", "1000")) == 1   # 회차가 늘지 않는다
+
+
+def test_save_review_survives_null_string_fields():
+    db.save_review(problem_id=2000, title="B", tier=1, tags=["math"],
+                   code="x", efficiency="good", problem_ref="2000", language="Python 3",
+                   complexity=None, better_algorithm=None, feedback=None)
+
+    row = db.get_reviews_by_problem("boj", "2000")[0]
+    assert row["complexity"] == ""
+    assert row["feedback"] == ""
+
+
+def test_analyzer_normalizes_null_string_fields():
+    """생산자에서 끝낸다 — 소비처마다 막으면 한쪽이 빠진다(실제로 그랬다)."""
+    import analyzer
+
+    result = {"efficiency": "good", "complexity": None, "feedback": None,
+              "better_algorithm": None}
+    normalized = analyzer.normalize_review_result(result)
+
+    assert normalized["complexity"] == ""
+    assert normalized["feedback"] == ""
+    assert normalized["better_algorithm"] == ""

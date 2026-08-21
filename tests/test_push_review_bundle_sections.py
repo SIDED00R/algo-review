@@ -38,8 +38,17 @@ _CASES = [
 _IDS = [c[0] for c in _CASES]
 
 
-def _patch(monkeypatch, fetcher, failure_value):
+def _patch(monkeypatch, fetcher, failure_value, readme_exists=True):
+    """수집 실패를 주입한다.
+
+    `get_github_file_sha` 도 반드시 패치한다 — 빼먹으면 `_readme_exists()` 가 실제
+    api.github.com 으로 나가고(배포 게이트에서 파라미터×매트릭스만큼 외부 호출),
+    그 401 예외가 "있다" 로 삼켜져 **틀린 이유로** 초록이 된다. 그러면 가드에서
+    `_readme_exists` 호출을 빼버리는 회귀(=최초 등록을 이유 없이 차단)도 통과한다.
+    """
     monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: failure_value)
+    monkeypatch.setattr(helpers.api_client, "get_github_file_sha",
+                        lambda repo, path, token: "sha123" if readme_exists else None)
     calls = []
     monkeypatch.setattr(helpers.api_client, "push_files_to_github",
                         lambda *a, **k: calls.append((a, k)) or True)
@@ -60,7 +69,7 @@ def test_scrape_failure_blocks_update_path(monkeypatch, _label, kw, fetcher, fai
 @pytest.mark.parametrize("_label,kw,fetcher,failure_value,folder", _CASES, ids=_IDS)
 def test_scrape_failure_allows_first_time_registration(monkeypatch, _label, kw, fetcher,
                                                        failure_value, folder):
-    calls = _patch(monkeypatch, fetcher, failure_value)
+    calls = _patch(monkeypatch, fetcher, failure_value, readme_exists=False)
 
     result = helpers.push_review_bundle("owner/repo", "token", require_sections=False, **kw)
 
