@@ -13,7 +13,7 @@ import pytest
 
 _JS_DIR = Path(__file__).resolve().parent.parent / "static" / "js"
 _FILES = ("problem-modal.js", "import-history.js", "tier-chart.js", "review.js",
-          "utils.js", "history.js", "report.js", "stats.js", "github.js")
+          "utils.js", "history.js", "report.js", "stats.js", "github.js", "tabs.js")
 
 
 @pytest.fixture(scope="module")
@@ -127,3 +127,145 @@ def test_repo_select_listener_is_bound_once(js):
     # try 의 닫는 괄호를 요구한다 — 그냥 `catch {}` 로 찾으면 이 결함을 설명하는
     # 주석 문구까지 걸린다(문자열 검사의 취약함이 그대로 드러나는 예다).
     assert not re.search(r"\}\s*catch\s*\{\s*\}", js["github.js"]),         "빈 catch 는 실패를 무음으로 만든다"
+
+
+# ── 접근성·CSS 불변식 ──
+
+_CSS_DIR = Path(__file__).resolve().parent.parent / "static" / "css"
+_HTML = Path(__file__).resolve().parent.parent / "static" / "index.html"
+
+
+def _strip_css_comments(src):
+    """규칙을 찾는 검사는 주석을 봐서는 안 된다 — 결함을 설명하는 주석에 그 결함의
+    코드 형태가 그대로 적혀 있어 거짓 빨강이 난다(실제로 두 번 걸렸다)."""
+    return re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+
+
+@pytest.fixture(scope="module")
+def css():
+    """주석을 제거한 본문. 주석 자체를 봐야 하는 검사는 raw_css 를 쓴다."""
+    return {p.name: _strip_css_comments(p.read_text(encoding="utf-8"))
+            for p in _CSS_DIR.glob("*.css")}
+
+
+@pytest.fixture(scope="module")
+def raw_css():
+    return {p.name: p.read_text(encoding="utf-8") for p in _CSS_DIR.glob("*.css")}
+
+
+@pytest.fixture(scope="module")
+def html():
+    return _HTML.read_text(encoding="utf-8")
+
+
+def test_control_borders_use_the_dedicated_token(css):
+    """폼·버튼·칩의 경계선은 WCAG 1.4.11(비텍스트 3:1) 대상이다.
+
+    --line/--line-strong 은 1.15~1.68:1 로 미달이었다. 배경이 지면과 1.03~1.06:1 이라
+    테두리가 유일한 식별 수단인 컨트롤에만 전용 토큰을 쓴다.
+    """
+    tokens = css["tokens.css"]
+    assert re.search(r"--line-control:\s*#646B73", tokens), "다크 값"
+    assert re.search(r"--line-control:\s*#848B93", tokens), "라이트 값"
+
+    comp = css["components.css"]
+    # 폼 컨트롤 공통 블록
+    form_block = comp.split('input[type="text"], input[type="password"], textarea, select')[1][:400]
+    assert "var(--line-control)" in form_block
+
+
+def test_chrome_does_not_consume_verdict_tokens(css):
+    """크롬 요소가 --eff-* 를 직접 쓰면 효율 판정 팔레트를 조정할 때 함께 변한다.
+
+    "GitHub 연결됨" 배지와 "효율적" 판정이 같은 토큰을 쓰던 상태를 막는다.
+    --eff-* 는 판정 배지(.eff-*)와 리뷰 결과(.points-box)만 쓴다.
+    """
+    for name in ("components.css", "surfaces.css", "layout.css", "base.css"):
+        for line_no, line in enumerate(css[name].split("\n"), 1):
+            if "var(--eff-" not in line:
+                continue
+            allowed = line.lstrip().startswith(".eff-") or ".points-box" in line
+            assert allowed, f"{name}:{line_no} 이 판정 토큰을 직접 쓴다 — {line.strip()[:70]}"
+
+
+def test_cmdk_input_selector_beats_the_element_selector(css):
+    """input[type="text"] 는 (0,1,1) 이라 .cmdk-input (0,1,0) 을 순서와 무관하게 이긴다.
+
+    예전에는 이 블록의 선언 6개가 전부 무효였다.
+    """
+    assert re.search(r"input\.cmdk-input\s*\{", css["surfaces.css"])
+    assert not re.search(r"^\.cmdk-input\s*\{", css["surfaces.css"], re.M)
+
+
+def test_editor_focus_ring_is_on_the_wrapper(css):
+    """래퍼에 overflow:hidden 이 있으므로 내부 요소의 outline 은 전량 클리핑된다."""
+    src = css["surfaces.css"]
+    assert re.search(r"\.cm-wrap:focus-within,\s*\.pm-code:focus-within\s*\{[^}]*outline:", src)
+    # 내부 .CodeMirror 에는 outline 을 주지 않는다.
+    inner = re.search(r"\.cm-wrap:focus-within \.CodeMirror[^{]*\{([^}]*)\}", src)
+    assert inner and "outline" not in inner.group(1)
+
+
+def test_row_hairlines_do_not_depend_on_first_child(css):
+    """#history-list 의 첫 자식은 항상 .toolbar 라 :first-child 가 매칭되지 않았다."""
+    src = css["components.css"]
+    assert not re.search(r"\.row:first-child", src)
+    assert re.search(r"\.row \+ \.row\s*\{[^}]*border-top:\s*none", src)
+
+
+def test_mono_weights_stay_within_the_loaded_faces(css, html):
+    """웹폰트는 mono 400/500 만 로드한다 — 600 을 지정하면 합성 볼드가 된다."""
+    loaded = set(re.findall(r"jetbrains-mono@[\d.]+/(\d+)\.css", html))
+    assert loaded == {"400", "500"}, f"로드된 굵기: {loaded}"
+    for name, src in css.items():
+        for block in re.findall(r"\{[^{}]*\}", src):
+            if "--font-mono" in block or "font-mono" in block:
+                assert "font-weight: 600" not in block, f"{name}: {block.strip()[:70]}"
+
+
+def test_tabs_have_a_keyboard_pattern(js, html):
+    """role="tablist" 를 선언했으면 화살표 키 이동과 roving tabindex 가 있어야 한다."""
+    src = js["tabs.js"]
+    # 단순 부분문자열 검사는 오타(ArrowRightX)를 통과시킨다 — 실제 키 매핑을 본다.
+    for key in ("ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"):
+        assert re.search(key + r"\s*:\s*-?1", src), f"{key} 매핑이 없다"
+    assert re.search(r"e\.key\s*===\s*['\"]Home['\"]", src)
+    assert re.search(r"e\.key\s*===\s*['\"]End['\"]", src)
+    assert re.search(r"setAttribute\(['\"]tabindex['\"],\s*['\"]-1['\"]\)", src)
+    # 마크업의 초기 상태도 맞아야 한다(JS 실행 전).
+    assert html.count('tabindex="-1"') == 6 and 'aria-selected="true" aria-controls="tab-review" tabindex="0"' in html
+
+
+def test_every_form_control_has_an_accessible_name(html):
+    """<summary> 는 label 이 아니고 placeholder 도 접근 가능한 이름이 아니다."""
+    # 문제 설명 textarea 만 이름이 없었다.
+    block = html.split('id="problem-statement"')[1][:200]
+    assert 'aria-label="문제 설명"' in block
+
+
+def test_hints_are_linked_to_their_controls(html):
+    """id 는 있는데 아무도 참조하지 않으면 스크린리더가 읽지 않는다."""
+    for control, hint in (("problem-id", "problem-id-help"),
+                          ("code-language", "code-language-help")):
+        block = html.split(f'id="{control}"')[1][:200]
+        assert f'aria-describedby="{hint}"' in block, control
+
+
+def test_toggles_expose_pressed_state(html):
+    assert html.count("aria-pressed") >= 4
+
+
+def test_modals_live_outside_the_tab_sections(html):
+    """탭 섹션 안에 있으면 다른 탭 활성 시 조상이 display:none 이 되어 열 수 없다."""
+    main_end = html.index("</main>")
+    for modal_id in ("review-modal", "problem-modal", "cmdk"):
+        assert html.index(f'id="{modal_id}"') > main_end, f"{modal_id} 가 main 안에 있다"
+
+
+def test_modal_a11y_is_shared_not_duplicated():
+    """Esc·포커스 트랩·복원 규약을 모달마다 복제하면 새 모달에서 또 빠진다."""
+    shared = (_JS_DIR / "modal-a11y.js").read_text(encoding="utf-8")
+    assert "registerModal" in shared and "Escape" in shared and "Tab" in shared
+    for name in ("history.js", "problem-modal.js", "command-palette.js"):
+        src = (_JS_DIR / name).read_text(encoding="utf-8")
+        assert "registerModal(" in src, f"{name} 이 공통 모듈을 쓰지 않는다"

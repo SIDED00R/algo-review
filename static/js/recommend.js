@@ -59,7 +59,7 @@ function renderRecommend(container, data) {
       const isCF = p.url && p.url.includes('codeforces');
       if (isCF) {
         html += `
-          <div class="rec-problem-card cf-clickable"
+          <div class="rec-problem-card is-clickable"
                data-ref="${escapeHtml(String(p.id))}"
                data-title="${escapeHtml(p.title)}"
                data-tier="${escapeHtml(p.tier_name)}">

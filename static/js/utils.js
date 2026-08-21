@@ -136,6 +136,19 @@ function renderMarkdown(text) {
   return DOMPurify.sanitize(marked.parse(raw));
 }
 
+/** div 를 버튼처럼 쓰는 곳에 키보드 접근을 준다. role/tabindex 만 붙여도 Enter/Space 가
+ *  동작하지 않으므로 핸들러까지 함께 건다 — 예전에는 마우스로만 열 수 있었다. */
+function makeRowActivatable(el, onActivate) {
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+  el.addEventListener('click', onActivate);
+  el.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    onActivate(e);
+  });
+}
+
 function detectLanguage(code) {
   if (/#include/.test(code) || /\bstd::/.test(code) || /\bcout\b/.test(code) ||
       /\bcin\b/.test(code) || /\bint\s+main\s*\(/.test(code) || /\bvector\s*</.test(code) ||

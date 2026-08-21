@@ -178,6 +178,17 @@
   document.getElementById('cmdk-close').addEventListener('click', close);
   document.getElementById('cmdk-open')?.addEventListener('click', open);
 
+  // 자기 Esc 는 "뒤로 한 단계" 의미가 있어 직접 처리한다 — 공통 모듈에는 트랩만 맡긴다.
+  registerModal('cmdk', close, { ownsEscape: true });
+
+  // 표기를 플랫폼에 맞춘다 — 핸들러는 metaKey|ctrlKey 를 다 받는데 UI 는 macOS 글리프만
+  // 보여줬다. 백준·CF 사용자 다수가 Windows 다.
+  const kbd = document.getElementById('cmdk-kbd');
+  if (kbd) {
+    const platform = navigator.userAgentData?.platform || navigator.platform || '';
+    if (/mac/i.test(platform)) kbd.textContent = '⌘K';
+  }
+
   document.addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();

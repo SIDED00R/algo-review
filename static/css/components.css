@@ -28,19 +28,20 @@
 .btn-secondary {
   background: transparent;
   color: var(--fg);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-control);
   padding: var(--s-2) var(--s-4);
   font-size: var(--fs-sm);
 }
 .btn-secondary:hover:not(:disabled) { border-color: var(--fg); background: var(--surface-2); }
 
 /* 작은 변형 — 예전에는 이 조합을 인라인 style 로 매번 손으로 만들었다 */
+/* 크기만 정하는 수식자다 — 반드시 색 변형(.btn-primary/.btn-code/.btn-ai)과 함께 쓴다.
+   단독으로 쓰면 브라우저 기본 버튼(buttonface)이 나온다. */
 .btn-sm { padding: var(--s-1) var(--s-3); font-size: var(--fs-sm); border: 1px solid transparent; }
-.btn-primary.btn-sm { padding: var(--s-1) var(--s-3); font-size: var(--fs-sm); }
-.btn-code { background: var(--surface-2); color: var(--fg); border-color: var(--line); }
+.btn-code { background: var(--surface-2); color: var(--fg); border-color: var(--line-control); }
 .btn-code:hover:not(:disabled) { border-color: var(--fg); }
 /* 목록 행마다 반복되므로 잉크로 채우지 않는다 — 테두리 강조로만 무게를 준다 */
-.btn-ai { background: transparent; color: var(--fg); border-color: var(--line-strong); }
+.btn-ai { background: transparent; color: var(--fg); border-color: var(--line-control); }
 .btn-ai:hover:not(:disabled) { border-color: var(--fg); background: var(--surface-2); }
 .btn-review { background: var(--ink); color: var(--ink-fg); border-color: var(--ink); }
 .btn-review:hover:not(:disabled) { background: var(--fg-muted); border-color: var(--fg-muted); }
@@ -65,12 +66,12 @@
   text-decoration: none;
 }
 
-/* 아이콘 버튼 — 예전에는 36/38/32px 세 크기가 섞여 있었다 */
+/* 아이콘 버튼 — 크기 하나로 통일 */
 .github-icon-btn, .theme-btn, .modal-close, .pm-close {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; flex-shrink: 0;
   background: transparent; color: var(--fg-muted);
-  border: 1px solid var(--line); border-radius: var(--r);
+  border: 1px solid var(--line-control); border-radius: var(--r);
   cursor: pointer; padding: 0;
   transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
@@ -78,13 +79,13 @@
 .modal-close:hover, .pm-close:hover { color: var(--fg); border-color: var(--line-strong); }
 .github-icon-btn svg, .theme-btn svg,
 .modal-close svg, .pm-close svg { width: 16px; height: 16px; display: block; }
-.github-icon-btn.connected { border-color: var(--eff-good-fg); }
+.github-icon-btn.connected { border-color: var(--status-ok-fg); }
 
 /* 칩 — 예전 .btn-toggle 과 .theme-chip 은 padding 만 다른 중복이었다 */
 .btn-toggle, .theme-chip {
   padding: var(--s-1) var(--s-3);
   font-size: var(--fs-sm);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   background: transparent;
   color: var(--fg-muted);
   border-radius: var(--r-pill);
@@ -99,7 +100,7 @@
 /* 페이지네이션 */
 .page-btn {
   padding: var(--s-1) var(--s-2); font-size: var(--fs-xs);
-  border: 1px solid var(--line); background: transparent; color: var(--fg-muted);
+  border: 1px solid var(--line-control); background: transparent; color: var(--fg-muted);
   font-family: var(--font-mono); font-variant-numeric: tabular-nums;
 }
 .page-btn:hover:not([disabled]):not(.active) { color: var(--fg); border-color: var(--line-strong); }
@@ -108,7 +109,7 @@
 
 /* ═══ 폼 ═══ */
 .form-row { margin-bottom: var(--s-4); }
-.form-row label, label.label { display: block; font-size: var(--fs-label); font-weight: 600;
+.form-row label:not(.label) { display: block; font-size: var(--fs-label); font-weight: 600;
   letter-spacing: .02em; color: var(--fg-dim); margin-bottom: var(--s-1); }
 
 /* 라벨 줄에 액션을 함께 두는 머리 행 */
@@ -129,7 +130,7 @@
 input[type="text"], input[type="password"], textarea, select, .input, .select {
   width: 100%;
   background: var(--surface-1);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-control);
   border-radius: var(--r);
   color: var(--fg);
   padding: var(--s-2) var(--s-3);
@@ -141,6 +142,13 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:f
 .input:focus, .select:focus { border-color: var(--fg); }
 select, .select { cursor: pointer; }
 textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-sm); }
+/* iOS Safari 는 16px 미만 입력에 포커스하면 페이지를 자동 확대한다 — 모바일 폭에서만
+   base 로 올린다(데스크톱 밀도는 유지). */
+@media (max-width: 860px) {
+  input[type="text"], input[type="password"], textarea, select, .input, .select {
+    font-size: var(--fs-base);
+  }
+}
 ::placeholder { color: var(--fg-dim); }
 
 /* ═══ 표면 ═══ */
@@ -154,20 +162,26 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
   margin-bottom: var(--s-4);
 }
 .card > h2, .result-card > h2 { margin-bottom: var(--s-1); }
-.card .desc { margin-bottom: var(--s-4); }
+.card .desc, .result-card .desc { margin-bottom: var(--s-4); }
 
-/* 목록 행 — 조회형 탭의 밀도를 올린다. 개별 박스 대신 헤어라인 구분. */
+/* 목록 행 — 조회형 탭의 밀도를 올린다. 개별 박스 대신 헤어라인 구분.
+
+   위·아래 선을 스스로 갖고 인접한 행에서 위 선을 뺀다. 예전에는 상단선을
+   `.row:first-child` 로 줬는데, #history-list 의 첫 자식은 항상 .toolbar 라
+   리뷰 기록 탭에서는 영원히 매칭되지 않았다(가져오기 탭만 적용돼 같은 컴포넌트가
+   탭마다 다르게 보였다). 인접 선택자는 구조에 의존하지 않는다. */
 .row {
   display: flex; align-items: center; gap: var(--s-4);
   padding: var(--s-3) var(--s-2);
+  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   transition: background var(--dur) var(--ease);
 }
+.row + .row { border-top: none; }
 .row:hover { background: var(--surface-2); }
 /* 클릭 핸들러가 없는 행(가져오기 목록) — 포인터 커서는 거짓 어포던스가 된다. */
 .row-static { cursor: default; }
-.row:first-child { border-top: 1px solid var(--line); }
 
 .toolbar { display: flex; gap: var(--s-2); flex-wrap: wrap;
   align-items: center; margin-bottom: var(--s-3); }
@@ -260,17 +274,17 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 .section-title-gap { margin-top: var(--s-5); }
 .section-title-flush { margin: 0; white-space: nowrap; }
 
-.hint-ok { font-size: var(--fs-xs); color: var(--eff-good-fg); }
-.hint-bad { font-size: var(--fs-xs); color: var(--eff-poor-fg); }
+.hint-ok { font-size: var(--fs-xs); color: var(--status-ok-fg); }
+.hint-bad { font-size: var(--fs-xs); color: var(--status-danger-fg); }
 .pad-y { padding: var(--s-2) 0; }
 .td-dim { color: var(--fg-dim); font-size: var(--fs-xs);
   font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .pager { display: flex; gap: var(--s-1); justify-content: center;
   flex-wrap: wrap; margin-top: var(--s-3); }
 .code-inline-view { margin: 0 0 var(--s-2); }
-.btn-danger { border-color: var(--eff-poor-line); color: var(--eff-poor-fg); }
-.btn-danger:hover:not(:disabled) { border-color: var(--eff-poor-fg);
-  background: var(--eff-poor-bg); color: var(--eff-poor-fg); }
+.btn-danger { border-color: var(--status-danger-line); color: var(--status-danger-fg); }
+.btn-danger:hover:not(:disabled) { border-color: var(--status-danger-fg);
+  background: var(--status-danger-bg); color: var(--status-danger-fg); }
 
 /* ═══ 알림 ═══ */
 .alert {
@@ -283,8 +297,8 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
   margin-bottom: var(--s-4);
 }
 .alert-info  { border-color: var(--line-strong); color: var(--fg); }
-.alert-error { border-color: var(--eff-poor-line); background: var(--eff-poor-bg); color: var(--eff-poor-fg); }
-.alert-ok    { border-color: var(--eff-good-line); background: var(--eff-good-bg); color: var(--eff-good-fg); }
+.alert-error { border-color: var(--status-danger-line); background: var(--status-danger-bg); color: var(--status-danger-fg); }
+.alert-ok    { border-color: var(--status-ok-line); background: var(--status-ok-bg); color: var(--status-ok-fg); }
 
 /* ═══ 스피너 ═══ */
 .spinner {
@@ -297,8 +311,9 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═══ 코드 ═══
-   예전에는 .code-block / .pm-pre / .tc-detail pre / .markdown-body pre 가
-   서로 다른 네 가지 스타일이었다. */
+   네 계통(.code-block / .pm-pre / .tc-detail pre / .markdown-body pre)이 서로 다른
+   스타일이었다 — 테두리·radius·패딩·서체를 공통으로 묶는다. 산문 안의 코드 블록만
+   배경과 세로 여백이 다르므로 아래에서 그 둘만 덮는다. */
 .code-block, .pm-pre, .markdown-body pre, .tc-detail pre {
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -335,7 +350,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 .points-box ul { padding-left: var(--s-4); }
 .points-box li { font-size: var(--fs-sm); margin-bottom: var(--s-1); color: var(--fg-muted); }
 .points-box.good h4 { color: var(--eff-good-fg); }
-.points-box.bad h4 { color: var(--eff-ok-fg); }
+.points-box.bad h4 { color: var(--eff-ok-fg); }   /* 개선점은 경고색(ok)까지만 — 붉게 쓰면 실패로 읽힌다 */
 
 .feedback-box { background: var(--surface-2); border: 1px solid var(--line);
   border-radius: var(--r); padding: var(--s-4); }
@@ -389,8 +404,8 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
   display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
 }
 .rec-problem-card a { text-decoration: none; font-weight: 500; font-size: var(--fs-md); }
-.rec-problem-card.cf-clickable { cursor: pointer; transition: border-color var(--dur) var(--ease); }
-.rec-problem-card.cf-clickable:hover { border-color: var(--line-strong); }
+.rec-problem-card.is-clickable { cursor: pointer; transition: border-color var(--dur) var(--ease); }
+.rec-problem-card.is-clickable:hover { border-color: var(--line-strong); }
 
 /* ═══ 테마 칩 목록 · 문제 헤더 ═══ */
 .theme-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
@@ -407,10 +422,11 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 /* ═══ 테스트 케이스 ═══ */
 .test-case { border-radius: var(--r); padding: var(--s-2) var(--s-3);
   margin-bottom: var(--s-2); border: 1px solid var(--line); font-size: var(--fs-sm); }
-.test-case.pass    { border-color: var(--eff-good-line); background: var(--eff-good-bg); }
-.test-case.fail    { border-color: var(--eff-poor-line); background: var(--eff-poor-bg); }
+.test-case.pass    { border-color: var(--status-ok-line); background: var(--status-ok-bg); }
+.test-case.fail    { border-color: var(--status-danger-line); background: var(--status-danger-bg); }
 .test-case.pending { background: var(--surface-2); color: var(--fg-dim); }
-.tc-badge { font-weight: 600; margin-right: var(--s-2); font-family: var(--font-mono); }
+/* 웹폰트는 mono 400/500 만 로드한다 — 600 을 지정하면 합성(faux) 볼드가 된다. */
+.tc-badge { font-weight: 500; margin-right: var(--s-2); font-family: var(--font-mono); }
 .tc-detail { margin-top: var(--s-2); font-size: var(--fs-xs); }
 .tc-time { color: var(--fg-dim); font-size: var(--fs-xs); margin-left: var(--s-2);
   font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -435,5 +451,5 @@ details[open] > summary .toggle-arrow { transform: rotate(90deg); }
   flex-wrap: wrap; margin-top: var(--s-4); }
 .action-row-center { justify-content: center; }
 .action-msg { font-size: var(--fs-sm); }
-.action-msg.ok { color: var(--eff-good-fg); }
-.action-msg.bad { color: var(--eff-poor-fg); }
+.action-msg.ok { color: var(--status-ok-fg); }
+.action-msg.bad { color: var(--status-danger-fg); }

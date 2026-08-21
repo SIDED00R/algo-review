@@ -8,6 +8,9 @@ function activateTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.remove('active');
     b.setAttribute('aria-selected', 'false');
+    // roving tabindex — 활성 탭만 탭 순서에 둔다. ARIA tabs 패턴에서 Tab 은 탭 목록을
+    // 통과하고 목록 안 이동은 화살표 키가 담당한다.
+    b.setAttribute('tabindex', '-1');
   });
   document.querySelectorAll('.tab-content').forEach(s => {
     s.classList.remove('active');
@@ -16,6 +19,7 @@ function activateTab(name) {
 
   btn.classList.add('active');
   btn.setAttribute('aria-selected', 'true');
+  btn.setAttribute('tabindex', '0');
   tab.classList.remove('hidden');
   tab.classList.add('active');
 
@@ -29,6 +33,25 @@ function activateTab(name) {
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+});
+
+// role="tablist" 를 선언했으면 화살표 키 이동이 있어야 한다 — 보조기술 사용자는 그것을
+// 기대하는데 예전에는 click 리스너만 있었다(선언과 동작 불일치).
+document.getElementById('main-nav')?.addEventListener('keydown', e => {
+  const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+  const tabs = [...document.querySelectorAll('.tab-btn')];
+  const here = tabs.indexOf(document.activeElement);
+  if (here === -1) return;
+
+  let next = null;
+  if (e.key in keys) next = (here + keys[e.key] + tabs.length) % tabs.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = tabs.length - 1;
+  if (next === null) return;
+
+  e.preventDefault();
+  activateTab(tabs[next].dataset.tab);
+  tabs[next].focus();
 });
 
 const menuToggle = document.getElementById('menu-toggle');
