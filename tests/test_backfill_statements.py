@@ -1,15 +1,36 @@
 """백필 스크립트 검증.
 
-README 파서는 `build_readme` 가 쓴 문서를 되읽는 것이므로, build_readme 로 만든 README 를
-그대로 통과시켜 왕복을 고정한다 — 형식이 바뀌면 여기서 깨진다.
+README 파서는 두 형식을 되읽는다 — 이 앱의 `build_readme` 가 쓴 것과 BaekjoonHub 가 쓴 것.
+전자는 build_readme 출력을 그대로 통과시켜 왕복을 고정하고, 후자는 실제 저장소에서 확인한
+형태(### 헤더 · 헤더 뒤 공백 · HTML 본문)를 재현해 고정한다.
 """
 import pytest
 
 import backfill_statements as backfill
 import db
+from clients.github import _leading_problem_number
 from routes.helpers import build_readme
 from routes.problem_resolve import is_scrape_failure
 
+# BaekjoonHub 는 폴더명의 공백을 U+2005(four-per-em space)로 바꾼다.
+NBSP = " "
+
+
+def _baekjoonhub_readme(title, number, description):
+    """BaekjoonHub 가 쓰는 형태 — ### 헤더, 헤더 뒤 공백, 본문이 HTML."""
+    return (
+        "# [Silver II] {title} - {number} \n\n"
+        "[문제 링크](https://www.acmicpc.net/problem/{number}) \n\n"
+        "### 성능 요약\n\n메모리: 32412 KB, 시간: 6028 ms\n\n"
+        "### 분류\n\n브루트포스 알고리즘\n\n"
+        "### 제출 일자\n\n2026년 4월 11일 09:08:45\n\n"
+        "### 문제 설명\n\n<p>{description}</p>\n\n"
+        "### 입력 \n\n <p>첫째 줄에 N과 S가 주어진다. (1 ≤ N ≤ 20)</p>\n\n"
+        "### 출력 \n\n <p>첫째 줄에 경우의 수를 출력한다.</p>\n"
+    ).format(title=title, number=number, description=description)
+
+
+# ── 파서 ──
 
 def test_parse_readme_roundtrips_build_readme_output():
     readme = build_readme(
@@ -36,6 +57,21 @@ def test_parse_readme_roundtrips_build_readme_output():
     assert "성능 요약" not in statement
 
 
+def test_parses_baekjoonhub_readme_with_html_body():
+    """저장소의 백준 README 는 대부분 BaekjoonHub 가 쓴 것이다 — ### + HTML 을 받아야 한다."""
+    readme = _baekjoonhub_readme(
+        "부분수열의 합", 1182, "N개의 정수로 이루어진 수열에서 합이 S가 되는 경우의 수를 구하시오.")
+    statement = backfill.parse_readme_sections(readme)
+
+    assert statement.startswith("【문제】")
+    assert "【입력】" in statement and "【출력】" in statement
+    assert "합이 S가 되는 경우의 수" in statement
+    assert "<p>" not in statement, "HTML 태그를 벗겨야 한다"
+    assert "성능 요약" not in statement
+    assert "브루트포스" not in statement
+    assert "32412" not in statement
+
+
 def test_parse_readme_without_statement_sections_returns_empty():
     """본문 없이 올라간 README — 여기서 빈 문자열이 나와야 백필이 SKIP 으로 처리한다."""
     readme = build_readme(problem_ref="1000", title="A+B", tier_name="Bronze V",
@@ -51,75 +87,94 @@ def test_parse_readme_takes_only_present_sections():
     assert statement == "【문제】\n본문만 있고 입력·출력 섹션은 없다."
 
 
-def test_fetch_boj_statement_uses_solution_folder_path(monkeypatch):
-    """폴더 경로는 build_solution_target 이 만든다 — 규칙을 복제하면 저장소와 어긋난다."""
+# ── 저장소 조회 ──
+
+def test_leading_problem_number_accepts_both_folder_formats():
+    """BaekjoonHub 는 `1182. 제목`, 이 앱은 `1182번. 제목` 으로 쓴다 — 둘 다 받아야 한다."""
+    assert _leading_problem_number("1182." + NBSP + "부분수열의" + NBSP + "합") == 1182
+    assert _leading_problem_number("1182번. 부분수열의 합") == 1182
+    assert _leading_problem_number("31429." + NBSP + "SUAPC") == 31429
+
+
+def test_leading_problem_number_requires_a_number_boundary():
+    """숫자로 시작하기만 하면 받으면 문제 폴더가 아닌 것을 문제로 오인한다.
+
+    숫자 뒤에 `.` 또는 `번.` 이 와야 한다 — 이걸 빼면 `2024 대회 후기` 가 2024번 문제가 된다.
+    """
+    assert _leading_problem_number("2024 대회 후기") is None
+    assert _leading_problem_number("2024년 정리") is None
+    assert _leading_problem_number("제목만 있는 폴더") is None
+
+
+def test_fetch_boj_statement_uses_tree_path(monkeypatch):
+    """경로를 조립하지 않는다 — BaekjoonHub 는 공백을 U+2005 로, 특수문자를 전각으로 바꾸고
+    `번` 을 붙이지 않으며, 티어 폴더도 DB 값과 다를 수 있다."""
     asked = []
+    bh_path = "백준/Silver/1182." + NBSP + "부분수열의" + NBSP + "합/README.md"
 
     def fake_get(repo, path, token=None):
         asked.append((repo, path, token))
-        return build_readme(problem_ref="1000", title="A+B", tier_name="Bronze V", tags=[],
-                            language="Python 3", url="https://boj.kr/1000",
-                            description="두 정수 A와 B를 입력받아 A+B를 출력하는 프로그램을 작성하시오.")
+        return _baekjoonhub_readme("부분수열의 합", 1182, "합이 S가 되는 경우의 수를 구하시오.")
 
     monkeypatch.setattr(backfill.api_client, "get_raw_github_content", fake_get)
-    problem = {"problem_ref": "1000", "name_candidates": [("A+B", "Bronze V")]}
-    statement, source = backfill.fetch_boj_statement(problem, "me/solutions", "tok")
+    statement, source = backfill.fetch_boj_statement(
+        {"problem_ref": "1182"}, "me/solutions", "tok", {1182: [bh_path]})
 
-    assert asked == [("me/solutions", "백준/Bronze/1000번. A+B/README.md", "tok")]
+    assert asked == [("me/solutions", bh_path, "tok")]
     assert statement.startswith("【문제】")
-    assert source == "백준/Bronze/1000번. A+B/README.md"
+    assert source == bh_path
 
 
-def test_fetch_boj_statement_falls_back_to_other_title(monkeypatch):
-    """회차 사이에 제목이 바뀌면 폴더명이 달라진다 — 다른 회차 제목으로 재시도해야 한다."""
+def test_fetch_boj_statement_tries_next_candidate_when_first_has_no_body(monkeypatch):
+    """같은 문제에 폴더가 둘 있을 수 있다(앱이 올린 것 + BaekjoonHub 것) — 본문이 나오는 것을 쓴다."""
+    empty = "백준/Unrated/1182번. 부분수열의 합/README.md"
+    good = "백준/Silver/1182." + NBSP + "부분수열의" + NBSP + "합/README.md"
+
     def fake_get(repo, path, token=None):
-        if "고친 제목" not in path:
-            raise RuntimeError("404")
-        return build_readme(problem_ref="1000", title="A+B 고친 제목", tier_name="Bronze V",
-                            tags=[], language="Python 3", url="https://boj.kr/1000",
-                            description="두 정수 A와 B를 입력받아 A+B를 출력하는 프로그램을 작성하시오.")
+        if path == empty:
+            return build_readme(problem_ref="1182", title="부분수열의 합", tier_name="Unrated",
+                                tags=[], language="Python 3", url="https://boj.kr/1182")
+        return _baekjoonhub_readme("부분수열의 합", 1182, "합이 S가 되는 경우의 수를 구하시오.")
 
     monkeypatch.setattr(backfill.api_client, "get_raw_github_content", fake_get)
-    problem = {"problem_ref": "1000",
-               "name_candidates": [("A+B", "Bronze V"), ("A+B 고친 제목", "Bronze V")]}
-    statement, source = backfill.fetch_boj_statement(problem, "me/solutions", "tok")
+    statement, source = backfill.fetch_boj_statement(
+        {"problem_ref": "1182"}, "me/solutions", "tok", {1182: [empty, good]})
     assert statement.startswith("【문제】")
-    assert "고친 제목" in source
+    assert source == good
 
 
-def test_fetch_boj_statement_reports_when_no_readme(monkeypatch):
-    def fake_get(repo, path, token=None):
-        raise RuntimeError("404")
-
-    monkeypatch.setattr(backfill.api_client, "get_raw_github_content", fake_get)
-    problem = {"problem_ref": "1000", "name_candidates": [("A+B", "Bronze V")]}
-    statement, source = backfill.fetch_boj_statement(problem, "me/solutions", "tok")
+def test_fetch_boj_statement_reports_when_repo_has_no_readme(monkeypatch):
+    monkeypatch.setattr(backfill.api_client, "get_raw_github_content",
+                        lambda *a, **k: pytest.fail("후보가 없으면 요청하지 않는다"))
+    statement, source = backfill.fetch_boj_statement(
+        {"problem_ref": "1182"}, "me/solutions", "tok", {})
     assert statement == ""
-    assert "README 를 찾지 못했다" in source
+    assert source == "저장소에 README 가 없다"
 
 
 def test_fetch_boj_statement_reports_when_readme_lacks_sections(monkeypatch):
     """본문 없이 올라간 README — 조용히 빈 값을 저장하지 않고 이유를 보고해야 한다."""
-    def fake_get(repo, path, token=None):
-        return build_readme(problem_ref="1000", title="A+B", tier_name="Bronze V", tags=[],
-                            language="Python 3", url="https://boj.kr/1000")
-
-    monkeypatch.setattr(backfill.api_client, "get_raw_github_content", fake_get)
-    problem = {"problem_ref": "1000", "name_candidates": [("A+B", "Bronze V")]}
-    statement, source = backfill.fetch_boj_statement(problem, "me/solutions", "tok")
+    path = "백준/Unrated/1182번. 부분수열의 합/README.md"
+    monkeypatch.setattr(backfill.api_client, "get_raw_github_content",
+                        lambda repo, p, token=None: build_readme(
+                            problem_ref="1182", title="부분수열의 합", tier_name="Unrated",
+                            tags=[], language="Python 3", url="https://boj.kr/1182"))
+    statement, source = backfill.fetch_boj_statement(
+        {"problem_ref": "1182"}, "me/solutions", "tok", {1182: [path]})
     assert statement == ""
     assert "문제 설명 섹션이 비었다" in source
 
 
 def test_reason_bucket_collapses_paths_for_the_summary():
     """이유마다 경로가 붙으면 요약이 전부 다른 항목이 되어 의미를 잃는다."""
-    a = "README 를 찾지 못했다 (시도: 백준/Gold/1654번. 랜선 자르기/README.md)"
-    b = "README 를 찾지 못했다 (시도: 백준/Silver/1003번. 피보나치 함수/README.md)"
-    assert backfill.reason_bucket(a) == backfill.reason_bucket(b) == "README 를 찾지 못했다"
-    c = "README 는 있으나 문제 설명 섹션이 비었다: 백준/Gold/1654번. 랜선 자르기/README.md"
-    assert backfill.reason_bucket(c) == "README 는 있으나 문제 설명 섹션이 비었다"
-    assert backfill.reason_bucket("GitHub 미연결") == "GitHub 미연결"
+    a = "README 는 있으나 문제 설명 섹션이 비었다: 백준/Gold/1654번. 랜선 자르기/README.md"
+    b = "README 는 있으나 문제 설명 섹션이 비었다: 백준/Silver/1003번. 피보나치 함수/README.md"
+    assert backfill.reason_bucket(a) == backfill.reason_bucket(b) == \
+        "README 는 있으나 문제 설명 섹션이 비었다"
+    assert backfill.reason_bucket("저장소에 README 가 없다") == "저장소에 README 가 없다"
 
+
+# ── 저장 가드 ──
 
 def test_scrape_failure_strings_are_rejected():
     """수집 함수는 예외 대신 실패 문자열을 반환한다 — 저장하면 리뷰가 영구히 오염된다."""
@@ -132,26 +187,23 @@ def test_scrape_failure_strings_are_rejected():
     assert not is_scrape_failure("【문제】\n두 정수 A와 B를 입력받아 A+B를 출력한다.")
 
 
-def _seed(problem_ref: str, platform: str = "boj", title: str = "A+B",
-          tier_name: str = "Bronze V", statement: str = ""):
+def _seed(problem_ref, platform="boj", title="A+B", tier_name="Bronze V", statement=""):
     db.save_review(problem_id=int(problem_ref) if problem_ref.isdigit() else 0,
                    title=title, tier=1, tags=["수학"], code="print(1)", feedback="f",
                    efficiency="good", platform=platform, problem_ref=problem_ref,
                    tier_name=tier_name, language="Python 3", problem_statement=statement)
 
 
-def test_missing_statement_groups_by_problem_and_collects_name_candidates(at_time):
+def test_missing_statement_groups_by_problem(at_time):
     at_time("2024-01-01T00:00:00")
     _seed("1000", title="A+B")
     at_time("2024-01-02T00:00:00")
-    _seed("1000", title="A+B 고친 제목")      # 제목이 바뀐 회차 — 폴더명 후보가 둘이 된다
+    _seed("1000", title="A+B 고친 제목")
     _seed("4A", platform="codeforces", title="Watermelon", tier_name="Codeforces 800")
 
     problems = db.get_problems_missing_statement()
     by_ref = {p["problem_ref"]: p for p in problems}
     assert by_ref["1000"]["empty_rows"] == 2
-    assert set(by_ref["1000"]["name_candidates"]) == {("A+B", "Bronze V"),
-                                                      ("A+B 고친 제목", "Bronze V")}
     assert by_ref["4A"]["platform"] == "codeforces"
 
     only_boj = db.get_problems_missing_statement("boj")
@@ -187,12 +239,10 @@ def test_set_problem_statement_rejects_empty():
     assert db.get_reviews_by_problem("boj", "1000")[0]["problem_statement"] == ""
 
 
-def test_resolve_statement_never_returns_failure_string(monkeypatch):
-    """acmicpc.net 종료 이후 BOJ 리뷰가 프롬프트의 문제 설명 자리에 404 문자열을 넣고 있었다.
+# ── 수집 실패 처리 ──
 
-    수집 함수는 예외를 던지지 않고 실패 문자열을 반환하므로, 그걸 걸러 빈 본문을 줘야 한다
-    (analyzer 는 제목·티어·태그·코드로 분석한다).
-    """
+def test_resolve_statement_never_returns_failure_string(monkeypatch):
+    """acmicpc.net 종료 이후 BOJ 리뷰가 프롬프트의 문제 설명 자리에 404 문자열을 넣고 있었다."""
     from routes import problem_resolve
 
     monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",

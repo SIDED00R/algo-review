@@ -27,6 +27,7 @@ from clients.github import (
     push_file_to_github,
     push_files_to_github,
     get_baekjoonhub_problems,
+    get_boj_readme_paths,
     get_raw_github_content,
 )
 from clients.utils import (
@@ -47,6 +48,6 @@ __all__ = [
     "search_cf_problems_by_tag",
     "exchange_github_code", "get_github_user", "get_github_user_repos",
     "push_file_to_github", "push_files_to_github",
-    "get_baekjoonhub_problems", "get_raw_github_content",
+    "get_baekjoonhub_problems", "get_boj_readme_paths", "get_raw_github_content",
     "get_problem_url", "_get_file_extension",
 ]
