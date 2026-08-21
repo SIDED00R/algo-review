@@ -1,5 +1,5 @@
 import db
-from clients import search_cf_problems_by_tag, search_problems_by_tag
+from clients import ProblemSearchError, search_cf_problems_by_tag, search_problems_by_tag
 
 # 테마별 문제 둘러보기 — 알고리즘 분야별 대표 문제를 플랫폼(Codeforces/백준)별 네이티브 난이도로 제공한다.
 # cf_tag 는 Codeforces problemset 태그명(공백 포함), boj_tag 는 solved.ac 태그 키.
@@ -38,16 +38,24 @@ def _fetch_boj_pool(boj_tag: str) -> list[list[dict]]:
     """밴드당 solved.ac 검색 1회(최다 풀이순) — 상위 POOL_PER_BAND개씩."""
     bands = []
     for lo, hi in BOJ_BANDS:
-        found = search_problems_by_tag(boj_tag, lo, hi, exclude_ids=set())
+        # 실패한 밴드는 빈 밴드로 둔다 — 아래 get_theme_problem_pool 이 만료 캐시로
+        # 채우고, 전면 실패(모든 밴드가 빔)는 error 필드로 사용자에게 알린다.
+        try:
+            found = search_problems_by_tag(boj_tag, lo, hi, exclude_ids=set())
+        except ProblemSearchError:
+            found = []
         bands.append(found[:POOL_PER_BAND])
     return bands
 
 
 def _fetch_cf_pool(cf_tag: str) -> list[list[dict]]:
     """CF 스냅샷 검색 1회(최다 풀이순) 후 레이팅 밴드로 버킷팅."""
-    pool = search_cf_problems_by_tag(
-        cf_tag, CF_BANDS[0][0], CF_BANDS[-1][1], exclude_refs=set(),
-    )
+    try:
+        pool = search_cf_problems_by_tag(
+            cf_tag, CF_BANDS[0][0], CF_BANDS[-1][1], exclude_refs=set(),
+        )
+    except ProblemSearchError:
+        return [[] for _ in CF_BANDS]
     bands = []
     for lo, hi in CF_BANDS:
         in_band = [
@@ -73,7 +81,8 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
         fresh = _fetch_cf_pool(theme["cf_tag"])
 
     bands = fresh
-    stale = db.cache_get_stale(key)
+    # 부분 실패일 때만 만료 캐시를 본다 — 전부 성공한 정상 경로에서 읽으면 DB 왕복이 헛돈다.
+    stale = None if all(fresh) else db.cache_get_stale(key)
     # 밴드별로 따로 fetch하므로 일부만 실패할 수 있다(레이트리밋 등) — 실패(빈) 밴드는 이전 캐시로
     # 채워 부분 실패가 이미 좋은 밴드까지 지우지 않게 한다. 밴드 수가 다르면(설정 변경) 병합하지
     # 않는다 — zip이 짧은 쪽으로 잘라 잘린 결과를 캐시에 못박아 버린다.

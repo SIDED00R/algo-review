@@ -1,7 +1,7 @@
 import db
-import clients as api_client
-from fastapi import APIRouter, HTTPException
-from routes.models import validate_platform
+from constants import TIER_NAMES
+from fastapi import APIRouter
+from routes.helpers import require_platform
 
 router = APIRouter()
 
@@ -13,10 +13,7 @@ def get_tier_history():
 
 @router.get("/api/stats")
 def get_stats(platform: str | None = "boj"):
-    try:
-        platform = validate_platform(platform)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    platform = require_platform(platform)
 
     history = db.get_review_history(20, platform=platform)
     total_reviews = db.get_total_review_count(platform)
@@ -37,7 +34,7 @@ def get_stats(platform: str | None = "boj"):
     return {
         "platform": "boj",
         "avg_tier": avg_tier,
-        "avg_tier_name": api_client.TIER_NAMES.get(int(avg_tier), "N/A"),
+        "avg_tier_name": TIER_NAMES.get(int(avg_tier), "N/A"),
         "total_reviews": total_reviews,
         "tag_stats": tag_stats,
         "history": history,

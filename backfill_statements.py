@@ -122,7 +122,7 @@ def fetch_cf_statement(problem: dict) -> tuple[str, str]:
 
 def db_target_label() -> str:
     """접속 대상 DB 를 비밀 없이 한 줄로 표기한다."""
-    from sqlalchemy.engine import make_url
+    from sqlalchemy import make_url  # db/connection.py 와 같은 경로로 맞춘다
     try:
         return make_url(Settings().sqlalchemy_url).render_as_string(hide_password=True)
     except Exception as e:
@@ -162,9 +162,9 @@ def main() -> int:
     repo = token = ""
     readme_paths: dict[int, list[str]] = {}
     if any(p["platform"] == "boj" for p in problems):
-        settings = db.get_github_settings() or {}
-        repo = settings.get("target_repo") or ""
-        token = settings.get("access_token") or ""
+        gh_settings = db.get_github_settings() or {}
+        repo = gh_settings.get("target_repo") or ""
+        token = gh_settings.get("access_token") or ""
         if not (repo and token):
             print("경고: GitHub 연결·저장소가 없어 BOJ 는 건너뜁니다 "
                   "(acmicpc.net 종료로 README 가 유일한 소스입니다).\n")
@@ -177,7 +177,6 @@ def main() -> int:
             except Exception as e:
                 print("경고: 저장소 트리를 받지 못했습니다 (" + str(e) + ") — BOJ 는 건너뜁니다.\n")
 
-    mode = "APPLY" if args.apply else "DRY-RUN"
     print("[" + mode + "] 대상 문제 " + str(len(problems)) + "개"
           + (" · GitHub " + repo if repo else "") + "\n")
 

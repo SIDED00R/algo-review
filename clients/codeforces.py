@@ -1,5 +1,6 @@
 import logging
 import re
+import threading
 import time
 import random
 import hashlib
@@ -8,6 +9,8 @@ from itertools import zip_longest
 from urllib.parse import urlencode, urljoin
 import requests
 from bs4 import BeautifulSoup
+
+from clients.utils import ProblemSearchError
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -40,10 +43,23 @@ def cf_rating_label(rating) -> str:
 # 프로세스 전역 스냅샷을 비워 다른 요청까지 재다운로드를 유발한다 — 프로세스당 쿨다운으로 막는다.
 _FORCE_REFRESH_COOLDOWN = 600  # 10분에 1회만 강제 갱신
 _last_force_refresh = 0.0
+# 쿨다운 판정은 read-modify-write 다 — 락이 없으면 동시 miss 두 건이 **둘 다** 통과해
+# 위 주석이 막겠다던 전체 재다운로드가 그대로 2회 일어난다(스레드풀에서 실행된다).
+_force_refresh_lock = threading.Lock()
+
+
+def _claim_force_refresh() -> bool:
+    """쿨다운을 소비하고 True. 이미 다른 스레드가 가져갔으면 False."""
+    global _last_force_refresh
+    now = time.time()
+    with _force_refresh_lock:
+        if now - _last_force_refresh < _FORCE_REFRESH_COOLDOWN:
+            return False
+        _last_force_refresh = now
+        return True
 
 
 def get_codeforces_problem_info(problem_ref: str) -> dict:
-    global _last_force_refresh
     from clients.utils import get_problem_url
     contest_id, index = normalize_codeforces_problem_ref(problem_ref)
     problem = _get_codeforces_problem_lookup().get((contest_id, index))
@@ -51,9 +67,7 @@ def get_codeforces_problem_info(problem_ref: str) -> dict:
         # 스냅샷은 프로세스 기동 시점에 한 번 고정된다 — 그 뒤 새로 열린 대회의 문제는
         # miss가 난다. 주기적 TTL 대신 실제 miss가 났을 때만 강제 갱신 후 재조회하되,
         # 쿨다운 중이면 곧바로 miss 처리한다(오타 반복이 매번 전체 재다운로드로 번지지 않도록).
-        now = time.time()
-        if now - _last_force_refresh >= _FORCE_REFRESH_COOLDOWN:
-            _last_force_refresh = now
+        if _claim_force_refresh():
             _get_cf_problemset_snapshot.cache_clear()
             _get_codeforces_problem_lookup.cache_clear()
             problem = _get_codeforces_problem_lookup().get((contest_id, index))
@@ -319,18 +333,24 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
         signed_params["apiSig"] = api_sig
         params = signed_params
 
-    resp = requests.get(
-        f"{CODEFORCES_API_BASE}/{method_name}",
-        params=params,
-        headers=CODEFORCES_HEADERS,
-        timeout=30,
-    )
-    # 이 요청의 쿼리스트링에는 apiKey·apiSig 가 들어 있다. requests 의 HTTPError 메시지는
-    # 요청 URL 전문을 포함하므로 raise_for_status() 를 그대로 쓰면 안 된다 — 그 예외는
-    # routes/import_codeforces.py 의 `except Exception as e` 를 타고 500 detail 로
-    # **클라이언트에게 반환**되고 로그에도 남는다. 서버에 CODEFORCES_API_KEY 가 설정된
-    # 배포에서는 요청자가 키를 넣지 않아도 운영자 키+유효 서명이 노출된다.
-    # 그래서 상태코드만 담은 ValueError 로 치환한다.
+    # 이 요청의 쿼리스트링에는 apiKey·apiSig 가 들어 있고, requests 계열 예외 메시지는
+    # 요청 URL 전문을 포함한다 — raise_for_status() 뿐 아니라 **requests.get 자체가 던지는**
+    # ConnectTimeout·ConnectionError 도 그렇다(urllib3 의 MaxRetryError 를 감싸며
+    # "Max retries exceeded with url: /api/user.status?...&apiKey=...&apiSig=..." 를 남긴다).
+    # 그 예외는 routes/import_codeforces.py 의 `except Exception as e` 를 타고 500 detail 로
+    # **클라이언트에게 반환**되고 로그에도 남는다. /api/import-codeforces 는 인증이 없고,
+    # 요청자가 키를 넣지 않으면 settings.codeforces_api_key(운영자 키)로 폴백하므로
+    # 운영자 키+유효 서명이 익명 요청자에게 노출된다.
+    # 그래서 이 함수를 나가는 모든 예외를 원문 없는 ValueError 로 치환한다.
+    try:
+        resp = requests.get(
+            f"{CODEFORCES_API_BASE}/{method_name}",
+            params=params,
+            headers=CODEFORCES_HEADERS,
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        raise ValueError(f"Codeforces API 연결 실패 ({type(e).__name__})") from None
     try:
         payload = resp.json()
     except ValueError:
@@ -426,8 +446,8 @@ def search_cf_problems_by_tag(tag: str, min_rating: int, max_rating: int,
         problems, stats_map = _get_cf_problemset_snapshot()
     except Exception as e:
         # 전면 실패를 빈 목록으로 돌려주면 호출부가 "다 풀었음"과 구분할 수 없다.
-        logger.warning("CF 문제셋 스냅샷 조회 실패 — 추천/테마가 빈 결과가 된다: %s", e)
-        return []
+        logger.warning("CF 문제셋 스냅샷 조회 실패: %s", e)
+        raise ProblemSearchError("Codeforces 문제 검색에 실패했습니다.") from e
 
     results = []
     for p in problems:

@@ -1,8 +1,13 @@
 import json
+import logging
 from datetime import datetime, timezone
+
+from sqlalchemy.exc import IntegrityError
 
 from db.connection import session_scope
 from db.models import ApiCache
+
+logger = logging.getLogger("uvicorn.error")
 
 # 외부 API 파생 페이로드의 DB 캐시 — Cloud Run 콜드 스타트에도 살아남는다.
 # TTL은 컬럼이 아니라 읽기 시점에 판정한다.
@@ -51,8 +56,18 @@ def cache_get_stale(key: str):
 
 
 def cache_set(key: str, payload) -> None:
-    """JSON 직렬화 가능한 페이로드를 upsert한다."""
+    """JSON 직렬화 가능한 페이로드를 upsert한다.
+
+    merge() 는 SELECT 후 없으면 INSERT 라, 인스턴스 두 개가 같은 키를 동시에 채우면
+    한쪽이 IntegrityError 를 받는다. 캐시 쓰기는 **부수 효과**이므로 그것 때문에 요청이
+    500 이 되면 안 된다 — 상대가 이미 같은 값을 넣었다는 뜻이라 그냥 넘어간다.
+    (warmup 경로는 자기 try/except 로 삼키지만 /api/themes/{id}/problems 경로는
+    잡는 곳이 없었다.)
+    """
     data = json.dumps(payload, ensure_ascii=False)
     now = datetime.now(timezone.utc).isoformat()
-    with session_scope(commit=True) as session:
-        session.merge(ApiCache(cache_key=key, payload=data, updated_at=now))
+    try:
+        with session_scope(commit=True) as session:
+            session.merge(ApiCache(cache_key=key, payload=data, updated_at=now))
+    except IntegrityError:
+        logger.info("캐시 동시 쓰기 충돌 — 다른 인스턴스가 먼저 채웠다 (key=%s)", key)

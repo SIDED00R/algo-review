@@ -13,7 +13,9 @@ def validate_platform(value: str) -> str:
 
 class ReviewRequest(BaseModel):
     platform: str = "boj"
-    problem_id: int | None = None
+    # gt=0 — 프론트의 `if (!problemId)` 가드는 문자열 "0" 을 통과시키므로(!"0" === false)
+    # problem_id=0 이 서버까지 도달해 "문제 0" 리뷰 행이 저장됐다.
+    problem_id: int | None = Field(default=None, gt=0)
     problem_ref: str | None = None
     problem_statement: str | None = None
     code: str

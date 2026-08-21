@@ -1,9 +1,8 @@
 import re
 
-from openai import OpenAI
-
 from clients.codeforces import TEX_IMG_MARKER_RE
 from config import settings
+from llm_client import choice_text, get_client, require_choice
 
 _MAX_TOKENS = settings.openai_max_tokens or 2000
 _TEMPERATURE = settings.openai_temperature
@@ -46,8 +45,7 @@ def translate_cf_text(text: str, title: str) -> str:
     입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
     """
     text, image_urls = _mask_image_markers(text)
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
-    resp = client.chat.completions.create(
+    resp = get_client().chat.completions.create(
         model=settings.openai_model or "gpt-4o-mini",
         messages=[
             {"role": "system", "content": (
@@ -72,13 +70,14 @@ def translate_cf_text(text: str, title: str) -> str:
         temperature=_TEMPERATURE,
         timeout=_API_TIMEOUT,
     )
+    require_choice(resp)
     if resp.choices[0].finish_reason == "length":
         # 응답이 max_tokens 에 걸려 문장 중간에서 잘렸다. 잘린 번역이라도 성공으로 간주해
         # 영구 캐시되게 하고, 잘렸다는 사실만 사용자에게 알린다(무한 재시도 방지).
-        partial = resp.choices[0].message.content.strip() or text
+        partial = choice_text(resp) or text
         return _unmask_image_markers(partial, image_urls) + \
             "\n\n_(⚠️ 문제가 너무 길어 번역이 일부 생략되었습니다.)_"
 
     # text 는 이 시점에 마스킹된 상태이므로 폴백이든 번역문이든 똑같이 되돌린다.
-    result = resp.choices[0].message.content.strip() or text
+    result = choice_text(resp) or text
     return _unmask_image_markers(result, image_urls)

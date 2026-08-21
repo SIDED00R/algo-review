@@ -337,7 +337,7 @@ def test_truncated_tree_raises_instead_of_returning_partial_results():
 # "저장 가드" 섹션이 is_scrape_failure 와 set_problem_statement 만 검사해, main() 안의
 # 길이 검사(MIN_STATEMENT_LEN)는 0 으로 바꿔도 스위트가 초록이었다.
 
-def _run_main(monkeypatch, statement, apply=False, capsys=None):
+def _run_main(monkeypatch, statement, apply=False):
     """main() 을 BOJ 한 건에 대해 돌린다. 수집 결과만 주입한다."""
     monkeypatch.setattr(db, "get_problems_missing_statement",
                         lambda platform=None: [{"platform": "boj", "problem_ref": "1000",
@@ -366,14 +366,14 @@ def test_short_statement_is_skipped_not_stored(monkeypatch, capsys):
     assert "SKIP" in out and "너무 짧거나" in out
 
 
-def test_long_enough_statement_is_stored(monkeypatch, capsys):
+def test_long_enough_statement_is_stored(monkeypatch):
     body = "가" * (backfill.MIN_STATEMENT_LEN + 1)
     written = _run_main(monkeypatch, body, apply=True)
 
     assert len(written) == 1 and written[0][2] == body
 
 
-def test_failure_string_is_skipped_even_when_long(monkeypatch, capsys):
+def test_failure_string_is_skipped_even_when_long(monkeypatch):
     """길이는 충분하지만 실패 문자열이면 저장하면 안 된다 — 저장하면 그 문제의 리뷰가
     resolve_statement 를 통해 영구히 오염된다."""
     failure = "크롤링 실패: 404 Client Error: Not Found for url: " + "x" * 40

@@ -77,6 +77,8 @@ _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 
 
 
 def _client():
+    """conftest 의 minimal_app 과 같은 최소 앱 — 여기서는 픽스처가 아니라 함수여야 한다
+    (monkeypatch 를 먼저 적용한 뒤 만들어야 하는 테스트가 있다)."""
     app = FastAPI()
     app.include_router(execute_route.router)
     return TestClient(app)

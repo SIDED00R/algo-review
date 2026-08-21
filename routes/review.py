@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from config import settings
 from routes.models import ReviewRequest, ReviewResponse
 from routes.problem_resolve import resolve_problem_info, resolve_statement
+from routes.helpers import require_language
 from routes.review_response import save_and_build_response
 from demo_mode import IS_DEMO, DEMO_PROBLEM_INFO, DEMO_REVIEW_RESULT
 
@@ -13,6 +14,7 @@ router = APIRouter()
 def review_code(req: ReviewRequest):
     if not req.code.strip():
         raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
+    require_language(req.language)
 
     if IS_DEMO:
         return save_and_build_response(DEMO_PROBLEM_INFO, req.code, DEMO_REVIEW_RESULT,

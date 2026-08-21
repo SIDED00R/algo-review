@@ -3,9 +3,25 @@ const TIER_GROUPS = {
   platinum: [16, 20], diamond: [21, 25], ruby: [26, 30], unrated: [0, 0],
 };
 
+// 라벨은 배지에 찍히는 티어 이름(Bronze V ...)과 같은 표기를 쓴다 — 필터가 걸러내는
+// 대상과 같은 말이어야 한다.
+const TIER_GROUP_LABELS = {
+  bronze: 'Bronze', silver: 'Silver', gold: 'Gold',
+  platinum: 'Platinum', diamond: 'Diamond', ruby: 'Ruby', unrated: 'Unrated',
+};
+
 function tierInGroup(tier, key) {
   const r = TIER_GROUPS[key];
   return tier >= r[0] && tier <= r[1];
+}
+
+/** 난이도 필터 <option> 목록. 두 벌로 두면 갈린다 — 실제로 리뷰 기록 탭에는 Ruby·Unrated
+ *  가 빠져 있어 그 두 그룹을 난이도로 걸러낼 수 없었다. */
+function tierFilterOptionsHtml() {
+  return ['<option value="">전체 난이도</option>']
+    .concat(Object.keys(TIER_GROUPS).map(
+      key => `<option value="${key}">${TIER_GROUP_LABELS[key]}</option>`))
+    .join('');
 }
 
 function tierClass(tier) {
@@ -70,8 +86,9 @@ function cfRefToUrl(ref) {
 function problemUrl(problem) {
   if (problem.problem_url) return problem.problem_url;
   if (problem.platform === 'codeforces') {
-    const url = cfRefToUrl(problem.problem_ref);
-    if (url) return url;
+    // 파싱이 실패해도 BOJ 로 흘려보내지 않는다 — "CF 문제인데 백준 링크" 는
+    // 깨진 링크보다 알아채기 어려운 조용한 오답이다.
+    return cfRefToUrl(problem.problem_ref) || 'https://codeforces.com/problemset';
   }
   return `https://boj.kr/${problem.problem_id ?? problem.problem_ref}`;
 }
@@ -99,8 +116,10 @@ function setLoading(btn, loading) {
 }
 
 function showError(container, msg) {
-  container.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`;
+  // 먼저 보이게 한 뒤 내용을 넣는다 — display:none 상태에서 일어난 변경은 접근성
+  // 트리에 없어 aria-live 영역이어도 스크린리더가 첫 메시지를 읽지 않는다.
   container.classList.remove('hidden');
+  container.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`;
 }
 
 async function fetchJsonOk(url, options, fallbackMsg) {

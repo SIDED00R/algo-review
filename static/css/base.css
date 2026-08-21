@@ -26,6 +26,10 @@ a { color: inherit; }
 .mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  /* weight 를 못박는다 — 지정하지 않으면 상속받는다. .summary-value(600) 안에 놓이는
+     CF 평균 레이팅(stats.js)이 실제로 그랬고, JetBrains Mono 는 400/500 만 로드하므로
+     브라우저가 합성 볼드를 그렸다. 로드한 두 굵기 중 굵은 쪽으로 고정한다. */
+  font-weight: 500;
 }
 
 /* 라벨은 한글이므로 Pretendard 로 둔다 — JetBrains Mono 에 한글 글리프가 없어

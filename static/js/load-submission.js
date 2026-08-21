@@ -64,7 +64,10 @@ function fillReviewForm(review, seq, total) {
   window.setEditorValue('code-input', review.code || '');
 
   activateTab('review');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // 명시 behavior 는 base.css 의 `scroll-behavior: auto !important` 를 이긴다
+  // (CSSOM View) — 감소 모션 설정을 여기서 직접 본다.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
 
   if (loadSubmissionMsg) {
     loadSubmissionMsg.className = 'hint';

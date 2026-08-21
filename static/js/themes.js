@@ -77,9 +77,14 @@ function _cacheThemeProblems(key, data) {
   _lsSet(`themes:problems:v1:${key}`, data);
 }
 
+// 요청 세대 토큰 — 테마 A 를 고른 직후 B 를 누르면 A 의 늦은 응답이 B 의 렌더를 덮어
+// 칩은 B 가 활성인데 제목은 A 가 표시된다(problem-modal.js 와 같은 규약).
+let _themeToken = 0;
+
 async function loadThemeProblems({ force = false } = {}) {
   const result = document.getElementById('themes-result');
   const key = `${themesPlatform}:${selectedThemeId}`;
+  const token = ++_themeToken;
 
   if (!force) {
     const mem = _themeProblemsCache.get(key);
@@ -95,9 +100,12 @@ async function loadThemeProblems({ force = false } = {}) {
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 문제를 불러오는 중입니다...</div>';
   try {
     const data = await _fetchThemeProblems(themesPlatform, selectedThemeId);
+    // 캐시는 키가 있어 늦은 응답이어도 안전하다 — 렌더만 막는다.
     _cacheThemeProblems(key, data);
+    if (token !== _themeToken) return;
     renderThemeProblems(result, data);
   } catch (e) {
+    if (token !== _themeToken) return;
     showError(result, e.message);
   }
 }

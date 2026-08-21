@@ -68,6 +68,17 @@ def test_average_tier_window_limited_to_30(at_time):
     assert db.get_average_tier() == 10.0
 
 
+def test_average_tier_excludes_codeforces_rows():
+    """BOJ 전용 지표다 — 지금은 CF 리뷰의 tier 가 항상 0 이라 `tier > 0` 만으로도
+    걸러지지만 그건 우연이다. CF 레이팅을 티어로 매핑하면 BOJ 평균이 오염된다.
+    """
+    mk_review(problem_id=1, problem_ref="1", tier=10)
+    # CF 행에 실제 티어가 붙는 미래를 흉내낸다.
+    mk_review(problem_id=0, platform="codeforces", problem_ref="4A", tier=30,
+              tier_name="Codeforces 2400")
+    assert db.get_average_tier() == 10.0
+
+
 def test_average_cf_rating_empty_returns_default():
     assert db.get_average_cf_rating() == 1200.0
 
@@ -80,7 +91,7 @@ def test_average_cf_rating_parses_and_averages_latest():
     assert db.get_average_cf_rating() == 1400.0
 
 
-def test_problems_grouped_counts_and_orders_efficiencies(at_time):
+def test_problems_grouped_counts_and_reports_latest_efficiency(at_time):
     at_time("2024-01-01T00:00:00")
     mk_review(problem_id=1, problem_ref="1", efficiency="good")
     at_time("2024-01-02T00:00:00")
@@ -89,8 +100,9 @@ def test_problems_grouped_counts_and_orders_efficiencies(at_time):
     assert len(grouped) == 1
     row = grouped[0]
     assert row["submission_count"] == 2
-    # 최신 제출이 먼저 — poor(01-02) → good(01-01)
-    assert row["efficiencies"] == "poor,good"
+    # 최신 회차(poor, 01-02)의 판정만 내려간다 — 프론트(history.js)가 그 하나만 배지로 쓴다.
+    assert row["last_efficiency"] == "poor"
+    assert "efficiencies" not in row
 
 
 def test_pending_review_skips_tag_stats():

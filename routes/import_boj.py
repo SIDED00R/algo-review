@@ -56,7 +56,7 @@ def import_history(req: ImportRequest):
                 problem_ref=str(problem_id),
             )
             if github_push_enabled and code:
-                ext = api_client._get_file_extension(sub.get("language", ""))
+                ext = api_client.get_file_extension(sub.get("language", ""))
                 folder, msg = build_solution_target("boj", problem_id, info["title"], info.get("tier_name", ""))
                 readme = build_readme(str(problem_id), info["title"],
                                       info.get("tier_name", ""), info.get("tags", []),

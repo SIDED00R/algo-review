@@ -21,7 +21,6 @@
   let rows = [];            // 현재 화면에 보이는 항목 [{label, meta, run}]
   let cursor = 0;
   let problems = null;      // /api/reviews/grouped 캐시 (팔레트를 여는 동안만)
-  let lastFocus = null;
 
   function isOpen() { return !overlay.classList.contains('hidden'); }
 
@@ -141,7 +140,6 @@
   }
 
   function open() {
-    lastFocus = document.activeElement;
     overlay.classList.remove('hidden');
     mode = 'root';
     problems = null;   // 팔레트를 열 때마다 최신 목록을 받는다
@@ -149,12 +147,13 @@
     input.value = '';
     input.placeholder = '무엇을 할까요?';
     refresh();
-    input.focus();
+    // 포커스 이동·복원은 modal-a11y 에 맡긴다(아래 registerModal 의 initial).
+    // 여기서 직접 input.focus() 를 하면 공통 모듈이 "열기 전 포커스" 로 #cmdk-input
+    // 자신을 기억해, 닫을 때 숨겨진 입력으로 되돌리려 하는 장부가 하나 더 생긴다.
   }
 
   function close() {
     overlay.classList.add('hidden');
-    if (lastFocus) lastFocus.focus();
   }
 
   function back() {
@@ -179,7 +178,7 @@
   document.getElementById('cmdk-open')?.addEventListener('click', open);
 
   // 자기 Esc 는 "뒤로 한 단계" 의미가 있어 직접 처리한다 — 공통 모듈에는 트랩만 맡긴다.
-  registerModal('cmdk', close, { ownsEscape: true });
+  registerModal('cmdk', close, { ownsEscape: true, initial: '#cmdk-input' });
 
   // 표기를 플랫폼에 맞춘다 — 핸들러는 metaKey|ctrlKey 를 다 받는데 UI 는 macOS 글리프만
   // 보여줬다. 백준·CF 사용자 다수가 Windows 다.

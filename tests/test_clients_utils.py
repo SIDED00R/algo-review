@@ -6,11 +6,11 @@ rereview 가 "저장된 언어 정보가 없어 파일명을 재현할 수 없�
 예전에 빠져 있던 실제 표기:
 - BOJ 채점 목록의 C 계열 표준 연도 표기 (`C99`/`C11`/`C90`, `(Clang)` 변종 포함)
 - 컴파일러 이름이 앞에 붙어 `c++` 부분문자열이 없는 C++ 표기 (`GNU G++17 7.3.0`, `Clang++17`)
-- `_get_file_extension` 이 만드는데 `_ext_to_language` 가 모르던 확장자 (`.hs`/`.scala`/`.fs`/`.d`)
+- `get_file_extension` 이 만드는데 `_ext_to_language` 가 모르던 확장자 (`.hs`/`.scala`/`.fs`/`.d`)
 """
 import pytest
 
-from clients.utils import _ext_to_language, _get_file_extension
+from clients.utils import _ext_to_language, get_file_extension
 
 # 실제로 관측되는 언어 문자열 → 기대 확장자
 _CASES = [
@@ -34,7 +34,7 @@ _CASES = [
 
 @pytest.mark.parametrize("language,expected", _CASES, ids=[c[0] or "empty" for c in _CASES])
 def test_language_maps_to_expected_extension(language, expected):
-    assert _get_file_extension(language) == expected
+    assert get_file_extension(language) == expected
 
 
 @pytest.mark.parametrize("language,expected", _CASES, ids=[c[0] or "empty" for c in _CASES])
@@ -47,21 +47,21 @@ def test_extension_round_trips_back_to_a_language(language, expected):
 
 def test_go_is_matched_as_a_word_not_a_substring():
     """`go` 를 부분문자열로 찾으면 이 언어들이 .go 로 걸린다 — BOJ 채점 목록에 실재한다."""
-    assert _get_file_extension("Golfscript") != ".go"
-    assert _get_file_extension("Algol 68") != ".go"
+    assert get_file_extension("Golfscript") != ".go"
+    assert get_file_extension("Algol 68") != ".go"
 
 
 def test_c_boundary_does_not_swallow_cpp():
     """C 패턴이 C++ 를 먹으면 확장자가 뒤바뀐다."""
-    assert _get_file_extension("C++17") == ".cpp"
-    assert _get_file_extension("GNU G++17 7.3.0") == ".cpp"
+    assert get_file_extension("C++17") == ".cpp"
+    assert get_file_extension("GNU G++17 7.3.0") == ".cpp"
 
 
 def test_every_produced_extension_is_known_to_the_reverse_map():
-    """_get_file_extension 이 만들 수 있는 확장자 전체가 _ext_to_language 에 있어야 한다.
+    """get_file_extension 이 만들 수 있는 확장자 전체가 _ext_to_language 에 있어야 한다.
 
     앞으로 새 언어를 추가할 때 한쪽만 고치는 것을 막는다.
     """
-    produced = {_get_file_extension(lang) for lang, _ in _CASES} - {".txt"}
+    produced = {get_file_extension(lang) for lang, _ in _CASES} - {".txt"}
     missing = [ext for ext in sorted(produced) if not _ext_to_language("x" + ext)]
     assert missing == []

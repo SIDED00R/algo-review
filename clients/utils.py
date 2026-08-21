@@ -1,5 +1,17 @@
 import re
 
+
+class ProblemSearchError(RuntimeError):
+    """문제 검색이 **실패**했다(빈 결과가 아니다).
+
+    빈 목록으로 돌려주면 호출부가 "조건에 맞는 문제 없음"과 구분할 수 없다. 실제로
+    운영에서 solved.ac 가 Cloud Run 을 403 으로 막는 동안 /api/recommend 가
+    `recommendations: []` 를 주고 UI 는 "아직 추천 데이터가 없습니다. 먼저 코드 리뷰를
+    몇 개 진행해보세요." 로 **사용자를 탓하고 있었다** — 같은 응답에 평균 티어와 취약
+    태그가 채워져 있는데도. (#113)
+    """
+
+
 # BOJ 채점 목록은 표준 연도를 붙여 `C99`·`C11`·`C90`(+ `(Clang)` 변종) 으로 적고, CF 는
 # `GNU C11`, 프론트 드롭다운은 `C` 를 쓴다. 세 표기를 한 패턴으로 받는다 — 예전에는
 # `startswith("c ")` 만 봐서 BOJ 표기가 전부 .txt 로 떨어졌고, 확장자가 .txt 면
@@ -24,7 +36,7 @@ def get_problem_url(platform: str, problem_ref: str | int) -> str:
     return f"https://boj.kr/{problem_ref}"
 
 
-def _get_file_extension(language: str) -> str:
+def get_file_extension(language: str) -> str:
     lang = (language or "").lower()
     if _CPP_LANG_RE.search(lang) or "c plus" in lang:
         return ".cpp"
@@ -64,7 +76,7 @@ def _get_file_extension(language: str) -> str:
 
 
 def _ext_to_language(filename: str) -> str:
-    """확장자에서 언어를 되돌린다. _get_file_extension 이 만드는 모든 확장자를 받아야 한다 —
+    """확장자에서 언어를 되돌린다. get_file_extension 이 만드는 모든 확장자를 받아야 한다 —
     빠뜨리면 그 언어로 push 한 풀이를 다시 가져올 때 language 가 빈 문자열이 되고,
     rereview 가 파일명을 재현할 수 없다며 재업로드를 거부한다."""
     ext_map = {

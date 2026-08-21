@@ -72,8 +72,8 @@ def test_translate_returns_partial_content_when_truncated(monkeypatch):
     # 유료 호출이 반복된다 — 잘린 번역이라도 성공으로 간주해 영구 캐시되도록,
     # 예외 대신 부분 번역문 + 안내 문구를 반환해야 한다.
     monkeypatch.setattr(
-        cf_translator, "OpenAI",
-        lambda **kwargs: _FakeOpenAI("잘린 번역문...", "length"),
+        cf_translator, "get_client",
+        lambda: _FakeOpenAI("잘린 번역문...", "length"),
     )
     result = cf_translator.translate_cf_text("원문", "제목")
     assert "잘린 번역문..." in result
@@ -82,7 +82,7 @@ def test_translate_returns_partial_content_when_truncated(monkeypatch):
 
 def test_translate_returns_content_when_not_truncated(monkeypatch):
     monkeypatch.setattr(
-        cf_translator, "OpenAI",
-        lambda **kwargs: _FakeOpenAI("완전한 번역문", "stop"),
+        cf_translator, "get_client",
+        lambda: _FakeOpenAI("완전한 번역문", "stop"),
     )
     assert cf_translator.translate_cf_text("원문", "제목") == "완전한 번역문"

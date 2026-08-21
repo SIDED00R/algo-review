@@ -18,14 +18,18 @@ router = APIRouter()
 _STATE_TTL = 300  # seconds
 _HMAC_KEY = settings.github_client_secret.encode() or b"dev-fallback-key"
 # 사용된 nonce → 만료 시각. TTL 만료된 것만 정리해 1000개 일괄 삭제로 인한 replay 창 재개를 방지.
+# **프로세스 로컬**이다 — 인스턴스가 2개 이상이면 재사용 차단이 인스턴스별로만 성립한다.
+# 잔여 위험은 HMAC 서명 + 300초 TTL + HttpOnly 쿠키 바인딩이 받친다(아래 콜백 참조).
 _USED_NONCES: dict[str, float] = {}
 
 
-def _new_state() -> str:
+def _new_state() -> tuple[str, str]:
+    """(state, nonce). nonce 를 함께 돌려준다 — 호출부가 방금 만든 문자열을
+    `state.split(".")[0]` 로 되파싱하던 왕복을 없앤다."""
     nonce = secrets.token_urlsafe(16)
     ts = str(int(time.time()))
     sig = hmac.new(_HMAC_KEY, f"{nonce}.{ts}".encode(), hashlib.sha256).hexdigest()
-    return f"{nonce}.{ts}.{sig}"
+    return f"{nonce}.{ts}.{sig}", nonce
 
 
 def _validate_state(state: str) -> tuple[bool, str]:
@@ -65,8 +69,7 @@ def github_oauth_start():
     client_id, _, app_url = _github_oauth_settings()
     if not client_id:
         raise HTTPException(status_code=500, detail="GITHUB_CLIENT_ID가 설정되지 않았습니다.")
-    state = _new_state()
-    nonce = state.split(".")[0]
+    state, nonce = _new_state()
     callback_url = f"{app_url}/auth/github/callback"
     github_url = (
         f"https://github.com/login/oauth/authorize"

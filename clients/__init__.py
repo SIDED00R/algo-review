@@ -1,5 +1,4 @@
 from clients.solved_ac import (
-    TIER_NAMES,
     BojCrawlError,
     get_problems_bulk,
     get_problem_info,
@@ -32,12 +31,12 @@ from clients.github import (
     get_raw_github_content,
 )
 from clients.utils import (
+    ProblemSearchError,
     get_problem_url,
-    _get_file_extension,
+    get_file_extension,
 )
 
 __all__ = [
-    "TIER_NAMES",
     "BojCrawlError",
     "get_problems_bulk", "get_problem_info", "get_problem_statement",
     "get_boj_problem_sections", "search_problems_by_tag", "get_tag_key_by_name",
@@ -50,5 +49,5 @@ __all__ = [
     "exchange_github_code", "get_github_user", "get_github_user_repos",
     "get_github_file_sha", "push_file_to_github", "push_files_to_github",
     "get_baekjoonhub_problems", "get_boj_readme_paths", "get_raw_github_content",
-    "get_problem_url", "_get_file_extension",
+    "ProblemSearchError", "get_problem_url", "get_file_extension",
 ]

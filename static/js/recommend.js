@@ -26,8 +26,12 @@ recommendBtn.addEventListener('click', () => fetchRecommend());
 
 function renderRecommend(container, data) {
   if (!data.recommendations || data.recommendations.length === 0) {
-    container.innerHTML = `
-      <div class="alert alert-info">
+    // 검색 실패와 "기록이 없어서 빈 결과" 를 구분한다 — 서버가 error 를 주면 그 이유를
+    // 그대로 보인다. 예전에는 solved.ac 가 막혀도 "먼저 코드 리뷰를 몇 개 진행해보세요"
+    // 라고 사용자를 탓했다.
+    container.innerHTML = data.error
+      ? `<div class="alert alert-error">${escapeHtml(data.error)} 잠시 후 다시 시도해주세요.</div>`
+      : `<div class="alert alert-info">
         아직 추천 데이터가 없습니다. 먼저 코드 리뷰를 몇 개 진행해보세요.
       </div>`;
     return;
@@ -69,7 +73,7 @@ function renderRecommend(container, data) {
       } else {
         html += `
           <div class="rec-problem-card">
-            <a href="${escapeHtml(p.url || 'https://boj.kr/' + p.id)}" target="_blank">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
+            <a href="${escapeHtml(p.url || 'https://boj.kr/' + p.id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
             ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       }

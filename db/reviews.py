@@ -17,16 +17,18 @@ update_pending_review 가 실제 리뷰로 채울 때 집계한다.
 
 
 def _normalize_review_row(row: dict) -> dict:
+    """리뷰 상세 행 — JSON 리스트 컬럼을 파싱한다.
+
+    **strengths/weaknesses 를 select 한 행에만 쓴다.** 목록 응답(grouped·history)은 그
+    컬럼을 뽑지 않는데 여기를 통과시키면 빈 리스트 두 개가 응답에 주입된다 — 프론트는
+    쓰지 않지만 "이 API 는 강점/약점을 준다" 는 잘못된 계약이 응답에 박힌다.
+    """
     normalize_common_row(row)
 
-    if isinstance(row.get("strengths"), str):
-        row["strengths"] = json.loads(row.get("strengths") or "[]")
-    else:
-        row["strengths"] = row.get("strengths", [])
-    if isinstance(row.get("weaknesses"), str):
-        row["weaknesses"] = json.loads(row.get("weaknesses") or "[]")
-    else:
-        row["weaknesses"] = row.get("weaknesses", [])
+    for key in ("strengths", "weaknesses"):
+        value = row.get(key)
+        # 저장 경로가 막혀 있어도 옛 행에는 문자열 "null" 이 남아 있을 수 있다.
+        row[key] = json.loads(value or "[]") if isinstance(value, str) else (value or [])
     return row
 
 
@@ -51,6 +53,7 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
                 strengths: list = None, weaknesses: list = None,
                 platform: str = "boj", problem_ref: str | None = None,
                 tier_name: str = "", language: str = "", problem_statement: str = ""):
+    tags = tags or []
     strengths = strengths or []
     weaknesses = weaknesses or []
     platform = (platform or "boj").strip().lower()
@@ -75,8 +78,8 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
             tags=json.dumps(tags, ensure_ascii=False), code=code, feedback=feedback or "",
             efficiency=efficiency, complexity=complexity or "",
             better_algorithm=better_algorithm or "",
-            strengths=json.dumps(strengths or [], ensure_ascii=False),
-            weaknesses=json.dumps(weaknesses or [], ensure_ascii=False),
+            strengths=json.dumps(strengths, ensure_ascii=False),
+            weaknesses=json.dumps(weaknesses, ensure_ascii=False),
             language=language or "", problem_statement=problem_statement or "",
             created_at=datetime.now().isoformat(),
         ))
@@ -119,8 +122,10 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         row.complexity = result.get("complexity") or ""
         row.better_algorithm = result.get("better_algorithm") or ""
         row.feedback = result.get("feedback") or ""
-        row.strengths = json.dumps(result.get("strengths", []), ensure_ascii=False)
-        row.weaknesses = json.dumps(result.get("weaknesses", []), ensure_ascii=False)
+        # 리스트도 `or []` 로 통일한다 — json.dumps(None) 은 IntegrityError 없이
+        # 문자열 "null" 을 만들어 통과하고, 읽을 때 None 이 되어 API 가 null 을 내보낸다.
+        row.strengths = json.dumps(result.get("strengths") or [], ensure_ascii=False)
+        row.weaknesses = json.dumps(result.get("weaknesses") or [], ensure_ascii=False)
 
         if platform == "boj" and reviewed_before == 0:
             _bump_tag_stats(session, json.loads(row.tags), efficiency)
@@ -178,13 +183,20 @@ _AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
 
 
 def get_average_tier() -> float:
-    """최근 30개 고유 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다."""
+    """최근 30개 고유 **BOJ** 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다.
+
+    플랫폼을 명시한다. `tier > 0` 만으로도 지금은 CF 가 걸러지지만(clients/codeforces.py
+    가 CF 리뷰에 항상 tier=0 을 넣는다) 그건 우연이다 — CF 레이팅을 티어로 매핑하는
+    변경이 들어오면 BOJ 평균 티어와 추천 난이도가 조용히 오염된다.
+    형제 함수 get_tier_history·get_average_cf_rating 은 이미 플랫폼을 명시한다.
+    """
     rn = func.row_number().over(
         partition_by=(Review.platform, Review.problem_ref),
         order_by=Review.created_at.desc(),
     ).label("rn")
     with session_scope() as session:
-        sub = select(Review.tier, Review.created_at, rn).where(Review.tier > 0).subquery()
+        sub = select(Review.tier, Review.created_at, rn).where(
+            Review.platform == "boj", Review.tier > 0).subquery()
         tiers = session.scalars(
             select(sub.c.tier).where(sub.c.rn == 1)
             .order_by(sub.c.created_at.desc()).limit(_AVG_TIER_WINDOW)
@@ -205,27 +217,24 @@ def get_problems_grouped() -> list:
 
     # (platform, problem_ref) 로 묶는다 — 재제출 사이 제목/태그가 바뀌어도 한 문제로 합쳐진다.
     grouped: dict[tuple, dict] = {}
-    order: list[tuple] = []
     for r in rows:
         key = (r["platform"], r["problem_ref"])
-        if key not in grouped:
-            grouped[key] = {
-                "problem_id": r["problem_id"], "platform": r["platform"],
-                "problem_ref": r["problem_ref"], "title": r["title"],
-                "tier": r["tier"], "tier_name": r["tier_name"], "tags": r["tags"],
-                "submission_count": 0, "last_submitted": r["created_at"], "_effs": [],
-            }
-            order.append(key)
-        g = grouped[key]
+        # rows 가 created_at DESC 라 처음 만난 행이 최신 회차다.
+        g = grouped.setdefault(key, {
+            "problem_id": r["problem_id"], "platform": r["platform"],
+            "problem_ref": r["problem_ref"], "title": r["title"],
+            "tier": r["tier"], "tier_name": r["tier_name"], "tags": r["tags"],
+            "submission_count": 0, "last_submitted": r["created_at"],
+            # 예전에는 회차 판정을 CSV(`efficiencies`)로 내려보냈다. GROUP_CONCAT 을 쓰던
+            # 시절의 잔재로, 프론트가 받자마자 `.split(',')[0]` 으로 첫 값만 꺼내 썼다.
+            # 판정 문자열에 콤마가 들어가면 깨지는 잠재 결함까지 있어 값 하나로 좁혔다.
+            "last_efficiency": r["efficiency"],
+        })
         g["submission_count"] += 1
-        g["_effs"].append(r["efficiency"])  # rows 가 created_at DESC 라 최신순으로 쌓인다
 
-    result = []
-    for key in order:
-        g = grouped[key]
-        g["efficiencies"] = ",".join(g.pop("_effs"))
-        _normalize_review_row(g)
-        result.append(g)
+    result = list(grouped.values())
+    for g in result:
+        normalize_common_row(g)
     return result
 
 
@@ -311,7 +320,7 @@ def get_review_history(limit: int = 10, platform: str | None = None) -> list:
         rows = session.execute(stmt).mappings().all()
     result = [dict(r) for r in rows]
     for r in result:
-        _normalize_review_row(r)
+        normalize_common_row(r)
     return result
 
 

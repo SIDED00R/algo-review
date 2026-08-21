@@ -46,7 +46,14 @@ function showChartMessage(text) {
   emptyEl.classList.remove('hidden');
 }
 
+// 세대 토큰 — problem-modal.js 와 같은 규약. 없으면 탭을 연속으로 열 때 호출 A·B 가
+// 둘 다 진입 시점에 tierChartInstance === null 을 보고 destroy 를 건너뛴 뒤, 뒤늦은
+// new Chart 가 같은 canvas 에서 "Canvas is already in use" 를 던진다. 그 예외는
+// 아래 catch 가 showChartMessage 로 넘겨 **Chart.js 영문 메시지가 안내문 자리에** 뜬다.
+let _chartToken = 0;
+
 async function loadTierChart() {
+  const token = ++_chartToken;
   if (tierChartInstance) {
     tierChartInstance.destroy();
     tierChartInstance = null;
@@ -55,6 +62,7 @@ async function loadTierChart() {
     // fetchJsonOk 를 쓴다 — res.ok 를 안 보면 503(온디맨드 DB 정지)이 빈 배열로 흘러
     // "기록이 없습니다"로 표시되고 사용자가 장애를 알 수 없다.
     const data = await fetchJsonOk('/api/tier-history', undefined, '성장 곡선 로딩 실패');
+    if (token !== _chartToken) return;
     const history = data.history || [];
 
     if (!history.length) {
@@ -130,7 +138,7 @@ async function loadTierChart() {
       .getPropertyValue(name).trim();
     const gridColor = cssVar('--line');
     const textColor = cssVar('--fg-dim');
-    const lineColor = cssVar('--eff-good-fg');
+    const lineColor = cssVar('--chart-line');
     // 면적도 데이터다 — 토큰 색에서 투명도만 낮춰 쓴다
     const fillColor = hexToRgba(lineColor, 0.1);
 
@@ -143,6 +151,7 @@ async function loadTierChart() {
     }
 
     const ctx = document.getElementById('tier-chart').getContext('2d');
+    if (token !== _chartToken) return;
     tierChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -205,13 +214,36 @@ async function loadTierChart() {
       },
     });
   } catch (e) {
+    if (token !== _chartToken) return;
     // 예전에는 console.error 만 남겨 사용자에게 아무 반응이 없었다.
     showChartMessage(e.message || '성장 곡선을 불러오지 못했습니다.');
   }
 }
 
+/** 테마 색만 새 토큰 값으로 바꾼다. 데이터는 그대로다. */
+function recolorTierChart() {
+  const chart = tierChartInstance;
+  if (!chart) return;
+  const cssVar = name => getComputedStyle(document.documentElement)
+    .getPropertyValue(name).trim();
+  const gridColor = cssVar('--line');
+  const textColor = cssVar('--fg-dim');
+  const lineColor = cssVar('--chart-line');
+
+  chart.data.datasets[0].borderColor = lineColor;
+  chart.data.datasets[0].backgroundColor = hexToRgba(lineColor, 0.1);
+  chart.options.plugins.legend.labels.color = textColor;
+  for (const axis of [chart.options.scales.x, chart.options.scales.y]) {
+    axis.ticks.color = textColor;
+    axis.grid.color = gridColor;
+  }
+  chart.update('none');
+}
+
 // editor.js 와 같은 방식으로 테마 변경을 감시한다. 예전에는 감시자가 없어
 // 테마를 토글해도 축·그리드·범례 색이 그대로 남았다(통계 탭을 다시 눌러야 갱신).
-new MutationObserver(() => {
-  if (tierChartInstance) loadTierChart();
-}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+// 색만 갱신한다 — loadTierChart() 를 다시 부르면 색을 바꾸려고 /api/tier-history 를
+// 재요청하고(editor.js 는 setOption 만 한다), 통계 탭이 비활성일 때는 0×0 canvas 에
+// 차트를 재생성한다.
+new MutationObserver(recolorTierChart)
+  .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

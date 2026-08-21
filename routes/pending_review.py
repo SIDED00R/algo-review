@@ -5,7 +5,7 @@
 """
 import db
 from fastapi import APIRouter, HTTPException
-from routes.helpers import push_review_bundle, require_github_target
+from routes.helpers import push_review_bundle, require_github_target, require_language
 from routes.models import ReviewRequest
 from routes.problem_resolve import resolve_problem_info
 from demo_mode import IS_DEMO, DEMO_PROBLEM_INFO
@@ -19,9 +19,7 @@ _PENDING_REVIEW = {"efficiency": db.PENDING_EFFICIENCY}
 def push_without_review(req: ReviewRequest):
     if not req.code.strip():
         raise HTTPException(status_code=400, detail="코드가 비어있습니다.")
-    # 언어를 모르면 확장자가 .txt 로 떨어져 나중에 재업로드할 파일을 특정할 수 없다.
-    if not req.language.strip():
-        raise HTTPException(status_code=400, detail="언어를 선택해주세요. 파일 확장자를 정하는 데 필요합니다.")
+    require_language(req.language)
 
     if IS_DEMO:
         # 데모는 외부 API·GitHub 를 치지 않는다 — mock 문제 정보로 기록만 남긴다.

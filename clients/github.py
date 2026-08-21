@@ -92,8 +92,13 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
     }
     base = f"https://api.github.com/repos/{repo}"
     try:
+        # 기본 브랜치를 여기서 확정해 아래 PATCH 까지 그대로 쓴다 — 다시 추측하면
+        # master 저장소에서 실패 PATCH 를 1회 낭비하고, 폴백 조건(422)에 걸리지 않는
+        # 응답(404 등)이 오면 tree·commit 객체를 이미 만든 상태에서 고아로 남는다.
+        branch = "main"
         ref_resp = requests.get(f"{base}/git/ref/heads/main", headers=headers, timeout=10)
         if ref_resp.status_code == 404:
+            branch = "master"
             ref_resp = requests.get(f"{base}/git/ref/heads/master", headers=headers, timeout=10)
         ref_resp.raise_for_status()
         head_sha = ref_resp.json()["object"]["sha"]
@@ -124,16 +129,10 @@ def push_files_to_github(repo: str, token: str, files: list[dict], commit_messag
         new_commit_sha = new_commit_resp.json()["sha"]
 
         update_resp = requests.patch(
-            f"{base}/git/refs/heads/main",
+            f"{base}/git/refs/heads/{branch}",
             json={"sha": new_commit_sha},
             headers=headers, timeout=10,
         )
-        if update_resp.status_code == 422:
-            update_resp = requests.patch(
-                f"{base}/git/refs/heads/master",
-                json={"sha": new_commit_sha},
-                headers=headers, timeout=10,
-            )
         update_resp.raise_for_status()
         return True
     except Exception as e:

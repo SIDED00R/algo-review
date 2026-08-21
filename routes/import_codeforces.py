@@ -1,3 +1,4 @@
+import logging
 import time
 import db
 import clients as api_client
@@ -7,6 +8,7 @@ from routes.models import CodeforcesImportRequest
 from routes.helpers import build_readme, push_solution, build_solution_target, merged_github_target
 from demo_mode import IS_DEMO, demo_block
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # CF API 는 2초에 1회를 넘기면 429 를 준다 — 여유를 두고 쉰다.
@@ -34,9 +36,14 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             api_secret=api_secret,
         )
     except ValueError as e:
+        # ValueError 는 clients.codeforces 가 직접 만든 안전한 메시지만 담는다.
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Codeforces 기록 조회 실패: {e}")
+        # 서명 호출 경로다 — 예외 원문에 apiKey·apiSig 가 실린 URL 이 들어올 수 있으므로
+        # 타입명만 노출한다. 세부 내용은 서버 로그에서만 본다.
+        logger.exception("Codeforces 기록 조회 실패")
+        raise HTTPException(status_code=500,
+                            detail=f"Codeforces 기록 조회 실패 ({type(e).__name__})") from None
 
     existing_keys = db.get_solved_problem_keys()
     new_subs = [s for s in submissions if ("codeforces", s["problem_ref"]) not in existing_keys]
@@ -54,20 +61,19 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             tier_name=sub["tier_name"],
             tags=sub["tags"],
             code=sub["code"],
-            language=sub.get("language", ""),
+            language=sub["language"],
             platform="codeforces",
             problem_ref=sub["problem_ref"],
         )
         if github_push_enabled and sub.get("code"):
-            ext = api_client._get_file_extension(sub.get("language", ""))
+            # get_codeforces_user_submissions 가 아래 키를 전부 채운다(clients/codeforces.py).
+            # .get(key, default) 로 쓰면 도달 불가한 기본값을 제출마다 평가하게 되므로
+            # 계약을 믿고 직접 인덱싱한다 — 계약이 깨지면 KeyError 로 즉시 드러난다.
+            ext = api_client.get_file_extension(sub["language"])
             ref = sub["problem_ref"]
             folder, msg = build_solution_target("codeforces", ref, sub["title"])
-            # get_codeforces_user_submissions 가 항상 채운다 — .get 기본값은 도달 불가인데
-            # 파이썬이 기본값 표현식을 먼저 평가하므로 제출마다 정규식+URL 조립이 헛돌았다.
-            cf_url = sub["problem_url"]
-            readme = build_readme(ref, sub["title"],
-                                  sub.get("tier_name", ""), sub.get("tags", []),
-                                  sub.get("language", ""), cf_url)
+            readme = build_readme(ref, sub["title"], sub["tier_name"], sub["tags"],
+                                  sub["language"], sub["problem_url"])
             if push_solution(github_repo, github_token, folder,
                              ref, ext, sub["code"], readme, msg):
                 github_pushed += 1

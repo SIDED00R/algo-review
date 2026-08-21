@@ -8,10 +8,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# main 에 연속 머지되면 두 배포가 경쟁해 나중 커밋이 먼저 끝날 수 있다.
+# main 에 연속 머지되면 두 배포가 경쟁해 나중 커밋이 먼저 끝날 수 있다 — 직렬화한다.
+# 그런데 그룹이 ref 단위라 PR 에도 적용된다. PR 은 배포하지 않으므로 구 실행을 붙잡을
+# 이유가 없다 — 연속 push 때 직렬 대기로 CI 분만 낭비했다.
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PROJECT_ID: boj-code-review-2024
@@ -26,7 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install ruff==0.15.22
+      # 핀은 requirements-dev.txt 하나가 정본이다 — 여기에 버전을 복제하면
+      # requirements-dev 만 올렸을 때 CI 가 조용히 구버전으로 린트한다.
+      # 파일을 통째로 설치하면 -r requirements.txt 까지 딸려와 린트 잡이 느려지므로
+      # 핀 한 줄만 뽑아 쓴다.
+      - run: pip install "$(grep -E '^ruff==' requirements-dev.txt)"
       - run: ruff check .
 
   lint-js:

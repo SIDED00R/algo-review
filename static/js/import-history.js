@@ -22,21 +22,15 @@ async function loadImportedHistory() {
         <h3 class="section-title section-title-flush">
           가져온 풀이 기록 (<span id="import-count">${allProblems.length}</span>개)
         </h3>
-        <input id="import-search" class="input filter-grow" type="text" placeholder="문제번호 또는 제목 검색..." />
+        <input id="import-search" class="input filter-grow" type="text" aria-label="가져온 기록 검색"
+               placeholder="문제번호 또는 제목 검색..." />
         <select id="import-platform-filter" class="select filter-fixed" aria-label="플랫폼 필터">
           <option value="">전체 플랫폼</option>
           <option value="boj">BOJ</option>
           <option value="codeforces">Codeforces</option>
         </select>
         <select id="import-tier-filter" class="select filter-fixed" aria-label="난이도 필터">
-          <option value="">전체 난이도</option>
-          <option value="bronze">Bronze</option>
-          <option value="silver">Silver</option>
-          <option value="gold">Gold</option>
-          <option value="platinum">Platinum</option>
-          <option value="diamond">Diamond</option>
-          <option value="ruby">Ruby</option>
-          <option value="unrated">Unrated</option>
+          ${tierFilterOptionsHtml()}
         </select>
         <select id="import-per-page" class="select filter-fixed" aria-label="페이지당 개수">
           <option value="10">10개</option>
@@ -204,7 +198,6 @@ async function loadImportedHistory() {
   async function requestImportedReview(btn) {
     const platform = btn.dataset.platform;
     const problemRef = btn.dataset.problemRef;
-    const card = btn.closest('.row');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
 
@@ -228,7 +221,6 @@ async function loadImportedHistory() {
       list.innerHTML = '<div class="alert alert-info">가져온 기록이 없습니다.</div>';
       return;
     }
-    card.nextElementSibling?.remove();  // 코드 보기 패널
     renderImportCards(getFiltered());
   }
 

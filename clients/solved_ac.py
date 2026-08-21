@@ -8,7 +8,8 @@ logger = logging.getLogger("uvicorn.error")
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
 
 # 정본은 constants.py 다 — DB 레이어가 이 모듈을 import 하던 역의존을 없앴다.
-from constants import TIER_NAMES  # noqa: F401  (기존 import 경로 유지)
+from constants import TIER_NAMES
+from clients.utils import ProblemSearchError
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -166,8 +167,8 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
         items = data.get("items", [])
     except Exception as e:
         # 전면 실패를 빈 목록으로 돌려주면 호출부가 "조건에 맞는 문제 없음"과 구분할 수 없다.
-        logger.warning("solved.ac 태그 검색 실패 — 추천/테마가 빈 결과가 된다: %s", e)
-        return []
+        logger.warning("solved.ac 태그 검색 실패: %s", e)
+        raise ProblemSearchError("solved.ac 문제 검색에 실패했습니다.") from e
 
     results = []
     for item in items:

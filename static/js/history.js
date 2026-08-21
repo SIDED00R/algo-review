@@ -27,14 +27,10 @@ function renderHistoryControls(container) {
   ctrl.id = 'history-controls';
   ctrl.className = 'toolbar';
   ctrl.innerHTML = `
-    <input id="h-search" class="input filter-grow" type="text" placeholder="제목 또는 태그 검색..." />
+    <input id="h-search" class="input filter-grow" type="text" aria-label="리뷰 기록 검색"
+           placeholder="제목 또는 태그 검색..." />
     <select id="h-tier" class="select filter-fixed" aria-label="난이도 필터">
-      <option value="">전체 난이도</option>
-      <option value="bronze">브론즈</option>
-      <option value="silver">실버</option>
-      <option value="gold">골드</option>
-      <option value="platinum">플래티넘</option>
-      <option value="diamond">다이아</option>
+      ${tierFilterOptionsHtml()}
     </select>
     <select id="h-eff" class="select filter-fixed" aria-label="효율 필터">
       <option value="">전체 효율</option>
@@ -69,7 +65,7 @@ function getFilteredReviews() {
     if (!matchesProblemQuery(p, q)) return false;
     if (tier && !tierInGroup(p.tier, tier)) return false;
     if (eff) {
-      const lastEff = p.efficiencies.split(',')[0];
+      const lastEff = p.last_efficiency;
       if (lastEff !== eff) return false;
     }
     return true;
@@ -96,7 +92,7 @@ function renderProblemList(container, problems) {
   const frag = document.createDocumentFragment();
   problems.forEach(p => {
     const tc = tierClass(p.tier);
-    const lastEff = p.efficiencies.split(',')[0];
+    const lastEff = p.last_efficiency;
     const div = document.createElement('div');
     div.className = 'row';
     div.dataset.platform = p.platform || 'boj';
@@ -121,14 +117,20 @@ function renderProblemList(container, problems) {
   container.appendChild(frag);
 }
 
+// 요청 세대 토큰 — 목록의 행을 연달아 누르면 먼저 누른 문제의 늦은 응답이
+// 나중에 연 모달의 내용을 덮는다(problem-modal.js 와 같은 규약).
+let _modalToken = 0;
+
 async function openReviewModal(platform, problemRef) {
   const modal = document.getElementById('review-modal');
   const content = document.getElementById('modal-content');
+  const token = ++_modalToken;
   modal.classList.remove('hidden');
   content.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
 
   try {
     const data = await fetchJsonOk(`/api/reviews/problem/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, undefined, '실패');
+    if (token !== _modalToken) return;
     const reviews = data.reviews;
     if (!reviews.length) throw new Error('기록이 없습니다.');
 
@@ -215,6 +217,7 @@ async function openReviewModal(platform, problemRef) {
 
     renderDetail(0);
   } catch (e) {
+    if (token !== _modalToken) return;
     content.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
   }
 }
