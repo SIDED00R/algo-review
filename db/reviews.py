@@ -142,6 +142,23 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         return True
 
 
+def get_stored_problem_statement(platform: str, problem_ref: str) -> str:
+    """그 문제의 회차 중 **비어 있지 않은 가장 최근 본문**.
+
+    `problem_statement` 는 회차(reviews 행)마다 저장되지만 의미는 **문제**의 속성이다.
+    최신 행만 보면, 1회차에 붙여 넣은 본문이 본문 없이 저장된 2회차에 가려진다 — BOJ 는
+    acmicpc.net 종료로 스크래핑이 상시 실패하므로 앱이 이미 가진 본문을 두고 사용자에게
+    다시 붙여넣으라고 요구하게 되고, 재리뷰는 빈 문제 설명으로 유료 호출을 낸다.
+    """
+    platform = (platform or "boj").strip().lower()
+    with session_scope() as session:
+        return session.scalar(
+            select(Review.problem_statement)
+            .where(Review.platform == platform, Review.problem_ref == str(problem_ref).strip(),
+                   Review.problem_statement != "")
+            .order_by(Review.created_at.desc()).limit(1)) or ""
+
+
 def refresh_unresolved_problem_metadata(problem_id: int, info: dict) -> int:
     """자리표시 메타로 저장된 BOJ 행들을 실제 문제 메타로 갱신하고, 갱신한 행 수를 돌려준다.
 
@@ -293,10 +310,11 @@ def get_tag_stats() -> list:
             return _read()
         try:
             _reconcile_tag_stats()
-        except DBAPIError:
+        except DBAPIError as e:
             # 다른 인스턴스와 같은 행을 동시에 건드리면 PK 충돌·잠금 경합으로 진다.
-            # 재계산은 멱등이라 다음 주기가 다시 맞춘다.
-            logger.info("tag_stats 재계산 경합 — 다음 주기에 다시 맞춘다")
+            # 재계산은 멱등이라 다음 주기가 다시 맞춘다. 다만 OperationalError 도
+            # DBAPIError 라, 예외를 버리면 진짜 DB 장애가 "경합" 한 줄로 사라진다.
+            logger.warning("tag_stats 재계산 실패 — 다음 주기에 다시 맞춘다: %s", e)
         _tag_stats_reconciled_at = now
     finally:
         _tag_stats_lock.release()
@@ -310,7 +328,9 @@ def get_total_review_count(platform: str | None = None) -> int:
     platform 을 함께 distinct 해야 두 플랫폼의 같은 문자열이 하나로 합쳐지지 않는다.
     """
     with session_scope() as session:
-        stmt = select(func.count(distinct(func.concat(Review.platform, ":", Review.problem_ref))))
+        # `||` 연결을 쓴다 — func.concat 은 SQLite 3.44(2023-11)+ 에서만 있어서,
+        # 그보다 낮은 런타임에서는 "no such function: concat" 이 난다.
+        stmt = select(func.count(distinct(Review.platform + ":" + Review.problem_ref)))
         if platform:
             stmt = stmt.where(Review.platform == platform.strip().lower())
         return session.scalar(stmt)
@@ -378,10 +398,10 @@ def get_average_tier() -> float:
 
 def has_graded_tier() -> bool:
     """등급(tier > 0)이 있는 BOJ 리뷰가 하나라도 있는지."""
+    # 존재만 보면 되므로 LIMIT 1 이다 — COUNT 는 조건에 맞는 행을 전부 센다(5만 행에서 37ms).
     with session_scope() as session:
         return session.scalar(
-            select(func.count()).select_from(Review)
-            .where(Review.platform == "boj", Review.tier > 0)) > 0
+            select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
 def get_problems_grouped() -> list:

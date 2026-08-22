@@ -257,6 +257,8 @@ gcloud run deploy algo-review-demo \
 | `OPENAI_REPORT_MAX_TOKENS` | 선택 | 종합 리포트 응답 최대 토큰 (기본값: `1024`) |
 | `OPENAI_TEMPERATURE` | 선택 | CF 번역 temperature (기본값: `0.3`) |
 | `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·CF 번역) 공통 타임아웃(초) (기본값: `15`) |
+| `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `2`) |
+| `EXECUTE_ENABLED` | 선택 | `true` 설정 시 `/api/execute` 의 임의 코드 실행을 연다. **기본값 `false` 이며 그대로 두는 것이 맞다** — 자식 프로세스가 앱과 같은 uid·네트워크 네임스페이스에서 돌아 메타데이터 서버와 `/proc/1/environ` 에 닿는다(자세한 내용은 `ARCHITECTURE.md` 보안 조치 1번) |
 | `COMPILE_TIMEOUT` | 선택 | `/api/execute` C++ 컴파일 타임아웃(초) (기본값: `30`) |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |

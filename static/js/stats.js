@@ -88,7 +88,7 @@ function renderStats(container, data) {
     <div class="result-card">
       <div class="summary-grid">
         <div class="summary-item">
-          <div class="summary-label">총 리뷰 수</div>
+          <div class="summary-label">리뷰한 문제 수</div>
           <div class="summary-value">${escapeHtml(String(data.total_reviews))}개</div>
         </div>
         <div class="summary-item">

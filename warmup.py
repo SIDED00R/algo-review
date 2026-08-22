@@ -15,9 +15,12 @@ async def warm_theme_caches():
     운영(Cloud SQL)에서는 하루 중 첫 인스턴스만 실제 fetch를 수행한다."""
     for platform in PLATFORMS:
         for theme in theme_service.THEMES:
-            if await asyncio.to_thread(theme_service.theme_pool_is_fresh, platform, theme):
-                continue   # 외부 호출이 없다 — 예절 간격도 필요 없다
             try:
+                # 신선도 확인도 DB 를 친다 — try 밖에 두면 온디맨드 DB 정지 상태에서
+                # 첫 항목의 OperationalError 가 이 코루틴을 통째로 끝낸다. 그 태스크는
+                # fire-and-forget 이라 "never retrieved" 경고조차 뜨지 않아 무흔적이다.
+                if await asyncio.to_thread(theme_service.theme_pool_is_fresh, platform, theme):
+                    continue   # 외부 호출이 없다 — 예절 간격도 필요 없다
                 await asyncio.to_thread(theme_service.get_theme_problem_pool, platform, theme)
             except Exception as e:
                 logger.warning("테마 캐시 예열 실패 %s/%s: %s", platform, theme["id"], e)

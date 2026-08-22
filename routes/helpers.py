@@ -135,11 +135,25 @@ def build_solution_target(platform: str, problem_ref, title: str, tier_name: str
 
 
 def merged_github_target(repo_override: str = "", token_override: str = "") -> tuple[str, str]:
-    """override 우선으로 GitHub 저장소/토큰을 병합, 둘 다 없으면 ("", "") 반환."""
+    """override 우선으로 GitHub 저장소/토큰을 병합, 둘 다 없으면 ("", "") 반환.
+
+    저장소와 토큰은 **짝으로만** 받는다. 한쪽만 override 하면 나머지가 저장된 값으로
+    폴백해, 요청자가 고른 저장소에 저장된 토큰으로 커밋하게 된다 — `scope=repo` 토큰이라
+    그 계정이 쓰기 권한을 가진 모든 저장소가 대상이 된다.
+    """
+    repo = (repo_override or "").strip()
+    token = (token_override or "").strip()
+    if repo or token:
+        if not (repo and token):
+            raise HTTPException(
+                status_code=400,
+                detail="저장소와 토큰은 함께 지정해야 합니다. 한쪽만 주면 저장된 연결 정보와 "
+                       "섞여 의도하지 않은 저장소에 커밋될 수 있습니다.")
+        return repo, token
     gh_settings = db.get_github_settings()
-    github_repo = (repo_override or "").strip() or (gh_settings["target_repo"] if gh_settings else "")
-    github_token = (token_override or "").strip() or (gh_settings["access_token"] if gh_settings else "")
-    return github_repo, github_token
+    if not gh_settings:
+        return "", ""
+    return gh_settings["target_repo"], gh_settings["access_token"]
 
 
 _EFFICIENCY_LABELS = {"good": "효율적", "ok": "보통", "poor": "비효율적"}

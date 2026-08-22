@@ -100,7 +100,10 @@ def github_oauth_callback(request: Request, code: str = "", error: str = "", sta
     # 쿠키 nonce와 state nonce가 일치해야 콜백이 같은 브라우저에서 시작됐음을 보장
     cookie_nonce = request.cookies.get("oauth_nonce", "")
     state_nonce = state.split(".")[0] if state else ""
-    if not cookie_nonce or not hmac.compare_digest(cookie_nonce, state_nonce):
+    # compare_digest 는 non-ASCII str 에 TypeError 를 던진다 — state 는 요청 쿼리에서
+    # 오는 임의 문자열이라 그대로 넣으면 500 이 샌다. 이 경로의 정상 실패는 리다이렉트다.
+    if (not cookie_nonce or not state_nonce.isascii()
+            or not hmac.compare_digest(cookie_nonce, state_nonce)):
         _logger.warning("GitHub OAuth callback: nonce mismatch (possible CSRF)")
         return RedirectResponse(f"{app_url}/?github=error")
     valid, nonce = _validate_state(state)
@@ -111,7 +114,9 @@ def github_oauth_callback(request: Request, code: str = "", error: str = "", sta
         token = api_client.exchange_github_code(code, client_id, client_secret)
         user = api_client.get_github_user(token)
         username = user.get("login", "")
-        db.save_github_settings(access_token=token, github_username=username)
+        # target_repo 를 명시적으로 비운다. 생략하면 기존 값이 보존되어(단일 행 설계),
+        # 새로 연결한 계정의 토큰이 **이전 사용자가 고른 저장소**와 짝지어진다.
+        db.save_github_settings(access_token=token, github_username=username, target_repo="")
     except Exception:
         _logger.exception("GitHub OAuth callback failed")
         # nonce를 소비하지 않아 재시도 가능

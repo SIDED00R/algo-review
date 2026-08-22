@@ -31,7 +31,11 @@ def _run_review(platform: str, review: dict) -> dict:
     # 저장된 본문을 넘긴다 — 없으면 resolve_statement 가 스크래핑한다. BOJ 는 acmicpc.net
     # 종료로 스크래핑이 죽어 빈 본문이 되므로, 넘기지 않으면 백필한 본문과 사용자가 붙여 넣은
     # 원문이 LLM 프롬프트에서 버려진다. 아래 _repush_bundle 도 같은 값을 쓴다.
-    statement = resolve_statement(platform, problem_info, review.get("problem_statement"))
+    # 회차 중 본문이 있는 가장 최근 것을 쓴다 — 이 회차 자신이 본문 없이 저장됐어도
+    # 같은 문제의 다른 회차에 있으면 그것을 쓴다.
+    statement = resolve_statement(
+        platform, problem_info,
+        db.get_stored_problem_statement(platform, review["problem_ref"]))
     # 상한 도입 이전에 저장된 행이 있을 수 있다 — 저장 시점 검증만 믿지 않고 여기서도 본다.
     require_reviewable_code(review["code"])
     try:

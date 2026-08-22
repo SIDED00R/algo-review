@@ -59,8 +59,11 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     # 응답에 채워져 있는데도. themes 응답이 이미 쓰는 error 필드 계약을 그대로 따른다. (#113)
     error = ""
     try:
-        recs = recommender.get_recommendations(weak_tags[:3], platform=platform,
-                                               extra_exclude=extra_exclude)
+        # 위에서 구한 평균 난이도를 넘긴다 — 넘기지 않으면 recommender 가 같은 요청 안에서
+        # reviews 전 행 윈도우 쿼리를 한 번 더 돈다(5만 행에서 490ms).
+        recs = recommender.get_recommendations(
+            weak_tags[:3], platform=platform, extra_exclude=extra_exclude,
+            avg_difficulty=avg_rating if platform == "codeforces" else avg_tier)
     except ProblemSearchError as e:
         recs, error = [], str(e)
 
