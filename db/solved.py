@@ -33,10 +33,38 @@ def save_solved_problem(problem_id: int, title: str, tier: int, tags: list,
             session.rollback()  # 동시 삽입 경합 — 이미 존재하면 무시
 
 
-def delete_solved_problem(platform: str, problem_ref: str):
+def claim_solved_problem(platform: str, problem_ref: str) -> dict | None:
+    """가져온 기록 하나를 **선점**한다 — 성공하면 그 행을 돌려주고 표에서 지운다.
+
+    조회와 삭제를 한 트랜잭션의 단일 DELETE 로 묶는다. 나누면 여러 요청이 전부 조회를
+    통과해 각자 유료 LLM 호출을 하고 리뷰 행을 남긴다(그 문제의 제출 회차가 1이 아니라
+    N 이 된다). 프론트의 진행 중 가드는 탭 로컬이라 두 탭에서 우회된다.
+
+    선점에 실패하면(다른 요청이 먼저 집었거나 원래 없다) None 이다. 리뷰가 실패하면
+    호출부가 `save_solved_problem` 으로 되돌린다.
+    """
+    platform = (platform or "boj").strip().lower()
+    problem_ref = str(problem_ref).strip()
     with session_scope(commit=True) as session:
-        session.execute(delete(SolvedHistory).where(
-            SolvedHistory.platform == platform, SolvedHistory.problem_ref == problem_ref))
+        # RETURNING 으로 조회와 삭제를 한 문장에 묶는다 — 나누면 여러 요청이 전부 조회를
+        # 통과한다. SQLite 3.35+ 와 PostgreSQL 모두 DELETE ... RETURNING 을 지원한다.
+        row = session.execute(
+            delete(SolvedHistory)
+            .where(SolvedHistory.platform == platform,
+                   SolvedHistory.problem_ref == problem_ref)
+            .returning(*SolvedHistory.__table__.columns)
+        ).mappings().first()
+    if row is None:
+        return None
+    return normalize_common_row(dict(row))
+
+
+def delete_solved_problem(platform: str, problem_ref: str) -> int:
+    """행을 지우고 **지운 개수**를 돌려준다. 0 이면 이미 없었다는 뜻이다."""
+    with session_scope(commit=True) as session:
+        return session.execute(delete(SolvedHistory).where(
+            SolvedHistory.platform == platform,
+            SolvedHistory.problem_ref == problem_ref)).rowcount
 
 
 def clear_solved_history():

@@ -18,12 +18,29 @@ def review_imported(platform: str, problem_ref: str):
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 
-    problem = db.get_solved_problem(platform, problem_ref)
+    # 조회-리뷰-삭제를 나누면 여러 요청이 전부 조회를 통과해 각자 유료 LLM 호출을 하고
+    # 리뷰 행을 남긴다(CI postgres 다리에서 4건 동시 진행 재현). 삭제를 **선점**으로 써서
+    # 한 요청만 진행시킨다. 실패하면 아래에서 되돌린다.
+    problem = db.claim_solved_problem(platform, problem_ref)
     if not problem:
         raise HTTPException(status_code=404, detail="가져온 기록에서 해당 문제를 찾을 수 없습니다.")
+
+    def _restore():
+        """선점한 행을 되돌린다 — 리뷰가 실패하면 목록에서 사라지면 안 된다."""
+        db.save_solved_problem(
+            problem["problem_id"], problem.get("title", ""), problem.get("tier", 0),
+            problem.get("tags", []), code=problem.get("code", ""),
+            language=problem.get("language", ""), platform=platform,
+            problem_ref=problem_ref, tier_name=problem.get("tier_name", ""))
+
     if not problem.get("code"):
+        _restore()
         raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 세션 쿠키로 다시 가져오기 해주세요.")
-    require_reviewable_code(problem["code"])
+    try:
+        require_reviewable_code(problem["code"])
+    except HTTPException:
+        _restore()
+        raise
 
     if platform == "codeforces":
         # 조회 실패를 400/500 으로 매핑하는 공용 해석기를 쓴다(직접 호출하면 ValueError 가 500 으로만 샌다).
@@ -48,8 +65,10 @@ def review_imported(platform: str, problem_ref: str):
     try:
         result = analyzer.analyze_code(problem_info, statement, problem["code"])
     except ValueError as e:
+        _restore()
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
+        _restore()
         raise upstream_failure("코드 분석 실패", e)
 
     # solved 기록의 제목/태그/식별자를 응답·저장 기준으로 사용한다. 단 빈 값으로 덮지
@@ -62,10 +81,10 @@ def review_imported(platform: str, problem_ref: str):
     if problem.get("tags"):
         problem_info["tags"] = problem["tags"]
 
-    response = save_and_build_response(problem_info, problem["code"], result,
-                                       problem.get("language", ""))
-    db.delete_solved_problem(platform, problem_ref)
-    return response
+    # 행은 이미 선점 시점에 지웠다 — 여기서 또 지우면 그 사이 사용자가 다시 가져온
+    # 같은 문제까지 지운다.
+    return save_and_build_response(problem_info, problem["code"], result,
+                                   problem.get("language", ""))
 
 
 @router.delete("/api/solved-history")

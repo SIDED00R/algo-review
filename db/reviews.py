@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 from sqlalchemy import distinct, func, select, update
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
@@ -39,13 +39,33 @@ def _normalize_review_row(row: dict) -> dict:
 
 
 def _bump_tag_stats(session, tags: list, efficiency: str) -> None:
-    """태그별 good/poor 카운트를 누적한다. BOJ 첫 리뷰에서만 호출한다."""
+    """태그별 good/poor 카운트를 누적한다. BOJ 첫 리뷰에서만 호출한다.
+
+    없는 태그는 **savepoint 안에서** 만든다. `get` → 없으면 `add` → `flush` 는 두 트랜잭션이
+    둘 다 "없음" 을 본 창에서 뒤엣것이 PK 중복으로 진다(CI postgres 다리에서 재현). 그
+    IntegrityError 가 `save_review` 를 빠져나가면 트랜잭션이 통째로 롤백되어 **LLM 응답을
+    이미 받아 과금된 리뷰 행까지 사라진다** — 라우터는 분석 후에 저장한다.
+
+    savepoint 로 감싸면 충돌한 INSERT 만 되돌리고 바깥 트랜잭션은 살아 있다. 되돌린 뒤
+    상대가 넣은 행을 다시 읽어 그 위에 누적한다.
+    """
     for tag in tags:
         stat = session.get(TagStat, tag)
         if stat is None:
-            stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
-            session.add(stat)
-            session.flush()
+            try:
+                with session.begin_nested():
+                    stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
+                    session.add(stat)
+                    session.flush()
+            except IntegrityError:
+                # 다른 트랜잭션이 먼저 만들었다 — 그 행을 읽어 이어서 센다.
+                session.expunge_all()
+                stat = session.get(TagStat, tag)
+                if stat is None:
+                    # 커밋되지 않은 상대의 INSERT 였다면 여기서도 안 보인다.
+                    # 이 회차의 집계는 건너뛴다 — 60초 주기 전면 재계산이 정답으로 맞춘다.
+                    logger.info("tag_stats 동시 생성 경합 — 재계산이 맞춘다 (tag=%s)", tag)
+                    continue
         stat.total_count += 1
         if efficiency == "good":
             stat.good_count += 1

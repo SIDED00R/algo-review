@@ -107,18 +107,17 @@ def test_only_one_request_can_claim_an_imported_record():
     문제의 제출 회차가 1이 아니라 N 이 된다). 프론트의 진행 중 가드는 탭 로컬이라
     두 탭에서 우회된다.
 
-    여기서는 라우터와 같은 순서를 흉내내되 LLM 자리에 지연만 둔다. 세는 것은
+    라우터는 `claim_solved_problem`(단일 DELETE ... RETURNING)으로 선점한다. 세는 것은
     "몇 개의 요청이 유료 호출까지 갔는가" 다.
     """
     db.save_solved_problem(4000, "t", 5, ["dp"], code="print(1)", language="Python 3",
                            platform="boj", problem_ref="4000", tier_name="Silver I")
 
     def claim(_i):
-        got = db.get_solved_problem("boj", "4000")
+        got = db.claim_solved_problem("boj", "4000")
         if not got:
             return False
         time.sleep(0.15)          # LLM 호출 자리 — 이 창에서 다른 요청이 들어온다
-        db.delete_solved_problem("boj", "4000")
         return True
 
     results, errors = _run_concurrently(claim, 4)
