@@ -140,7 +140,7 @@ function renderImportCards(container, problems) {
         <div class="row-side">
           ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''))}
           ${actionBtns}
-          <span class="row-dim">${escapeHtml(String(p.imported_at || '').slice(0, 10))}</span>
+          <span class="row-dim">${escapeHtml(localDate(p.imported_at))}</span>
         </div>
       </div>
       <div id="code-view-${escapeHtml(cardKey)}" class="hidden"></div>`;

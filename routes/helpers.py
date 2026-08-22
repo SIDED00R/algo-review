@@ -279,9 +279,8 @@ def _submitted_at_str(submitted_at: str) -> str:
 
 
 def _format_kst(moment: datetime) -> str:
-    """KST 로 변환해 표기한다. tz 가 없는 값은 UTC 로 간주한다 —
-    db.save_review 가 datetime.now().isoformat() 을 저장하고 Cloud Run 컨테이너는 UTC 라,
-    변환하지 않으면 최초 push(KST)와 재푸시(UTC)의 '제출 일자'가 9시간 어긋난다."""
+    """KST 로 변환해 표기한다. tz 가 없는 값은 UTC 로 간주한다(timestamps.parse_stored 와
+    같은 규칙) — 오프셋 없이 저장된 옛 행은 전부 Cloud Run(UTC)이 쓴 것이다."""
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     moment = moment.astimezone(KST)

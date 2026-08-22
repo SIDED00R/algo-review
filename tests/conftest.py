@@ -180,8 +180,11 @@ def client(monkeypatch):
 def at_time(monkeypatch):
     """save_review·save_solved_problem 이 기록하는 created_at·imported_at 을 고정 시각으로 강제한다.
 
-    created_at 은 datetime.now() 로 찍히므로 연속 저장의 순서(→ 최신 판정)를 결정론적으로
+    created_at 은 현재 시각으로 찍히므로 연속 저장의 순서(→ 최신 판정)를 결정론적으로
     제어하려면 필요하다. ISO 문자열은 사전순=시간순이므로 정렬 의미가 보존된다.
+
+    두 저장 경로가 timestamps.utc_now_iso() 하나를 쓰므로 고정할 지점도 하나다.
+    인자로 받는 iso 는 **UTC 벽시계**다(운영의 Cloud Run 컨테이너와 같다).
     """
     def _apply(iso: str):
         fixed = datetime.fromisoformat(iso)
@@ -191,7 +194,6 @@ def at_time(monkeypatch):
             def now(cls, tz=None):
                 return fixed if tz is None else fixed.replace(tzinfo=tz)
 
-        monkeypatch.setattr("db.reviews.datetime", _Frozen)
-        monkeypatch.setattr("db.solved.datetime", _Frozen)
+        monkeypatch.setattr("timestamps.datetime", _Frozen)
 
     return _apply

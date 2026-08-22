@@ -2,7 +2,6 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
 
 from sqlalchemy import distinct, func, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -11,6 +10,7 @@ from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
 from db.normalize import normalize_common_row
 from db.paging import DEFAULT_PAGE_SIZE, paging_bounds, search_filter
+from timestamps import utc_now_iso
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -108,7 +108,7 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
             strengths=json.dumps(strengths, ensure_ascii=False),
             weaknesses=json.dumps(weaknesses, ensure_ascii=False),
             language=language or "", problem_statement=problem_statement or "",
-            created_at=datetime.now().isoformat(),
+            created_at=utc_now_iso(),
         ))
 
         # tag_stats 는 BOJ 첫 제출에서만 집계한다. 리뷰 대기 행은 판정이 없어 제외한다.
@@ -116,12 +116,17 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
             _bump_tag_stats(session, tags, efficiency)
 
 
-def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool:
-    """**최신** '리뷰 대기' 행을 실제 리뷰 결과로 채운다. 대기 행이 없으면 False.
+def update_pending_review(platform: str, problem_ref: str, result: dict,
+                          *, review_id: int) -> bool:
+    """`review_id` 회차를 실제 리뷰 결과로 채운다. 그 행이 대기 상태가 아니면 False.
 
-    집계 기준선(`_first_submission_tag_counts`)은 **최초** non-pending 행이다. 지금 둘이
-    일치하는 이유는 유일한 호출자(routes/rereview.py)가 "가장 최신 행이 pending 일 때만"
-    부르기 때문이다 — 다른 호출자가 생기면 두 기준이 갈릴 수 있다.
+    **대상을 호출부가 지정한다.** "가장 최신 대기 행" 을 여기서 찾으면, LLM 이 도는
+    10~20초 사이에 같은 문제로 대기 회차가 하나 더 쌓였을 때 **리뷰한 적 없는 코드**에
+    결과가 붙는다(그 상태로 GitHub README 까지 올라간다). 실패도 오류도 없이 조용히 틀린다.
+
+    `efficiency == PENDING` 조건을 UPDATE 에 함께 건다 — 조회와 쓰기 사이가 벌어지면
+    동시 요청 둘이 같은 행을 차례로 덮어써 뒤늦게 도착한 결과가 앞선 것을 지운다.
+    이긴 쪽만 True 를 받는다.
 
     행을 새로 쌓지 않으므로 제출 회차가 늘지 않는다. save_review 가 미룬 tag_stats 집계는
     이 문제의 첫 리뷰인 경우 여기서 수행한다.
@@ -129,37 +134,40 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
     platform = (platform or "boj").strip().lower()
     problem_ref = (problem_ref or "").strip()
 
+    efficiency = result["efficiency"]
     with session_scope(commit=True) as session:
-        row = session.scalars(
-            select(Review)
-            .where(Review.platform == platform, Review.problem_ref == problem_ref,
-                   Review.efficiency == PENDING_EFFICIENCY)
-            .order_by(Review.created_at.desc()).limit(1)
-        ).first()
-        if row is None:
-            return False
-
-        # row 를 고치기 전에 세야 한다 — 뒤로 옮기면 autoflush 로 자기 행이 포함된다.
+        # UPDATE 보다 먼저 센다 — 뒤로 옮기면 방금 채운 자기 행이 포함되어 집계가 누락된다.
         reviewed_before = session.scalar(
             select(func.count()).select_from(Review)
             .where(Review.platform == platform, Review.problem_ref == problem_ref,
                    Review.efficiency != PENDING_EFFICIENCY))
 
-        efficiency = result["efficiency"]
-        row.efficiency = efficiency
-        # `or ""` 로 통일한다 — `.get(key, default)` 는 LLM 이 값에 null 을 준 경우
-        # default 를 적용하지 않아 NOT NULL 컬럼에 None 이 들어간다(analyzer 가 이미
-        # 정규화하지만, 이 함수는 dict 를 직접 받는 공개 경로라 여기서도 막는다).
-        row.complexity = result.get("complexity") or ""
-        row.better_algorithm = result.get("better_algorithm") or ""
-        row.feedback = result.get("feedback") or ""
-        # 리스트도 `or []` 로 통일한다 — json.dumps(None) 은 IntegrityError 없이
-        # 문자열 "null" 을 만들어 통과하고, 읽을 때 None 이 되어 API 가 null 을 내보낸다.
-        row.strengths = json.dumps(result.get("strengths") or [], ensure_ascii=False)
-        row.weaknesses = json.dumps(result.get("weaknesses") or [], ensure_ascii=False)
+        claimed = session.execute(
+            update(Review)
+            .where(Review.id == review_id,
+                   Review.platform == platform, Review.problem_ref == problem_ref,
+                   # 이 조건이 선점이다 — 둘이 동시에 들어오면 한쪽만 rowcount 1 을 받는다.
+                   Review.efficiency == PENDING_EFFICIENCY)
+            .values(
+                efficiency=efficiency,
+                # `or ""` 로 통일한다 — `.get(key, default)` 는 LLM 이 값에 null 을 준 경우
+                # default 를 적용하지 않아 NOT NULL 컬럼에 None 이 들어간다(analyzer 가 이미
+                # 정규화하지만, 이 함수는 dict 를 직접 받는 공개 경로라 여기서도 막는다).
+                complexity=result.get("complexity") or "",
+                better_algorithm=result.get("better_algorithm") or "",
+                feedback=result.get("feedback") or "",
+                # 리스트도 `or []` 로 통일한다 — json.dumps(None) 은 IntegrityError 없이
+                # 문자열 "null" 을 만들어 통과하고, 읽을 때 None 이 되어 API 가 null 을 내보낸다.
+                strengths=json.dumps(result.get("strengths") or [], ensure_ascii=False),
+                weaknesses=json.dumps(result.get("weaknesses") or [], ensure_ascii=False),
+            )
+        ).rowcount
+        if not claimed:
+            return False
 
         if platform == "boj" and reviewed_before == 0:
-            _bump_tag_stats(session, json.loads(row.tags), efficiency)
+            tags = session.scalar(select(Review.tags).where(Review.id == review_id))
+            _bump_tag_stats(session, json.loads(tags), efficiency)
         return True
 
 

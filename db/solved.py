@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 from sqlalchemy import case, delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -8,6 +7,7 @@ from db.connection import session_scope
 from db.models import Review, SolvedHistory
 from db.normalize import normalize_common_row, resolve_tier_name
 from db.paging import DEFAULT_PAGE_SIZE, paging_bounds, search_filter
+from timestamps import utc_now_iso
 
 
 def _row_to_dict(obj) -> dict:
@@ -26,7 +26,7 @@ def save_solved_problem(problem_id: int, title: str, tier: int, tags: list,
             problem_id=problem_id, platform=platform, problem_ref=problem_ref,
             title=title, tier=tier, tier_name=tier_name,
             tags=json.dumps(tags, ensure_ascii=False), code=code, language=language,
-            imported_at=datetime.now().isoformat(),
+            imported_at=utc_now_iso(),
         ))
         try:
             session.commit()

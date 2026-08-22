@@ -77,7 +77,7 @@ async function loadTierChart() {
     // 여기서 다시 거르지 않는다 — 같은 규칙을 두 곳에 두면 한쪽만 바뀌어 갈린다.
     const byDate = {};
     history.forEach(r => {
-      const d = r.created_at.slice(0, 10);
+      const d = localDate(r.created_at);
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(r);
     });

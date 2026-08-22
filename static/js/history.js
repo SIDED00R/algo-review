@@ -132,7 +132,7 @@ function renderProblemList(container, problems, hasAny = true) {
       <div class="row-side">
         ${tierBadgeHtml(tc, escapeHtml(p.tier_name || ''))}
         <span class="${effClass(lastEff)}">${escapeHtml(effLabel(lastEff))}</span>
-        <span class="row-dim">제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(String(p.last_submitted || '').slice(0, 10))}</span>
+        <span class="row-dim">제출 ${escapeHtml(String(p.submission_count || 0))}회 · ${escapeHtml(localDate(p.last_submitted))}</span>
       </div>`;
     makeRowActivatable(div, () => openReviewModal(div.dataset.platform, div.dataset.problemRef));
     frag.appendChild(div);
@@ -166,7 +166,7 @@ async function openReviewModal(platform, problemRef) {
     const ledgerHtml = reviews.map((r, i) => `
       <button class="ledger-row ${i === 0 ? 'active' : ''}" data-idx="${i}">
         <span class="ledger-seq">#${reviews.length - i}</span>
-        <span>${escapeHtml(String(r.created_at || '').slice(0, 10))}</span>
+        <span>${escapeHtml(localDate(r.created_at))}</span>
         <span class="ledger-meta">${escapeHtml(r.complexity || '-')}</span>
         <span class="${effClass(r.efficiency)}">${escapeHtml(effLabel(r.efficiency))}</span>
       </button>`).join('');

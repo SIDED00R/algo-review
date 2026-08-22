@@ -518,6 +518,36 @@ def test_modal_recovers_focus_that_escapes_to_the_body(js):
         "tabindex 없이 root.focus() 는 조용히 무효다"
 
 
+def test_timestamps_are_rendered_in_the_viewers_timezone(js):
+    """저장값은 UTC 다 — 문자열을 그냥 자르면 한국 00:00~09:00 제출이 전날로 찍힌다.
+
+    같은 제출이 GitHub README(KST 로 변환)와 다른 날짜가 되는 조용한 오답이고,
+    성장 곡선의 날짜 그룹도 함께 어긋난다.
+    """
+    # 위반 코드는 템플릿 리터럴 안에 있어 _code_lines 로는 보이지 않는다(그 헬퍼는 `${}`
+    # 내용을 줄에 담지 않는다). 원본을 훑되 주석 줄만 걸러 낸다.
+    for name, src in js.items():
+        for lineno, raw in enumerate(src.splitlines(), 1):
+            stripped = raw.strip()
+            if stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            assert not re.search(r"(created_at|last_submitted|imported_at)[^;\n]*slice\(\s*0",
+                                 raw), \
+                f"{name}:{lineno} 이 시각 문자열을 잘라 쓴다 — localDate() 를 거쳐야 한다"
+
+    # 부정 단정만 있으면 표시를 통째로 지워도 통과한다 — 변환기의 존재와 규칙도 고정한다.
+    body = _js_function_body(js["utils.js"], "function parseStoredTime")
+    assert re.search(r"const hasZone\s*=", body), "오프셋 유무 판정이 없다"
+    # 판정만 있고 쓰지 않으면 규칙이 죽는다 — JS 는 오프셋 없는 ISO 를 **로컬 시각**으로
+    # 읽으므로(ES2015+), Date 생성에 그 분기가 반영되어야 UTC 로 읽힌다.
+    assert re.search(r"new Date\([^)]*hasZone[^)]*\)", body), \
+        "오프셋이 없을 때 UTC 로 읽는 분기가 Date 생성에 반영되지 않았다"
+    assert re.search(r"function localDate\(", js["utils.js"])
+    for name in ("history.js", "import-history.js", "tier-chart.js",
+                 "stats.js", "command-palette.js", "load-submission.js"):
+        assert "localDate(" in js[name], f"{name} 이 날짜를 변환 없이 그린다"
+
+
 def test_tier_filter_is_boj_only(js):
     """난이도 그룹 경계는 solved.ac 티어 1~30 체계다. CF 행은 tier 가 항상 0 이라
     플랫폼을 보지 않으면 'Unrated' 선택에 CF 문제가 전량 딸려 온다."""

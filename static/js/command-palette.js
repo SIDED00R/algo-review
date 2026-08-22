@@ -105,7 +105,7 @@
       const over = (data.total || 0) - found.length;
       setRows(found.map(p => ({
         label: `${problemLabel(p)}. ${p.title}`,
-        meta: `제출 ${p.submission_count || 0}회 · ${String(p.last_submitted || '').slice(0, 10)}`,
+        meta: `제출 ${p.submission_count || 0}회 · ${localDate(p.last_submitted)}`,
         run: () => showLedger(p),
       })), over > 0 ? `그 외 ${over}건 — 검색어를 좁혀주세요` : '');
       render();
@@ -134,7 +134,7 @@
       const reviews = data.reviews || [];
       const total = reviews.length;
       setRows(reviews.map((r, i) => ({
-        label: `#${total - i}  ${String(r.created_at || '').slice(0, 10)}  ${r.complexity || '-'}`,
+        label: `#${total - i}  ${localDate(r.created_at)}  ${r.complexity || '-'}`,
         meta: effLabel(r.efficiency),
         run: () => {
           if (!confirmEditorOverwrite()) return;
