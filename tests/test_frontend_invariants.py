@@ -426,11 +426,9 @@ def test_modal_a11y_is_shared_not_duplicated():
 def test_problem_modal_has_a_height_ceiling(css):
     """상한이 없으면 박스가 문제문 길이만큼 자란다.
 
-    `.pm-left`/`.pm-right` 든 `.pm-box` 든 어딘가에는 상한이 있어야 한다. 없으면 긴
-    문제문에서 박스가 10,000px 이상까지 자라고(CDP 실측), 그러면
-    `.pm-body{overflow:hidden}` 과 두 열의 `overflow-y:auto` 가 전부 무효가 된다
-    (scrollHeight == clientHeight). 닫기 버튼이 든 헤더가 화면 밖으로 스크롤되며
-    코드 에디터까지 같이 늘어난다.
+    `.pm-left`/`.pm-right` 든 `.pm-box` 든 어딘가에는 상한이 있어야 한다. 없으면
+    `.pm-body{overflow:hidden}` 과 두 열의 `overflow-y:auto` 가 전부 무효가 되고
+    (scrollHeight == clientHeight), 헤더가 화면 밖으로 스크롤된다.
     """
     # 줄 시작으로 앵커한다 — 앵커가 없으면 공유 규칙(`.modal-box, .pm-box {`)을 먼저 잡는다.
     box = re.search(r"^\.pm-box\s*\{([^}]*)\}", css["surfaces.css"], re.M)
@@ -447,7 +445,7 @@ def test_row_activation_does_not_swallow_child_control_keys(js):
 
     `makeRowActivatable` 의 keydown 핸들러가 preventDefault 를 무조건 부르면 앵커의
     기본 활성화까지 취소된다 — 링크에 포커스한 채 Enter 를 눌러도 문제 페이지가 열리지
-    않고 행 모달이 열린다(WCAG 2.1.1 위반). CDP 로 Enter 를 주입해 실측한 경계다.
+    않고 행 모달이 열린다(WCAG 2.1.1 위반).
     """
     src = js["utils.js"]
     fn = re.search(r"function makeRowActivatable[\s\S]*?\n\}", src)
@@ -1100,8 +1098,7 @@ def _unterminated_string_lines(src: str) -> list[int]:
 def test_no_unterminated_string_literals(path):
     """`'…'`·`"…"` 는 줄을 넘을 수 없다 — 넘으면 그 파일 전체가 SyntaxError 다.
 
-    편집 스크립트가 `\n` 이스케이프를 실제 개행으로 바꾸는 사고가 반복해서 났고, 그때마다
-    로컬 게이트는 전부 초록이었다(node 가 없으면 구문 검사를 건너뛴다).
+    로컬 게이트로는 잡히지 않는다 — node 가 없으면 구문 검사를 건너뛴다.
     """
     bad = _unterminated_string_lines(path.read_text(encoding="utf-8"))
     assert not bad, f"{path.name}: {bad} 번 줄의 문자열이 줄 끝까지 닫히지 않았다"

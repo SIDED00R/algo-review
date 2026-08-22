@@ -22,10 +22,8 @@ def push_review_to_github(req: PushReviewRequest):
     # 저장된 최신 리뷰를 README 에 함께 싣는다 — 리뷰 직후 push 이므로 방금 결과가 최신 행이다.
     reviews = db.get_reviews_by_problem(req.platform, problem_ref)
     latest = reviews[0] if reviews else None
-    # 요청에 본문이 없으면 저장된 본문으로 대신한다. 스크래핑이 죽은 플랫폼(BOJ)에서
-    # 빈 섹션으로 README 를 재생성해 기존 문제 설명을 지우는 것을 막는다.
-    # 회차 중 본문이 있는 가장 최근 것을 쓴다 — 최신 행만 보면 1회차에 붙여 넣은 본문이
-    # 본문 없이 저장된 2회차에 가려진다.
+    # 요청에 본문이 없으면 저장된 본문으로 대신한다 — 빈 섹션으로 README 를 재생성해
+    # 기존 문제 설명을 지우지 않도록. 회차 중 본문이 있는 가장 최근 것을 쓴다.
     description = req.description or db.get_stored_problem_statement(req.platform, problem_ref)
     folder = push_review_bundle(
         github_repo, github_token,

@@ -2,18 +2,13 @@ const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
 recommendBtn.dataset.loadingLabel = '추천 계산 중...';
 
-// 현재 세션에서 이미 본 문제 ID 목록 (페이지 이탈 시 자동 초기화).
-// 통째로 `&exclude=` 쿼리스트링에 실리므로 상한을 둔다 — 없으면 "다른 목록 추천받기" 를
-// 누를 때마다 회당 최대 9개(취약 태그 3개 × 문제 3개)씩 무한히 늘어나 URL 길이 한계에
-// 걸린다. Set 은 삽입 순서를 유지하므로 앞(오래된 것)부터 버린다 — 이미 있는 id 를 다시
-// add 해도 위치는 그대로라 정확한 LRU 는 아니다. 서버가 exclude 를 실제로 적용하므로
-// 같은 문제가 다시 목록에 오지 않아 그 차이는 드러나지 않는다.
+// 이번 세션에서 이미 본 문제 ID. `&exclude=` 쿼리스트링에 통째로 실리므로 상한을 둔다.
+// Set 은 삽입 순서를 유지하므로 앞(오래된 것)부터 버린다.
 const _SHOWN_ID_LIMIT = 300;
 const _shownIds = new Set();
 
-// 플랫폼을 바꾸면 이전 결과를 지운다 — 남겨 두면 "토글=백준, 화면=Codeforces 목록" 이라는
-// 조용한 불일치가 되고, CF 카드의 인앱 뷰어가 계속 열린다(report.js 와 같은 처리).
-// 자동 재요청은 하지 않는다 — 추천은 외부 검색 API 를 여러 번 친다.
+// 플랫폼을 바꾸면 이전 결과를 지운다 — 토글과 화면이 다른 플랫폼을 가리키면 안 된다.
+// 자동 재요청은 하지 않는다(추천은 외부 검색 API 를 여러 번 친다).
 document.getElementById('recommend-platform')?.addEventListener('change', () => {
   _shownIds.clear();   // 세션 캐시도 플랫폼별이다 — CF id 가 BOJ 요청의 exclude 로 나간다
   const result = document.getElementById('recommend-result');

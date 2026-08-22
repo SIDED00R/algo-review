@@ -33,9 +33,8 @@ def upstream_failure(action: str, exc: Exception) -> HTTPException:
     """예외 원문을 응답에 싣지 않는다 — 타입명만 노출하고 세부는 로그로 보낸다.
 
     openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로
-    **제공자 본문을 그대로** 싣는다(실측). `.env.example` 이 OpenAI 호환 서드파티
-    엔드포인트를 1급 대안으로 안내하므로 그 본문 형태를 통제할 수 없고, `base_url` 이
-    내부 프록시면 그 주소도 함께 나간다. clients.codeforces 의 자격증명 유출과 같은 계열이다.
+    **제공자 본문을 그대로** 싣는다. 서드파티 엔드포인트를 쓸 수 있어 본문 형태를
+    통제할 수 없고, `base_url` 이 내부 프록시면 그 주소도 함께 나간다.
     """
     logger.exception("%s", action)
     return HTTPException(status_code=502, detail=f"{action} ({type(exc).__name__})")
@@ -73,15 +72,11 @@ def require_language(language: str) -> str:
     """제출 언어를 강제한다. 사용자가 폼에서 언어를 고르는 세 엔드포인트
     (/api/review, /api/review/pending, /api/push-review)가 이 규칙을 공유한다.
 
-    언어를 모르면 get_file_extension 이 `.txt` 를 주고, 저장소에 `1000.txt` 로 커밋된
-    풀이는 rereview 가 "저장된 언어 정보가 없어 파일명을 재현할 수 없습니다" 로 **영구
-    거부**한다. 프론트의 "자동 감지" 는 detectLanguage 가 미인식 코드에 '' 를 반환하므로
-    빈 값이 실제로 도달한다.
+    언어를 모르면 확장자가 `.txt` 가 되고, rereview 가 파일명을 재현하지 못해 그 행의
+    재업로드를 영구 거부한다.
 
-    `/api/review-imported` 는 일부러 부르지 않는다. 그 경로의 language 는 가져오기 원본
-    (파일 확장자·solved.ac 표)에서 오므로 요청자가 고칠 수단이 없다 — 400 으로 막으면
-    리뷰 자체가 불가능해진다. 대신 rereview 가 그 행을 안내 메시지로 degrade 시키고,
-    "지난 제출 불러오기" 가 코드에서 언어를 재추론해 복구 경로를 준다.
+    `/api/review-imported` 는 부르지 않는다 — 그 경로의 language 는 가져오기 원본에서
+    오므로 요청자가 고칠 수단이 없다.
     """
     value = (language or "").strip()
     if not value:
@@ -108,10 +103,8 @@ def require_problem_ref(platform: str, problem_ref) -> str:
     return f"{contest_id}{index}"
 
 
-# 저장소 경로 **세그먼트 구분자**만 바꾼다. `/` 가 제목에 있으면 폴더가 한 단계 깊어져
-# 재가져오기 파서(`get_boj_readme_paths` · `get_baekjoonhub_problems` 의 4세그먼트 규약)가
-# 그 문제를 조용히 빠뜨린다. 나머지 특수문자(`?` `#` 등)는 clients.github._url_path 가
-# 인코딩하므로 폴더명을 바꾸지 않는다 — 바꾸면 이미 올라간 폴더와 어긋난다.
+# 경로 세그먼트 구분자만 바꾼다. `/` 가 제목에 있으면 폴더가 깊어져 재가져오기 파서의
+# 4세그먼트 규약에서 빠진다. 나머지 특수문자는 clients.github._url_path 가 인코딩한다.
 _PATH_SEPARATORS = str.maketrans({"/": "-", "\\": "-"})
 
 
@@ -197,17 +190,14 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
                        submitted_at: str = "", require_sections: bool = True) -> str:
     """README + 코드 파일을 저장소에 push 하고 폴더 경로를 반환한다. 실패 시 HTTPException(500).
 
-    description 이 비어 있으면 플랫폼별 문제 본문을 자동 수집한다 — LLM 이 아니라 스크래핑이라
-    리뷰 없이 올리는 경로에서도 그대로 동작한다.
+    description 이 비어 있으면 플랫폼별 문제 본문을 스크래핑한다.
 
-    require_sections: 스크래핑 실패 시 막을지 여부. 기존 문서를 본문 없이 재생성하면
-    이미 올라간 문제 설명을 지우므로 True(기본값)로 막는다. 단 **저장소에 그 README 가
-    실제로 있을 때만** 막는다 — 지킬 문서가 없으면 502 는 최초 등록을 이유 없이 차단한다.
-    BOJ 는 acmicpc.net 종료로 수집이 상시 실패하므로 이 구분이 없으면 push 가 전부 막힌다.
-    False 로 넘기면 확인조차 하지 않는다(이미 문서가 없음이 확실한 경로).
+    require_sections: 스크래핑 실패 시 막을지 여부. 기본 True 이되 **저장소에 그 README 가
+    실제로 있을 때만** 막는다(지킬 문서가 없으면 최초 등록이 차단된다).
+    False 면 확인조차 하지 않는다.
 
     description 을 직접 주면 input/output 은 호출자 책임이다. `【문제】/【입력】/【출력】`
-    마커가 들어 있으면 build_readme 가 세 섹션으로 되쪼갠다.
+    마커가 있으면 build_readme 가 세 섹션으로 되쪼갠다.
     """
     ext = api_client.get_file_extension(language)
     # 스크래핑 분기 밖에서 확인한다 — 안에 두면 본문을 함께 보낸 요청이 검증을 건너뛰어
@@ -216,23 +206,17 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     url = url or api_client.get_problem_url(platform, problem_ref)
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 
-    # 호출자가 섹션을 하나라도 직접 줬으면 스크래핑하지 않는다. description 만 보고
-    # 분기하면 description="" + input_desc/output_desc 조합(CF 뷰어에서 넘어오는 경로)에서
-    # 호출자가 넘긴 값을 스크래핑 결과가 덮어쓴다.
+    # 호출자가 섹션을 하나라도 직접 줬으면 스크래핑하지 않는다. description 만 보고 분기하면
+    # description="" + input_desc/output_desc 조합에서 호출자 값이 덮인다.
     if not (description or input_desc or output_desc):
         if platform == "boj":
             sections = api_client.get_boj_problem_sections(int(problem_ref))
         else:
             sections = api_client.get_cf_problem_sections(problem_ref)
         if not sections or not any(sections.values()):
-            # 스크래핑 실패를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해 이미 잘
-            # 올라가 있던 문제 설명을 지워버린다. None 뿐 아니라 "200 인데 본문이 비었다"도
-            # 실패로 본다(수집기가 실패를 어떻게 표현하든 결과가 같아야 한다).
-            #
-            # 다만 무조건 막으면 안 된다 — 지킬 문서가 없는데 502 를 내면 최초 등록이
-            # 이유 없이 차단된다. BOJ 는 acmicpc.net 종료로 수집이 상시 실패하므로,
-            # 구분하지 않으면 "GitHub에 올리기" 가 전부 502 가 되고 메시지("잠시 후 다시
-            # 시도")가 절대 성공하지 않는 재시도를 유도한다.
+            # 스크래핑 실패를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해 기존 문제 설명을
+            # 지운다. None 뿐 아니라 "200 인데 본문이 비었다" 도 실패로 본다.
+            # 다만 지킬 문서가 없을 때는 막지 않는다 — 최초 등록이 이유 없이 차단된다.
             if require_sections and _readme_exists(repo, token, folder):
                 raise HTTPException(
                     status_code=502,

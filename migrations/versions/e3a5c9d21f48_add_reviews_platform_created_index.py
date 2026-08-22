@@ -9,7 +9,7 @@ Create Date: 2026-08-22 15:00:00.000000
 행을 고른 뒤 **전부 임시 B-트리에 넣어 정렬**한다(EXPLAIN: USE TEMP B-TREE FOR ORDER BY).
 20행을 얻으려고 그 플랫폼의 전 행을 정렬하는 셈이다.
 
-실측(reviews 5만 행, sqlite): 210ms → 0.1ms. `/api/stats` 와 `/api/report` 가 둘 다
+`/api/stats` 와 `/api/report` 가 둘 다
 이 함수를 쓴다. Postgres 도 같은 인덱스 집합이라 동일하게 적용된다.
 """
 from collections.abc import Sequence

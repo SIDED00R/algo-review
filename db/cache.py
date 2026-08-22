@@ -27,9 +27,8 @@ def cache_get(key: str, max_age_sec: int):
     if not row:
         return None
     payload, updated_at = row
-    # 인스턴스 간 TZ 차이가 만료 판정을 흔들지 않게 UTC aware 로 통일한다.
-    # 파싱 불가한 시각(naive 로 적힌 옛 행 등)은 만료로 취급한다 — 여기서 예외가 나가면
-    # 호출부가 cache_set 에 도달하지 못해 그 키가 영구히 자가 복구 불능이 된다.
+    # UTC aware 로 통일한다. 파싱 불가한 시각은 만료로 취급한다 — 예외가 나가면 호출부가
+    # cache_set 에 도달하지 못해 그 키가 영구히 복구 불능이 된다.
     try:
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(updated_at)).total_seconds()
     except (TypeError, ValueError):

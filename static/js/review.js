@@ -20,12 +20,8 @@ const reviewBtn = document.getElementById('review-btn');
 reviewBtn.dataset.label = '분석 시작';
 reviewBtn.dataset.loadingLabel = '분석 중...';
 
-// '자동 감지' 는 실패할 수 있다 — 어느 패턴에도 맞지 않는 코드와 드롭다운의 PyPy3 는
-// detectLanguage 가 '' 를 돌려준다. 서버는 빈 언어를 400 으로
-// 막는데(확장자가 .txt 로 떨어지면 재리뷰가 파일명을 재현하지 못해 영구 거부한다),
-// 그 메시지가 "언어를 선택해주세요" 라 방금 '자동 감지' 를 고른 사용자에게는 말이 안 된다.
-// 왕복 전에 정확한 이유로 안내한다.
-// 분석 이후 코드·언어가 바뀐 채로 올릴 때의 확인 문구.
+// '자동 감지' 는 실패할 수 있다 — 어느 패턴에도 맞지 않는 코드와 PyPy3 는 '' 가 된다.
+// 서버가 빈 언어를 400 으로 막으므로 왕복 전에 정확한 이유로 안내한다.
 const CODE_CHANGED_CONFIRM =
   '분석 이후 코드나 언어가 바뀌었습니다.\n' +
   'README 에는 분석 당시 코드에 대한 리뷰가 들어갑니다 — 지금 코드로 그대로 올릴까요?\n\n' +
@@ -193,9 +189,8 @@ function renderReview(container, d) {
     const btn = document.getElementById('push-github-btn');
     const msg = document.getElementById('push-github-msg');
     const { code, language } = currentCodeAndLanguage();
-    // README 의 리뷰는 **분석 당시 코드**에 대한 것이다. 지금 코드를 그대로 올리면 저장소
-    // 안에서 코드와 리뷰가 어긋나고, 언어까지 바뀌었으면 확장자가 달라져 다음 재업로드가
-    // 옛 확장자 파일을 하나 더 만든다(옛 파일은 지워지지 않는다).
+    // README 의 리뷰는 분석 당시 코드에 대한 것이다 — 지금 코드를 올리면 저장소 안에서
+    // 코드와 리뷰가 어긋나고, 언어가 바뀌었으면 옛 확장자 파일이 그대로 남는다.
     const changed = code !== reviewed.code || language !== reviewed.language;
     if (changed && !confirm(CODE_CHANGED_CONFIRM)) return;
     setLoading(btn, true);
@@ -217,9 +212,7 @@ function renderReview(container, d) {
           language,
           url: d.problem_url,
           ...(d.platform === 'codeforces' ? {
-            // 붙여넣은 본문이 먼저다 — 서버 resolve_statement 와 같은 우선순위여야
-            // LLM 리뷰와 README 의 문제 설명이 갈리지 않는다. 뷰어를 닫아도
-            // _currentProblem 이 남으므로, 뒤집으면 옛 번역본이 새 입력을 이긴다.
+            // 붙여넣은 본문이 먼저다 — 서버 resolve_statement 와 같은 우선순위여야 한다.
             description: pastedStatement || cfSections?.statement || '',
             input_desc: cfSections?.input || '',
             output_desc: cfSections?.output || '',

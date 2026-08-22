@@ -4,11 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Algo Review</title>
-  <!-- 인라인 SVG 다 — 자산 파일을 늘리지 않아 버전 쿼리 규칙과 무관하다. -->
+  <!-- 인라인 SVG — /static/ 자산이 아니라 버전 쿼리 규칙과 무관하다. -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13' font-family='monospace'%3E%3C/text%3E%3C/svg%3E" />
 
-  <!-- 테마를 페인트 전에 확정한다 — theme.js 는 </body> 직전에 로드되므로
-       거기서 처리하면 라이트 모드 사용자가 매 로드마다 다크 화면을 한 프레임 본다. -->
+  <!-- 테마를 페인트 전에 확정한다 — theme.js 는 </body> 직전이라 FOUC 가 생긴다. -->
   <script>
     (function () {
       var saved = null;
@@ -21,8 +20,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
 
-  <!-- 서체: Pretendard(한국어 UI) + JetBrains Mono(숫자·코드). 둘 다 jsDelivr 로
-       받아 새 호스트를 늘리지 않는다. -->
+  <!-- 서체: Pretendard(한국어 UI) + JetBrains Mono(숫자·코드). -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.2.6/400.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.2.6/500.css" />
@@ -39,20 +37,18 @@
   <link rel="stylesheet" href="/static/css/layout.css?v=__V__" />
   <link rel="stylesheet" href="/static/css/surfaces.css?v=__V__" />
 
-  <!-- 아래 라이브러리는 전부 이벤트 시점에만 쓰여 defer 안전 (defer는 선언 순서 보존: katex→auto-render, chart→adapter) -->
+  <!-- 전부 이벤트 시점에만 쓰여 defer 안전. defer 는 선언 순서를 보존한다. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-  <!-- 버전을 고정한다. jsDelivr 의 무고정 URL 은 최신 메이저를 주므로 배포와 무관하게
-       동작이 바뀔 수 있다. -->
+  <!-- 버전 고정 — jsDelivr 의 무고정 URL 은 최신 메이저를 준다. -->
   <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
-  <!-- 아이콘 스프라이트. 별도 자산 파일을 늘리지 않고 currentColor 를 따르게 해
-       테마별 filter:invert 해킹을 없앤다. -->
+  <!-- 아이콘 스프라이트 — currentColor 를 따른다. -->
   <svg class="icon-sprite" aria-hidden="true" focusable="false">
     <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
@@ -265,7 +261,7 @@
     <section id="tab-history" class="tab-content hidden measure-list" role="tabpanel" aria-labelledby="tabbtn-history">
       <div class="list-head">
         <h2>리뷰 기록</h2>
-        <p class="desc">과거에 분석한 코드와 피드백을 다시 볼 수 있습니다.</p>
+        <p class="desc">지난 제출의 코드와 피드백을 다시 볼 수 있습니다.</p>
         <button id="history-btn" class="btn-primary btn-sm push-right">기록 불러오기</button>
       </div>
       <div id="history-list" aria-live="polite"></div>
@@ -487,9 +483,7 @@
 
   <!-- CodeMirror 5 JS (modes + addons) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <!-- mode/rust 는 CodeMirror.defineSimpleMode 를 쓴다 — 이 addon 이 없으면 rust.min.js 가
-       "e.defineSimpleMode is not a function" 으로 죽고 Rust 하이라이팅이 조용히 등록되지 않는다.
-       모드 스크립트보다 먼저 와야 한다. -->
+  <!-- mode/rust 가 CodeMirror.defineSimpleMode 를 쓴다 — 모드 스크립트보다 먼저 와야 한다. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/mode/simple.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>

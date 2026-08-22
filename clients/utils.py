@@ -20,10 +20,8 @@ class ProblemSearchError(RuntimeError):
     """
 
 
-# BOJ 채점 목록은 표준 연도를 붙여 `C99`·`C11`·`C90`(+ `(Clang)` 변종) 으로 적고, CF 는
-# `GNU C11`, 프론트 드롭다운은 `C` 를 쓴다. 세 표기를 한 패턴으로 받는다.
-# 놓치면 확장자가 .txt 가 되고, .txt 는 _ext_to_language 가 빈 문자열을 돌려줘
-# rereview 가 재업로드를 거부한다.
+# BOJ 는 `C99`·`C11`·`C90`(+ `(Clang)` 변종), CF 는 `GNU C11`, 프론트는 `C` 를 쓴다.
+# 놓치면 확장자가 .txt 가 되고 rereview 가 재업로드를 거부한다.
 _C_LANG_RE = re.compile(r"(?:^|\s)c(?:\d+|2x)?(?:\s|$)")
 # C++ 은 컴파일러 이름이 앞에 붙어 `c++` 부분문자열이 없는 표기가 많다 — CF 는
 # `GNU G++17 7.3.0`, BOJ 는 `Clang++17`. `c++` 만 찾으면 둘 다 .txt 로 떨어진다.

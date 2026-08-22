@@ -1,6 +1,5 @@
 /* ── 컴포넌트 ──
-   사이즈·의미 변형(작은 primary 버튼, 작은 스피너, 성공 알림, JS 생성 폼 컨트롤)을
-   여기서 정식화한다. 변형이 없으면 그 조합을 인라인 style 로 손수 만들게 된다. */
+   사이즈·의미 변형(작은 버튼, 작은 스피너, 성공 알림, JS 생성 폼 컨트롤)을 정식화한다. */
 
 /* ═══ 버튼 ═══ */
 .btn-primary, .btn-secondary, .btn-sm, .btn-toggle, .theme-chip, .page-btn,
@@ -162,15 +161,12 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 .card > h2, .result-card > h2 { margin-bottom: var(--s-1); }
 .card .desc, .result-card .desc { margin-bottom: var(--s-4); }
 
-/* 목록 행 — 조회형 탭의 밀도를 올린다. 개별 박스 대신 헤어라인 구분.
+/* 목록 행 — 개별 박스 대신 헤어라인 구분.
 
-   위·아래 선을 스스로 갖고 앞에 행이 있으면 위 선을 뺀다. 상단선을
-   `.row:first-child` 로 주면 안 된다 — #history-list 의 첫 자식은 항상 .toolbar 라
-   리뷰 기록 탭에서는 영원히 매칭되지 않는다.
-
-   **인접(+)이 아니라 일반 형제(~)를 쓴다.** 가져오기 목록은 행마다 코드 보기 패널 div 를
-   형제로 끼워 넣는데, `+` 는 DOM 구조 기준이라 display:none 형제도 인접을 끊는다 —
-   그 탭에서만 구분선이 2px 로 겹친다. `~` 는 중간 노드와 무관하게 매칭된다. */
+   위·아래 선을 스스로 갖고 앞에 행이 있으면 위 선을 뺀다. `.row:first-child` 로는 안 된다
+   (#history-list 의 첫 자식은 항상 .toolbar 다).
+   인접(+)이 아니라 일반 형제(~)를 쓴다 — 가져오기 목록은 행 사이에 코드 보기 패널 div 를
+   끼워 넣는데 `+` 는 display:none 형제도 인접을 끊는다. */
 .row {
   display: flex; align-items: center; gap: var(--s-4);
   padding: var(--s-3) var(--s-2);
@@ -191,7 +187,6 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 .toolbar .filter-fixed { flex: 0 0 auto; width: auto; font-size: var(--fs-sm); }
 
 /* ═══ 제출 원장 ═══
-   이 앱의 고유 자산은 회차 이력이다. 모노 원장 한 줄로 표현하고
    기록 모달·불러오기·팔레트가 같은 컴포넌트를 쓴다. */
 .ledger { display: flex; flex-direction: column; margin-bottom: var(--s-4); }
 .ledger-row {
@@ -227,8 +222,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 }
 
 /* ═══ 배지 ═══
-   .tier-* / .cf-* / .eff-* 는 데이터 색 변수만 참조한다. 다크 기준
-   rgba 를 박고 라이트에서 color 만 덮는 방식이 아니다. */
+   .tier-* / .cf-* / .eff-* 는 데이터 색 변수만 참조한다. */
 .tier-badge {
   display: inline-block;
   font-family: var(--font-mono);
@@ -312,9 +306,8 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═══ 코드 ═══
-   네 계통(.code-block / .pm-pre / .tc-detail pre / .markdown-body pre)의 테두리·radius·
-   패딩·서체를 공통으로 묶는다. 산문 안의 코드 블록만 배경과 세로 여백이 다르므로
-   아래에서 그 둘만 덮는다. */
+   네 계통(.code-block / .pm-pre / .tc-detail pre / .markdown-body pre)을 공통으로 묶고,
+   산문 안의 코드 블록만 아래에서 배경·세로 여백을 덮는다. */
 .code-block, .pm-pre, .markdown-body pre, .tc-detail pre {
   background: var(--surface-2);
   border: 1px solid var(--line);

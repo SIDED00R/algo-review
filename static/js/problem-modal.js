@@ -13,9 +13,8 @@ function outputMatches(actual, expected) {
   });
 }
 
-// 백엔드가 남긴 수식 이미지 마커(⟦img:URL⟧)를 <img> 로 되살린다 — 구형 CF 문제의 수식은
-// alt 없는 PNG 라 텍스트로 추출되지 않는다. escapeHtml 이후에 호출해야 URL 이 속성값으로
-// 안전하게 이스케이프된 상태가 되고, http(s) 만 매치해 javascript: 스킴을 배제한다.
+// 수식 이미지 마커(⟦img:URL⟧)를 <img> 로 되살린다. escapeHtml 이후에 호출해야 URL 이
+// 속성값으로 안전하고, http(s) 만 매치해 javascript: 스킴을 배제한다.
 function restoreFormulaImages(html) {
   return html.replace(
     /⟦img:(https?:\/\/[^⟧\s]+)⟧/g,
@@ -74,10 +73,8 @@ async function openProblemModal(ref, title, tierName) {
   try {
     const data = await fetchJsonOk(`/api/problem/cf/${ref}`, undefined, '문제 로딩 실패');
 
-    // 이 응답이 아직 유효한지 확인한다. /api/problem/cf 는 CF 스크래핑 + 섹션 4개 번역이라
-    // 수 초~십수 초가 걸린다 — A 를 열고(로딩 중) 닫은 뒤 B 를 열면 A 의 늦은 응답이
-    // B 의 제목·본문·samples·sections 를 덮어, 예제 실행이 B 에 A 의 예제를 돌리고
-    // push-review 가 B 의 ref 와 A 의 sections 를 함께 보낸다(조용한 오답).
+    // 응답이 아직 유효한지 확인한다 — /api/problem/cf 는 수 초~십수 초라, 늦은 응답이
+    // 나중에 연 문제의 본문·samples·sections 를 덮는다.
     if (_currentProblem?.ref !== ref) return;
 
     _currentProblem.samples  = data.samples;
@@ -111,9 +108,8 @@ async function openProblemModal(ref, title, tierName) {
       .map(({ key, label }) => {
         const parts = sections[key].split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/);
         const escaped = parts.map((part, i) => {
-          // 수식 구간도 escape 한다 — KaTeX 는 DOM 텍스트(엔티티가 디코딩된 값)를 읽으므로
-          // 렌더링에는 영향이 없고, \begin{cases} 의 & 나 $a<b$ 의 < 가 HTML 로 먹히는 것과
-          // 문제 본문·번역문을 통한 스크립트 주입을 함께 막는다.
+          // 수식 구간도 escape 한다 — KaTeX 는 엔티티가 디코딩된 DOM 텍스트를 읽으므로
+          // 렌더링에는 영향이 없고, 본문을 통한 스크립트 주입을 막는다.
           if (i % 2 === 1) return escapeHtml(part);
           let text = part;
           if (i > 0) text = text.replace(/^\n+/, '');
@@ -141,9 +137,7 @@ async function openProblemModal(ref, title, tierName) {
       });
     }
   } catch (e) {
-    // 성공 경로와 같은 가드가 필요하다 — 없으면 A 를 닫고 B 를 연 뒤 A 의 요청이
-    // 실패했을 때 B 의 스피너 자리에 A 의 오류가 그려진다(세대 토큰을 쓰는 형제 모듈은
-    // 전부 catch 에도 같은 가드를 둔다).
+    // 성공 경로와 같은 세대 가드 — 없으면 늦게 도착한 실패가 다른 모달에 그려진다.
     if (_currentProblem?.ref !== ref) return;
     document.getElementById('pm-loading').innerHTML =
       `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -184,8 +178,7 @@ function addCustomCase() {
 function removeCustomCase(id) {
   document.getElementById(`pm-custom-${id}`)?.remove();
   // 삭제 버튼이 포커스를 가진 채 사라진다. 노드 제거는 focusout 을 발화시키지 않아
-  // modal-a11y 의 감시가 잡지 못하므로 여기서 직접 회수한다 — 그러지 않으면 포커스가
-  // <body> 로 떨어져 이 모달의 Esc·Tab 트랩이 함께 죽는다(둘 다 root 의 리스너다).
+  // modal-a11y 가 잡지 못하므로 여기서 직접 회수한다.
   recoverModalFocus(document.getElementById('problem-modal'));
 }
 
@@ -283,10 +276,8 @@ async function runSamples() {
       if (cell) cell.outerHTML = html;
     }
   } finally {
-    // 내 세대일 때만 되돌린다. 무조건 되돌리면, 무효화된 옛 실행의 응답이 늦게 도착해
-    // **새로 진행 중인 실행**의 버튼을 활성으로 만든다(그 상태에서 다시 누르면 진행 중인
-    // 결과가 지워진다). 모달 열기·닫기가 이미 resetRunButton() 을 부르므로 "버튼 고착"
-    // 방지는 그대로 유지된다.
+    // 내 세대일 때만 되돌린다 — 무효화된 옛 실행의 늦은 응답이 진행 중인 실행의 버튼을
+    // 활성으로 만들면 안 된다.
     if (runToken === _runToken) resetRunButton();
   }
 
@@ -300,9 +291,8 @@ async function runSamples() {
   }
 }
 
-// 뷰어에서 작성한 코드를 리뷰 폼으로 넘긴다. 폼 채우기·탭 전환·#code-language 의
-// change 발생은 전부 fillReviewForm 이 담당한다 — 여기서 직접 하면 탭 토글이
-// tabs.js 와 중복되고, change 를 빠뜨리면 CodeMirror 모드가 갱신되지 않는다.
+// 뷰어의 코드를 리뷰 폼으로 넘긴다. 폼 채우기·탭 전환·#code-language 의 change 발생은
+// 전부 fillReviewForm 이 담당한다.
 function proceedToReview() {
   if (!_currentProblem) return;
   // fillReviewForm 진입점 넷이 같은 규약을 따른다 — 여기만 확인을 건너뛰어
@@ -333,7 +323,6 @@ const problemModalEl = document.getElementById('problem-modal');
 problemModalEl.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeProblemModal();
 });
-// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. Esc 리스너는 모달 루트에 걸려
-// 있어야 한다 — document 레벨에 두면 이 모달 위에 ⌘K 팔레트를 열고 Esc 를 눌렀을 때
-// 둘이 함께 닫힌다.
+// Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. Esc 리스너는 모달 루트에 걸려야
+// 한다 — document 레벨이면 위에 열린 ⌘K 팔레트와 함께 닫힌다.
 registerModal('problem-modal', closeProblemModal, { initial: '#pm-close-btn' });

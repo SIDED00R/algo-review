@@ -212,10 +212,8 @@ def test_problem_statement_defaults_to_empty():
 
 # ── LLM 이 null 을 준 필드 ──
 #
-# `.get(key, default)` 는 **키가 있고 값이 None** 이면 default 를 적용하지 않는다.
-# reviews.complexity·feedback 은 NOT NULL 이라 그 None 이 그대로 흘러가면 저장이
-# IntegrityError 로 죽고, 이미 과금된 LLM 응답과 tag_stats 첫 집계가 롤백으로 함께 사라진다.
-# 저장 경로가 둘이라(save_review / update_pending_review) 한쪽만 막으면 다른 쪽에서 터진다.
+# `.get(key, default)` 는 키가 있고 값이 None 이면 default 를 적용하지 않는다.
+# 저장 경로가 둘이라(save_review / update_pending_review) 양쪽 다 본다.
 
 _NULL_RESULT = {
     "efficiency": "ok", "complexity": None, "better_algorithm": None,

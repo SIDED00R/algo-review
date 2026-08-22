@@ -19,23 +19,18 @@ h4 { font-size: var(--fs-sm); }
 
 a { color: inherit; }
 
-/* 숫자를 모노 등폭으로 세우는 유틸. 코드 블록·배지·제출 원장은 자기 규칙에서
-   같은 서체를 직접 지정한다(components.css).
-   "개발자 도구" 성격은 라벨을 영문 대문자로 만드는 데서 오는 게 아니라
-   숫자와 코드가 정렬되는 데서 온다. */
+/* 숫자를 모노 등폭으로 세우는 유틸. 코드 블록·배지·제출 원장은 components.css 에서
+   같은 서체를 직접 지정한다. */
 .mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  /* weight 를 못박는다 — 지정하지 않으면 상속받는다. .summary-value(600) 안에 놓이는
-     CF 평균 레이팅(stats.js)처럼 굵은 컨테이너 안에 들어가면 600 을 상속하는데,
-     JetBrains Mono 는 400/500 만 로드하므로 브라우저가 합성 볼드를 그린다.
-     로드한 두 굵기 중 굵은 쪽으로 고정한다. */
+  /* weight 를 못박는다 — JetBrains Mono 는 400/500 만 로드하므로 굵은 컨테이너 안에서
+     600 을 상속하면 브라우저가 합성 볼드를 그린다. */
   font-weight: 500;
 }
 
-/* 라벨은 한글이므로 Pretendard 로 둔다 — JetBrains Mono 에 한글 글리프가 없어
-   모노로 지정하면 라벨마다 서체 이음선이 생기고, uppercase 는 한글에 무효다.
-   한글은 넓은 자간을 잘 받지 않으므로 tracking 을 최소로 준다. */
+/* 라벨은 한글이라 Pretendard 로 둔다 — JetBrains Mono 에 한글 글리프가 없고
+   uppercase 는 한글에 무효다. tracking 은 최소로. */
 .label {
   display: block;
   font-size: var(--fs-label);
@@ -49,8 +44,7 @@ a { color: inherit; }
 .desc { color: var(--fg-muted); font-size: var(--fs-sm); }
 
 /* ── 포커스 ──
-   키보드 사용자가 현재 위치를 알 수 있어야 한다. 링을 무채색(--fg)으로 두면
-   두 테마와 모든 표면 위에서 함께 보인다. */
+   링은 무채색(--fg) — 두 테마와 모든 표면 위에서 보인다. */
 :focus-visible {
   outline: 2px solid var(--fg);
   outline-offset: 2px;

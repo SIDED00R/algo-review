@@ -28,11 +28,8 @@ def _run_review(platform: str, review: dict) -> dict:
         "problem_ref": review["problem_ref"], "title": review["title"],
         "tier": review["tier"], "tier_name": review["tier_name"], "tags": review["tags"],
     }
-    # 저장된 본문을 넘긴다 — 없으면 resolve_statement 가 스크래핑한다. BOJ 는 acmicpc.net
-    # 종료로 스크래핑이 죽어 빈 본문이 되므로, 넘기지 않으면 백필한 본문과 사용자가 붙여 넣은
-    # 원문이 LLM 프롬프트에서 버려진다. 아래 _repush_bundle 도 같은 값을 쓴다.
-    # 회차 중 본문이 있는 가장 최근 것을 쓴다 — 이 회차 자신이 본문 없이 저장됐어도
-    # 같은 문제의 다른 회차에 있으면 그것을 쓴다.
+    # 저장된 본문을 넘긴다 — 없으면 resolve_statement 가 스크래핑한다(BOJ 는 상시 실패).
+    # 회차 중 본문이 있는 가장 최근 것을 쓴다. 아래 _repush_bundle 도 같은 값을 쓴다.
     statement = resolve_statement(
         platform, problem_info,
         db.get_stored_problem_statement(platform, review["problem_ref"]))
@@ -65,9 +62,8 @@ def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool,
             platform=platform, problem_ref=problem_ref, title=review["title"],
             tier_name=review["tier_name"], tags=review["tags"], language=review["language"],
             code=review["code"], review=review, submitted_at=review.get("created_at", ""),
-            # 저장된 본문이 있으면 그걸 쓴다 — 없으면 push_review_bundle 이 스크래핑한다.
-            # BOJ 는 acmicpc.net 종료로 스크래핑이 죽어 빈 섹션이 돌아오고, 그대로 README 를
-            # 재생성하면 이미 올라가 있던 문제 설명을 지운다.
+            # 저장된 본문이 있으면 그걸 쓴다 — 없으면 push_review_bundle 이 스크래핑하고, BOJ 는
+            # 빈 섹션이 돌아와 이미 올라간 문제 설명을 지운다.
             description=review.get("problem_statement", ""),
         )
     except HTTPException as e:
@@ -99,9 +95,8 @@ def rereview_problem(platform: str, problem_ref: str):
     reviewed = False
     if latest["efficiency"] == db.PENDING_EFFICIENCY:
         result = _run_review(platform, latest)
-        # 리뷰한 **그 회차** 에 쓴다. LLM 이 도는 10~20초 사이에 같은 문제로 대기 회차가
-        # 하나 더 쌓일 수 있어(메인 탭의 '리뷰 없이 올리기'), "최신 대기 행" 에 쓰면
-        # 리뷰한 적 없는 코드에 결과가 붙는다.
+        # 리뷰한 그 회차에 쓴다 — LLM 이 도는 사이 대기 회차가 하나 더 쌓일 수 있어,
+        # '최신 대기 행' 에 쓰면 리뷰한 적 없는 코드에 결과가 붙는다.
         if not db.update_pending_review(platform, problem_ref, result,
                                         review_id=latest["id"]):
             raise HTTPException(

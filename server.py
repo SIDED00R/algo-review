@@ -35,10 +35,8 @@ async def lifespan(app: FastAPI):
         try:
             db.run_migrations()
         except OperationalError as e:
-            # 온디맨드 DB가 정지 상태여도 기동은 계속한다 — 배포·콜드스타트가 DB 상태에 묶이면 안 된다.
-            # **연결 실패만** 흘려보낸다. except Exception 으로 넓히면 잘못된 리비전·DDL 오류·
-            # 다중 인스턴스의 upgrade head 경합까지 warning 한 줄로 덮고, 새 컬럼이 없는
-            # 스키마로 서비스하다 나중에 원인 불명 500 이 난다.
+            # 온디맨드 DB 가 정지 상태여도 기동은 계속한다. **연결 실패만** 흘려보낸다 —
+            # except Exception 으로 넓히면 DDL 오류·upgrade 경합까지 warning 한 줄로 덮인다.
             logger.warning("DB 연결 실패로 마이그레이션 건너뜀 (온디맨드 정지 상태일 수 있음): %s", e)
     # 테마 캐시 예열은 기동을 막지 않게 백그라운드로 — 데모는 외부 API를 치지 않는다.
     warm_task = None if IS_DEMO else asyncio.create_task(warmup.warm_theme_caches())
@@ -73,16 +71,14 @@ async def _db_unavailable_handler(request: Request, exc: OperationalError):
 
 @app.exception_handler(Exception)
 async def _unhandled_handler(request: Request, exc: Exception):
-    # Starlette 의 ServerErrorMiddleware 가 응답 전송 후 예외를 항상 재-raise 하고,
-    # uvicorn 이 같은 로거로 트레이스백을 한 번 더 남긴다. 여기서 exception() 을 쓰면
-    # 미처리 예외 1건당 트레이스백이 2개가 되므로 요약만 남긴다.
+    # ServerErrorMiddleware 가 예외를 재-raise 하고 uvicorn 이 같은 로거로 트레이스백을 한 번
+    # 더 남긴다 — 여기서 exception() 을 쓰면 1건당 트레이스백이 2개가 된다.
     logger.error("처리되지 않은 예외: %r", exc)
     return JSONResponse(status_code=500, content={"detail": "서버 내부 오류가 발생했습니다."})
 
 
-# 목록 응답이 수 MB 가 된다(실측: reviews 5만 행에서 /api/reviews/grouped 7.37MB).
-# JSON 은 압축률이 10배 안팎이라 전송 시간이 그만큼 줄고 압축 CPU 는 100ms 수준이다.
-# minimum_size 아래(대부분의 API 응답)는 그대로 통과한다.
+# 목록 응답이 커질 수 있다. JSON 은 압축률이 10배 안팎이고 압축 CPU 는 100ms 수준이다.
+# minimum_size 아래는 그대로 통과한다.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
@@ -122,9 +118,8 @@ app.include_router(themes.router)
 
 @app.get("/health")
 def health():
-    # 경로는 /health — Cloud Run GFE 가 정확히 /healthz 를 가로채 컨테이너까지 오지 않는다.
-    # 상태코드는 항상 200 — Cloud Run 프로브가 온디맨드 DB 정지에 묶이면 안 된다.
-    # db 필드는 best-effort 진단용.
+    # 경로는 /health — Cloud Run GFE 가 /healthz 를 가로채 컨테이너까지 오지 않는다.
+    # 상태코드는 항상 200(프로브가 온디맨드 DB 정지에 묶이면 안 된다). db 필드는 진단용.
     db_status = "unavailable"
     try:
         with session_scope() as session:
@@ -136,11 +131,8 @@ def health():
 
 
 # 정적 자산 캐시 버전 — index.html 의 `?v=__V__` 를 기동 시 한 번 치환한다.
-# Cloud Run 이 리비전마다 넣어 주는 K_REVISION 을 토큰으로 쓰므로 배포하면 로컬 자산 URL 이
-# 한꺼번에 갱신된다. 손으로 적는 값이 아니라 배포마다 자동으로 바뀌는 값을 쓴다.
-# 개수는 적지 않는다 — 자산이 늘 때마다 주석만 뒤처진다.
-# 로컬에는 K_REVISION 이 없어 static/ 전체 파일 중 가장 최근 mtime 으로 대체한다 —
-# index.html 만 보면 JS/CSS 만 고쳤을 때 토큰이 그대로라 브라우저가 옛 자산을 계속 쓴다.
+# Cloud Run 의 K_REVISION 을 토큰으로 쓴다. 로컬에는 없어 static/ 최근 mtime 으로 대체한다
+# (index.html 만 보면 JS/CSS 만 고쳤을 때 토큰이 그대로다).
 _ASSET_VERSION = os.getenv("K_REVISION") or str(int(max(
     p.stat().st_mtime for p in STATIC_DIR.rglob("*") if p.is_file()
 )))

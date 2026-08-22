@@ -143,9 +143,8 @@ def get_boj_problem_sections(problem_id: int) -> dict | None:
 def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
                            exclude_ids: set[int]) -> list[dict]:
     tier_code_by_level = _build_tier_key_map()
-    # 직접 인덱싱한다. 맵이 1~30 을 다 채우고 호출처가 모두 그 범위로 클램프하므로
-    # 기본값을 둘 자리가 없다 — .get 으로 삼키면 범위 밖 tier 가 조용히 엉뚱한 검색이
-    # 되고, 직접 인덱싱하면 KeyError 로 즉시 드러난다.
+    # 직접 인덱싱한다 — 맵이 1~30 을 다 채우고 호출처가 그 범위로 클램프한다.
+    # .get 으로 삼키면 범위 밖 tier 가 조용히 엉뚱한 검색이 된다.
     min_key = tier_code_by_level[min_tier]
     max_key = tier_code_by_level[max_tier]
 
@@ -184,16 +183,13 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
     return results
 
 
-# 성공 조회로 얻은 키만 담는다. 만료가 없는 캐시이므로 추측 키를 섞으면 그 키가 프로세스
-# 수명 동안 남는다. 그 키로 검색하면 200 + 빈 목록이라 ProblemSearchError 도 나지 않아,
-# 추천이 error 없이 조용히 비어 버린다.
+# 성공 조회로 얻은 키만 담는다(만료 없는 캐시다). 추측 키로 검색하면 200 + 빈 목록이라
+# ProblemSearchError 도 나지 않고 추천이 조용히 빈다.
 _TAG_KEY_CACHE: dict[str, str] = {}
 
-# 추측 키는 **만료를 달아** 따로 둔다. 만료가 지나면 다음 조회가 진짜 키를 받아온다.
-# 두 가지 실패를 구분한다:
-#   - 조회 자체가 실패(장애·차단): 복구가 언제든 일어나므로 짧게
-#   - 조회는 성공했는데 목록에 없음: 안정적인 사실이므로 길게. 짧게 잡으면 그 태그를
-#     볼 때마다 전체 태그 목록을 다시 내려받는다(취약 태그 순회에서 최악 3회 풀 페치).
+# 추측 키는 만료를 달아 따로 둔다. 두 가지 실패를 구분한다:
+#   - 조회 자체가 실패(장애·차단): 짧게
+#   - 조회는 성공했는데 목록에 없음: 안정적인 사실이므로 길게
 _FALLBACK_TTL_UNREACHABLE = 60
 _FALLBACK_TTL_ABSENT = 3600
 _TAG_KEY_FALLBACK: dict[str, tuple[str, float]] = {}   # key_lower -> (추측 키, 만료 시각)
@@ -221,9 +217,8 @@ def get_tag_key_by_name(tag_name: str) -> str:
         resp.raise_for_status()
         items = resp.json().get("items", [])
         for item in items:
-            # `or ""` 로 받는다 — JSON 에 `"key": null` 이 오면 .get 은 None 을 주고,
-            # 아래 .lower() 가 AttributeError 를 내 except 가 삼킨다. 그러면 그 뒤 항목이
-            # 통째로 캐시에 들어가지 않아, 응답 안에 있던 태그도 추측 키로 나간다.
+            # `or ""` 로 받는다 — JSON 의 `"key": null` 은 .get 이 None 을 주고 .lower() 가
+            # AttributeError 를 낸다.
             key = item.get("key") or ""
             if not key:
                 continue

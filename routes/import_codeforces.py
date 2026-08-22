@@ -70,9 +70,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
             problem_ref=sub["problem_ref"],
         )
         if github_push_enabled and sub.get("code"):
-            # get_codeforces_user_submissions 가 아래 키를 전부 채운다(clients/codeforces.py).
-            # .get(key, default) 로 쓰면 도달 불가한 기본값을 제출마다 평가하게 되므로
-            # 계약을 믿고 직접 인덱싱한다 — 계약이 깨지면 KeyError 로 즉시 드러난다.
+            # get_codeforces_user_submissions 가 아래 키를 전부 채운다 — 계약을 믿고 직접 인덱싱한다.
             ext = api_client.get_file_extension(sub["language"])
             ref = sub["problem_ref"]
             folder, msg = build_solution_target("codeforces", ref, sub["title"])

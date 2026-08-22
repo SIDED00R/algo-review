@@ -31,10 +31,8 @@ def import_from_github(req: GithubImportRequest):
             raise HTTPException(status_code=400, detail="GitHub 토큰이 유효하지 않습니다.")
         raise HTTPException(status_code=502, detail=f"GitHub API 오류 ({type(e).__name__})") from None
     except ValueError as e:
-        # clients.github 가 직접 만든 사용자용 안내다 — 특히 "저장소 트리가 잘렸습니다"
-        # 는 대처법을 담고 있고, 상류 **장애**가 아니라 요청 대상의 한도 초과다.
-        # upstream_failure 로 삼키면 502 + 타입명만 남아 원인도 대처법도 알 수 없고,
-        # 502 가 유도하는 "잠시 후 재시도" 는 저장소가 작아지기 전엔 영원히 실패한다.
+        # clients.github 가 만든 사용자용 안내는 그대로 보여준다 — 상류 장애가 아니라
+        # 요청 대상의 한도 초과라 대처법이 다르다.
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise upstream_failure("GitHub API 오류", e)

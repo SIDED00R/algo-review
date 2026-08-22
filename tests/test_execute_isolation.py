@@ -65,11 +65,8 @@ def test_normal_code_still_runs():
 
 # ── 엔드포인트 게이트 ──
 #
-# 운영 서비스는 allUsers 공개이고 앱에는 인증이 없다. 자식 프로세스가 앱과 같은 uid·같은
-# 네트워크 네임스페이스에서 도는 한, 환경변수 필터·cwd 격리·-I 로도 두 경로가 남는다:
-#   ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 액세스 토큰
-#   ② /proc/1/environ → 앱 프로세스의 환경변수 전체
-# 그래서 엔드포인트 자체를 기본 비활성으로 둔다.
+# 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버와
+# /proc/1/environ 경로가 남는다. 그래서 엔드포인트 자체를 기본 비활성으로 둔다.
 
 _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
 
@@ -117,9 +114,8 @@ def test_demo_mode_blocks_even_when_enabled(monkeypatch):
 
 # ── UTF-8 출력 ──
 #
-# `-I`(isolated)는 `-E` 를 포함해 **모든 PYTHON* 환경변수를 무시**한다. 그래서
-# PYTHONIOENCODING/PYTHONUTF8 를 env 로 넘기면 적용되지 않고, 비-ASCII 를 출력하는
-# 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽는다. 커맨드라인 플래그로 줘야 한다.
+# `-I`(isolated)는 모든 PYTHON* 환경변수를 무시한다 — PYTHONIOENCODING 은 env 가 아니라
+# 커맨드라인 플래그로 줘야 한다.
 
 @pytest.mark.parametrize("text", ["안녕하세요", "你好世界", "Привет", "😀🎉", "café"])
 def test_non_ascii_output_survives(text):

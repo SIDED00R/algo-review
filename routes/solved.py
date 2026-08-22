@@ -18,9 +18,8 @@ def review_imported(platform: str, problem_ref: str):
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
 
-    # 조회-리뷰-삭제를 나누면 여러 요청이 전부 조회를 통과해 각자 유료 LLM 호출을 하고
-    # 리뷰 행을 남긴다(CI postgres 다리에서 4건 동시 진행 재현). 삭제를 **선점**으로 써서
-    # 한 요청만 진행시킨다. 실패하면 아래에서 되돌린다.
+    # 조회-리뷰-삭제를 나누면 여러 요청이 전부 조회를 통과해 각자 유료 LLM 호출을 한다.
+    # 삭제를 선점으로 써서 한 요청만 진행시킨다. 실패하면 아래에서 되돌린다.
     problem = db.claim_solved_problem(platform, problem_ref)
     if not problem:
         raise HTTPException(status_code=404, detail="가져온 기록에서 해당 문제를 찾을 수 없습니다.")
@@ -57,9 +56,8 @@ def review_imported(platform: str, problem_ref: str):
             "tags": problem["tags"],
         }
 
-    # 수집 함수는 예외 대신 실패 문자열을 반환한다 — 직접 부르면 그 값이 프롬프트의
-    # 문제 설명 자리에 그대로 박힌다. 리뷰·재리뷰와 같은 해석기를 써서 실패를 빈 본문으로
-    # 바꾼다.
+    # 수집 함수는 예외 대신 실패 문자열을 반환한다 — 리뷰·재리뷰와 같은 해석기를 써서
+    # 실패를 빈 본문으로 바꾼다.
     statement = resolve_statement(platform, problem_info)
 
     try:
@@ -71,9 +69,8 @@ def review_imported(platform: str, problem_ref: str):
         _restore()
         raise upstream_failure("코드 분석 실패", e)
 
-    # solved 기록의 제목/태그/식별자를 응답·저장 기준으로 사용한다. 단 빈 값으로 덮지
-    # 않는다 — CF 는 제목·태그를 문제 조회에서 받아오므로 solved 행이 비어 있으면
-    # 그걸 살려야 한다(BOJ 는 위에서 이미 같은 값으로 채워 no-op).
+    # solved 기록의 제목·태그·식별자를 쓰되 빈 값으로 덮지 않는다 — CF 는 문제 조회에서
+    # 받아오므로 solved 행이 비어 있으면 그걸 살려야 한다.
     problem_info["platform"] = platform
     problem_info["problem_ref"] = problem_ref
     if problem.get("title"):

@@ -110,11 +110,8 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
 
 
 # 이미 푼 문제 집합의 짧은 메모. 테마 탭 프리페치가 테마 10개를 연달아 요청하는데
-# `build_theme_response` 가 테마마다 이 집합을 다시 구한다 — 페이지 로드 1회에 같은
-# 전 행 스캔이 10번 돈다(reviews 5만 행에서 119ms × 10 = 페이지 로드의 82%).
-#
-# TTL 안에서는 방금 리뷰한 문제가 테마 목록에 남을 수 있다. 그 대가로 스캔이 10분의 1이
-# 되고, 다음 요청이 스스로 맞춘다. 다중 인스턴스에서는 인스턴스마다 따로 만료된다.
+# 테마마다 같은 전 행 스캔이 돈다.
+# TTL 안에서는 방금 리뷰한 문제가 테마 목록에 남을 수 있다.
 _SOLVED_TTL_SEC = 30
 _solved_cache: dict[str, tuple[set, float]] = {}
 

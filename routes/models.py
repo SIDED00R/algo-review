@@ -86,10 +86,8 @@ class ImportRequest(BaseModel):
     @field_validator("max_pages")
     @classmethod
     def max_pages_bounds(cls, v):
-        # 9999("전체") 선택 시 모든 기록을 가져온다. 상한이 필요한 이유는 무한 루프
-        # 방지만이 아니다 — 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40)의
-        # 슬롯을 페이지당 최대 15초(HTTP) + 0.5초(예절 간격) 동안 붙든다. 1000 이면
-        # 요청 하나가 4시간 넘게 슬롯을 점유해 /health 까지 막을 수 있다.
+        # 9999("전체") 선택 시 모든 기록을 가져온다. 이 라우터는 동기라 요청 하나가 anyio
+        # 스레드풀(기본 40) 슬롯을 페이지당 최대 15초 + 0.5초 동안 붙든다.
         return max(1, min(v, MAX_IMPORT_PAGES))
 
 

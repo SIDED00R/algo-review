@@ -38,16 +38,12 @@ def cf_rating_label(rating) -> str:
     return f"Codeforces {rating}" if rating else "Codeforces Unrated"
 
 
-# problemset 전체는 수 MB · timeout 30s 다. 오타 한 번에 이걸 다시 받으면 안 되므로
-# 강제 갱신에는 프로세스당 쿨다운을 둔다.
+# problemset 전체는 수 MB · timeout 30s — 강제 갱신에 프로세스당 쿨다운을 둔다.
 _FORCE_REFRESH_COOLDOWN = 600  # 10분에 1회만 강제 갱신
 _last_force_refresh = 0.0
 
-# 스냅샷은 직접 관리한다. lru_cache 를 쓰면 두 가지를 못 한다 —
-#  ① `cache_clear()` 는 **먼저 버리고 나중에 받는다**. 재다운로드가 실패하면
-#     정상 스냅샷까지 잃고, 그 뒤 CF 기능 전부가 요청마다 전체 다운로드를 재시도한다.
-#  ② lru_cache 는 사용자 함수 실행 중 락을 잡지 않아 **동시 miss 를 합치지 못한다** —
-#     스레드풀의 요청들이 각자 수 MB 를 내려받는다.
+# 스냅샷은 직접 관리한다. lru_cache 는 cache_clear() 가 먼저 버리고 나중에 받으며,
+# 동시 miss 를 합치지 못한다.
 _snapshot_lock = threading.Lock()
 _snapshot: tuple[list[dict], dict] | None = None
 _lookup: dict[tuple[int, str], dict] | None = None
@@ -109,9 +105,8 @@ def normalize_cf_math(text: str) -> str:
     return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
 
 
-# 수식 이미지 마커의 유일한 정의. 소비처가 셋이라 포맷이 어긋나면 조용히 깨진다 —
-# 번역 마스킹(cf_translator), README 변환(tex_markers_to_markdown),
-# 모달 렌더링(static/js/problem-modal.js 의 restoreFormulaImages).
+# 수식 이미지 마커의 유일한 정의. 소비처: cf_translator, tex_markers_to_markdown,
+# static/js/problem-modal.js 의 restoreFormulaImages.
 TEX_IMG_MARKER_RE = re.compile(r'⟦img:(https?://[^⟧\s]+)⟧')
 
 
@@ -138,8 +133,7 @@ def _drop_element_keeping_tail(el, replacement: str = "") -> None:
     parent.remove(el)
 
 
-# KaTeX 0.16 이 유니코드 그대로 인식하지 못하는 기호만 LaTeX 명령으로 바꾼다.
-# ≤ ≥ ≈ ∑ √ ⌊ 등은 그대로 렌더되므로 건드리지 않는다(katex.min.js 심볼 테이블 실측).
+# KaTeX 0.16 이 유니코드로 인식하지 못하는 기호만 LaTeX 명령으로 바꾼다.
 _KATEX_UNSUPPORTED = {
     "×": r"\times", "÷": r"\div", "±": r"\pm",
     "°": r"^\circ", "″": r"\prime\prime", "¬": r"\lnot",
@@ -184,9 +178,7 @@ def _replace_tex_images_with_markers(el) -> None:
     for img in el.xpath('.//img[contains(@class,"tex-formula")]'):
         src = img.get("src", "")
         if src:
-            # 소비처(cf_translator/tex_markers_to_markdown/problem-modal.js) 정규식이
-            # https?:// 만 매칭한다 — "//espresso.codeforces.com/..." 같은 프로토콜 상대
-            # 경로는 절대 URL로 승격해야 README에 리터럴 마커가 그대로 남지 않는다.
+            # 소비처 정규식이 https?:// 만 매칭한다 — 프로토콜 상대 경로를 절대 URL 로 승격한다.
             if not re.match(r'^https?://', src):
                 src = urljoin("https://codeforces.com", src)
             _drop_element_keeping_tail(img, f"⟦img:{src}⟧")
@@ -203,8 +195,8 @@ def cf_xpath_text(tree, expr: str) -> str:
     if not nodes:
         return ""
     el = nodes[0]
-    # script/noscript/style 텍스트는 MathJax 마크업이라 itertext()에 포함되면 수식 중복 발생.
-    # section-title은 "Input"/"Output" 같은 섹션 제목이 본문 텍스트에 섞여 중복되는 것을 막기 위해 제거.
+    # script/noscript/style 은 MathJax 마크업이라 itertext() 에서 수식이 중복된다.
+    # section-title 은 "Input"/"Output" 제목이 본문에 섞이는 것을 막으려고 제거한다.
     for unwanted in el.xpath(
         './/*[self::script or self::noscript or self::style'
         ' or contains(@class,"section-title")]'
@@ -320,15 +312,8 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
         signed_params["apiSig"] = api_sig
         params = signed_params
 
-    # 이 요청의 쿼리스트링에는 apiKey·apiSig 가 들어 있고, requests 계열 예외 메시지는
-    # 요청 URL 전문을 포함한다 — raise_for_status() 뿐 아니라 **requests.get 자체가 던지는**
-    # ConnectTimeout·ConnectionError 도 그렇다(urllib3 의 MaxRetryError 를 감싸며
-    # "Max retries exceeded with url: /api/user.status?...&apiKey=...&apiSig=..." 를 남긴다).
-    # 그 예외는 routes/import_codeforces.py 의 `except Exception as e` 를 타고 500 detail 로
-    # **클라이언트에게 반환**되고 로그에도 남는다. /api/import-codeforces 는 인증이 없고,
-    # 요청자가 키를 넣지 않으면 settings.codeforces_api_key(운영자 키)로 폴백하므로
-    # 운영자 키+유효 서명이 익명 요청자에게 노출된다.
-    # 그래서 이 함수를 나가는 모든 예외를 원문 없는 ValueError 로 치환한다.
+    # 쿼리스트링에 apiKey·apiSig 가 들어 있고 requests 예외 메시지는 요청 URL 전문을
+    # 포함한다 — 이 함수를 나가는 예외는 전부 원문 없는 ValueError 로 치환한다.
     try:
         resp = requests.get(
             f"{CODEFORCES_API_BASE}/{method_name}",
@@ -344,15 +329,12 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
     except ValueError:
         payload = None
     if not isinstance(payload, dict):
-        # 점검 페이지·프록시가 배열이나 문자열을 줄 수 있다. dict 가 아니면 아래의
-        # .get 이 AttributeError 로 새어 나가므로 여기서 없는 것으로 취급한다.
+        # 점검 페이지·프록시가 배열이나 문자열을 줄 수 있다 — dict 가 아니면 없는 것으로 본다.
         payload = None
     status = resp.status_code
     comment = payload.get("comment") if payload else None
     if status >= 500 or status in (403, 429):
-        # 상태코드를 comment 보다 먼저 본다 — CF 는 레이트리밋·점검 응답에도 comment 를
-        # 실어 주므로, comment 를 먼저 보면 5xx·429 가 400(입력 오류)으로 보고된다.
-        # 403 은 Cloudflare 가 이 출구 IP 를 막은 것이라 요청자가 고칠 수 있는 게 없다.
+        # 상태코드를 comment 보다 먼저 본다 — CF 는 레이트리밋·점검 응답에도 comment 를 실어 준다.
         raise UpstreamUnavailable(f"Codeforces API 오류 (HTTP {status})")
     if comment:
         # CF 가 준 메시지를 그대로 쓴다 — 요청 URL 을 담지 않아 서명이 새지 않는다.
@@ -436,8 +418,7 @@ def _try_refresh_snapshot() -> bool:
     """
     global _last_force_refresh
     now = time.time()
-    # 락 밖에서 먼저 본다 — 다른 스레드가 갱신 중이면 락에서 최대 30초(다운로드 timeout)
-    # 블록된 뒤 어차피 쿨다운에 걸려 False 를 받는다. 요청 스레드를 헛되이 묶지 않는다.
+    # 락 밖에서 먼저 본다 — 갱신 중인 스레드를 기다려도 어차피 쿨다운에 걸린다.
     if now - _last_force_refresh < _FORCE_REFRESH_COOLDOWN:
         return False
     if not _snapshot_lock.acquire(blocking=False):
