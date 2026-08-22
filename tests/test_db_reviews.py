@@ -6,6 +6,11 @@ import db.models
 from db.connection import session_scope
 
 
+def _latest_id(problem_ref, platform="boj"):
+    """호출부(routes/rereview.py)가 집는 회차 — 목록의 첫 행이 최신이다."""
+    return db.get_reviews_by_problem(platform, problem_ref)[0]["id"]
+
+
 def mk_review(**kw):
     args = {
         "problem_id": 1000,
@@ -120,7 +125,7 @@ def test_update_pending_review_fills_row_without_new_submission():
     assert db.update_pending_review("boj", "1", {
         "efficiency": "good", "complexity": "O(N)", "better_algorithm": None,
         "feedback": "좋은 풀이", "strengths": ["명확함"], "weaknesses": [],
-    }) is True
+    }, review_id=_latest_id("1")) is True
 
     rows = db.get_reviews_by_problem("boj", "1")
     assert len(rows) == 1  # 행을 새로 쌓지 않아 제출 회차가 늘지 않는다
@@ -150,7 +155,8 @@ def test_normal_review_after_pending_still_counts_tags(at_time):
 
 def test_update_pending_review_without_pending_row():
     mk_review(problem_id=1, problem_ref="1", efficiency="good")
-    assert db.update_pending_review("boj", "1", {"efficiency": "ok"}) is False
+    assert db.update_pending_review("boj", "1", {"efficiency": "ok"},
+                                    review_id=_latest_id("1")) is False
 
 
 def test_update_pending_review_does_not_recount_reviewed_problem(at_time):
@@ -158,7 +164,7 @@ def test_update_pending_review_does_not_recount_reviewed_problem(at_time):
     mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
     at_time("2024-01-02T00:00:00")
     mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
-    db.update_pending_review("boj", "1", {"efficiency": "poor"})
+    db.update_pending_review("boj", "1", {"efficiency": "poor"}, review_id=_latest_id("1"))
     stats = {s["tag"]: s for s in db.get_tag_stats()}
     # 이미 리뷰된 문제의 재제출이므로 집계는 첫 리뷰 1건 그대로다.
     assert stats["dp"]["total_count"] == 1
@@ -222,7 +228,7 @@ def test_update_pending_review_survives_null_string_fields():
                    code="print(1)", feedback="", efficiency=db.PENDING_EFFICIENCY,
                    problem_ref="1000", language="Python 3")
 
-    db.update_pending_review("boj", "1000", _NULL_RESULT)
+    db.update_pending_review("boj", "1000", _NULL_RESULT, review_id=_latest_id("1000"))
 
     row = db.get_reviews_by_problem("boj", "1000")[0]
     assert row["complexity"] == ""
@@ -355,7 +361,8 @@ def test_rebuild_handles_two_pending_rows_for_one_problem(at_time):
     mk_review(problem_id=5, problem_ref="5", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
     assert db.update_pending_review("boj", "5", {"efficiency": "good", "complexity": "",
                                                  "better_algorithm": "", "feedback": "",
-                                                 "strengths": [], "weaknesses": []})
+                                                 "strengths": [], "weaknesses": []},
+                                    review_id=_latest_id("5"))
 
     incremental = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
     with session_scope(commit=True) as session:

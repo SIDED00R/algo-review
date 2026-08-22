@@ -99,10 +99,19 @@ def rereview_problem(platform: str, problem_ref: str):
     reviewed = False
     if latest["efficiency"] == db.PENDING_EFFICIENCY:
         result = _run_review(platform, latest)
-        if not db.update_pending_review(platform, problem_ref, result):
-            raise HTTPException(status_code=409, detail="리뷰 대기 기록이 사라졌습니다. 목록을 다시 불러와 주세요.")
+        # 리뷰한 **그 회차** 에 쓴다. LLM 이 도는 10~20초 사이에 같은 문제로 대기 회차가
+        # 하나 더 쌓일 수 있어(메인 탭의 '리뷰 없이 올리기'), "최신 대기 행" 에 쓰면
+        # 리뷰한 적 없는 코드에 결과가 붙는다.
+        if not db.update_pending_review(platform, problem_ref, result,
+                                        review_id=latest["id"]):
+            raise HTTPException(
+                status_code=409,
+                detail="이 회차가 그 사이에 채워졌거나 사라졌습니다. 목록을 다시 불러와 주세요.")
         reviewed = True
-        latest = db.get_reviews_by_problem(platform, problem_ref)[0]
+        # 방금 채운 회차를 다시 읽는다 — 그 사이 더 최신 회차가 생겼을 수 있어 [0] 을
+        # 집으면 README 에 다른 회차의 코드가 올라간다.
+        latest = next(r for r in db.get_reviews_by_problem(platform, problem_ref)
+                      if r["id"] == latest["id"])
 
     pushed, detail = _repush_bundle(platform, problem_ref, latest)
     # 갱신된 리뷰 내용은 프론트가 기록 조회로 다시 읽는다 — 코드 전문을 응답에 싣지 않는다.

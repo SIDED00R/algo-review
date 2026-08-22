@@ -23,7 +23,7 @@ function confirmEditorOverwrite() {
 }
 
 function submissionSummary(review, seq, total) {
-  const when = String(review.created_at || '').slice(0, 10);
+  const when = localDate(review.created_at);
   const parts = [];
   if (seq) parts.push(`${seq}회차${seq === total ? '(최신)' : ''}`);
   if (when) parts.push(when);

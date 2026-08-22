@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from clients import (ProblemSearchError, get_tag_key_by_name,
                      search_cf_problems_by_tag, search_problems_by_tag)
 from constants import TIER_NAMES
+from timestamps import parse_stored
 import db
 
 TIER_RANGE_LOW       = 1
@@ -20,17 +21,23 @@ def _score_tags(tag_data: list) -> list:
     if not tag_data:
         return []
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     max_count = max(d["solve_count"] for d in tag_data) or 1
 
     for d in tag_data:
+        # parse_stored 로 aware 로 맞춘다 — naive 로 빼면 저장 형식이 바뀌는 순간
+        # TypeError 가 나고, 아래 except 가 그것을 삼켜 **모든 태그의 days_since 가
+        # 365 로 평탄해진다**(최신성 점수가 통째로 무의미해지는데 아무도 모른다).
         try:
-            last = datetime.fromisoformat(d["last_solved_at"])
-            d["days_since"] = (now - last).days
-        except Exception:
+            # 미래 시각(시계 되돌림·수동 편집)은 0 으로 깎는다 — 음수를 그대로 두면
+            # recency 점수가 **음수**가 되어 그 태그가 강점처럼 순위 밑으로 밀린다.
+            d["days_since"] = max(0, (now - parse_stored(d["last_solved_at"])).days)
+        except (TypeError, ValueError):
+            # 값이 없거나(첫 집계 전) 형식이 깨진 경우만 — '아주 오래 전' 으로 둔다.
             d["days_since"] = 365
 
-    max_days = max(d["days_since"] for d in tag_data) or 1
+    # 0 으로 나누지 않는다. 전부 오늘이면 최신성으로는 우열이 없다는 뜻이라 값은 0 이 된다.
+    max_days = max(1, max(d["days_since"] for d in tag_data))
 
     for d in tag_data:
         count_score   = 1 - (d["solve_count"] / max_count)

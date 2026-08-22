@@ -119,3 +119,67 @@ def test_repush_passes_stored_statement_as_description(minimal_client, monkeypat
 
     assert body["pushed"] is True
     assert seen["description"] == stored
+
+
+def test_llm_result_lands_on_the_round_that_was_reviewed(minimal_client, monkeypatch, at_time):
+    """LLM 이 도는 사이에 대기 회차가 하나 더 쌓여도 결과는 리뷰한 회차에 붙어야 한다.
+
+    사용자는 재리뷰를 눌러 두고(10~20초) 메인 탭에서 같은 문제를 '리뷰 없이 올리기' 로
+    다시 등록할 수 있다. "최신 대기 행" 에 쓰면 **리뷰한 적 없는 코드**가 리뷰 결과를
+    갖게 되고, 그 조합이 그대로 GitHub README 로 올라간다.
+    """
+    at_time("2026-01-01T00:00:00")
+    _save(db.PENDING_EFFICIENCY, code="코드 A")
+    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(rereview, "resolve_statement", lambda *a, **k: "문제 본문")
+
+    pushed_code = {}
+
+    def _fake_analyze(problem_info, statement, code):
+        # LLM 호출 중에 사용자가 같은 문제를 다시 대기 등록한다.
+        at_time("2026-01-02T00:00:00")
+        _save(db.PENDING_EFFICIENCY, code="코드 B")
+        return {"efficiency": "poor", "complexity": "O(N^2)", "better_algorithm": "",
+                "feedback": f"리뷰 대상: {code}", "strengths": [], "weaknesses": []}
+
+    def _fake_push(platform, problem_ref, review):
+        pushed_code["code"] = review["code"]
+        return True, None
+
+    monkeypatch.setattr(rereview.analyzer, "analyze_code", _fake_analyze)
+    monkeypatch.setattr(rereview, "_repush_bundle", _fake_push)
+
+    body = minimal_client.post("/api/rereview/boj/1000").json()
+    assert body["reviewed"] is True
+
+    rounds = {r["code"]: r for r in db.get_reviews_by_problem("boj", "1000")}
+    assert rounds["코드 A"]["feedback"] == "리뷰 대상: 코드 A"
+    assert rounds["코드 A"]["efficiency"] == "poor"
+    # 리뷰한 적 없는 회차는 대기 상태 그대로여야 한다.
+    assert rounds["코드 B"]["efficiency"] == db.PENDING_EFFICIENCY
+    # README 에도 리뷰한 그 회차의 코드가 올라가야 한다.
+    assert pushed_code["code"] == "코드 A"
+
+
+def test_a_round_filled_meanwhile_is_reported_as_conflict(minimal_client, monkeypatch, at_time):
+    """LLM 이 도는 사이 그 회차가 이미 채워졌으면 덮어쓰지 않고 409 로 알린다."""
+    at_time("2026-01-01T00:00:00")
+    _save(db.PENDING_EFFICIENCY, code="코드 A")
+    target = db.get_reviews_by_problem("boj", "1000")[0]["id"]
+    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(rereview, "resolve_statement", lambda *a, **k: "문제 본문")
+
+    def _fake_analyze(problem_info, statement, code):
+        db.update_pending_review("boj", "1000", {
+            "efficiency": "good", "complexity": "O(N)", "better_algorithm": "",
+            "feedback": "먼저 도착한 리뷰", "strengths": [], "weaknesses": [],
+        }, review_id=target)
+        return {"efficiency": "poor", "complexity": "", "better_algorithm": "",
+                "feedback": "뒤늦게 도착한 리뷰", "strengths": [], "weaknesses": []}
+
+    monkeypatch.setattr(rereview.analyzer, "analyze_code", _fake_analyze)
+
+    r = minimal_client.post("/api/rereview/boj/1000")
+    assert r.status_code == 409
+    row = db.get_reviews_by_problem("boj", "1000")[0]
+    assert row["feedback"] == "먼저 도착한 리뷰"

@@ -46,7 +46,9 @@ def test_update_pending_review_never_stores_the_string_null():
     """대기 행 채우기는 두 번째 저장 경로다 — save_review 만 막으면 여기가 뚫린다."""
     db.save_review(**_BASE, feedback="", efficiency=db.PENDING_EFFICIENCY)
 
-    assert db.update_pending_review("boj", "1000", dict(_NULLED, efficiency="good"))
+    target = db.get_reviews_by_problem("boj", "1000")[0]["id"]
+    assert db.update_pending_review("boj", "1000", dict(_NULLED, efficiency="good"),
+                                    review_id=target)
 
     row = db.get_reviews_by_problem("boj", "1000")[0]
     assert row["strengths"] == [] and row["weaknesses"] == []

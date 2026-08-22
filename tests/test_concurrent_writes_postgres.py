@@ -125,3 +125,65 @@ def test_only_one_request_can_claim_an_imported_record():
     reviewed = sum(1 for r in results if r)
     assert reviewed == 1, (
         f"{reviewed}개 요청이 유료 리뷰까지 진행했다 — 조회-삭제가 원자적이지 않다")
+
+
+def test_only_one_request_fills_a_pending_round():
+    """같은 대기 회차를 동시에 채우면 **한 요청만** 성공해야 한다.
+
+    조회와 쓰기를 나누면 둘 다 "대기 상태" 를 보고 차례로 덮어써, 뒤늦게 도착한 리뷰가
+    앞선 것을 지운다(둘 다 이미 과금된 LLM 결과다). UPDATE 의 WHERE 에
+    `efficiency = PENDING` 을 함께 걸어 선점으로 만든다.
+    """
+    db.save_review(problem_id=1, title="문제", tier=10, tags=["dp"], code="print(1)",
+                   feedback="", efficiency=db.PENDING_EFFICIENCY, problem_ref="1",
+                   language="Python 3")
+    target = db.get_reviews_by_problem("boj", "1")[0]["id"]
+
+    def fill(i):
+        return db.update_pending_review("boj", "1", {
+            "efficiency": "good" if i == 0 else "poor",
+            "complexity": "", "better_algorithm": "",
+            "feedback": f"{i} 번 요청의 리뷰", "strengths": [], "weaknesses": [],
+        }, review_id=target)
+
+    results, errors = _run_concurrently(fill, 8)
+    assert not errors, errors
+    assert sum(1 for r in results if r) == 1, \
+        f"선점이 성립하지 않았다 — {sum(1 for r in results if r)} 개 요청이 성공했다"
+
+    row = db.get_reviews_by_problem("boj", "1")[0]
+    assert row["efficiency"] != db.PENDING_EFFICIENCY
+    assert row["feedback"].endswith("번 요청의 리뷰")
+
+
+def test_concurrent_fills_of_two_rounds_reconcile_to_one_count():
+    """같은 문제의 대기 회차 둘을 동시에 채웠을 때, 집계가 결국 1 로 수렴해야 한다.
+
+    증분 집계()는 이 창에서 정확하지 않을 수 있다 — 둘 다 "아직 리뷰된
+    회차가 없다" 를 보고 각자 세거나(2), 한쪽이 상대의 미커밋 INSERT 를 못 봐 건너뛴다(1).
+    어느 쪽이 되는지는 타이밍에 달렸으므로 여기서 못박지 않는다.
+
+    못박는 것은 **수렴**이다. 60초 주기 전면 재계산이 reviews 를 다시 세어 정답으로
+    맞추므로, 그 경로를 태운 값은 타이밍과 무관하게 1 이어야 한다.
+    """
+    for _ in range(2):
+        db.save_review(problem_id=2, title="문제", tier=10, tags=["greedy"], code="print(2)",
+                       feedback="", efficiency=db.PENDING_EFFICIENCY, problem_ref="2",
+                       language="Python 3")
+        time.sleep(0.01)   # created_at 이 겹치지 않게 — 회차 순서가 결정되어야 한다
+    ids = [r["id"] for r in db.get_reviews_by_problem("boj", "2")]
+    assert len(ids) == 2
+
+    def fill(i):
+        return db.update_pending_review("boj", "2", {
+            "efficiency": "good", "complexity": "", "better_algorithm": "",
+            "feedback": "", "strengths": [], "weaknesses": [],
+        }, review_id=ids[i])
+
+    results, errors = _run_concurrently(fill, 2)
+    assert not errors, errors
+    assert all(results), "서로 다른 회차이므로 둘 다 성공해야 한다"
+
+    db.reset_tag_stats_rebuild_flag()
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert stats["greedy"]["total_count"] == 1

@@ -110,6 +110,31 @@ function tierGroupParams(key) {
   return { tier_min: r[0], tier_max: r[1], platform: 'boj' };
 }
 
+/** 저장된 시각 문자열을 Date 로. 오프셋이 없으면 UTC 로 본다.
+ *
+ *  서버의 `timestamps.parse_stored` 와 **같은 규칙**이다. 이 규칙이 없으면 JS 가 오프셋
+ *  없는 ISO 문자열을 **브라우저 로컬 시각**으로 읽어(ES2015+ 규정), UTC 로 저장된 값이
+ *  9시간 밀린다. 오프셋 없이 저장된 옛 행은 전부 Cloud Run(UTC)이 쓴 것이다. */
+function parseStoredTime(value) {
+  const s = String(value || '').trim();
+  if (!s) return null;
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(s);
+  const d = new Date(hasZone ? s : `${s}Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** 보는 사람의 시간대 기준 `YYYY-MM-DD`.
+ *
+ *  문자열을 그냥 자르면(`.slice(0, 10)`) UTC 날짜가 그대로 나온다 — 한국에서 00:00~09:00
+ *  에 제출한 기록이 전부 **전날**로 찍히고, 같은 제출이 GitHub README(KST)와 다른 날짜가
+ *  된다. 하루의 9시간이 어긋나는 셈이라 새벽에 푸는 사용자에게는 상시 오류다. */
+function localDate(value) {
+  const d = parseStoredTime(value);
+  if (!d) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** 객체를 쿼리스트링으로 만든다 — 빈 값은 빼서 서버 기본값을 쓰게 한다. */
 function listQuery(params) {
   const sp = new URLSearchParams();
