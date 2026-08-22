@@ -146,8 +146,7 @@ def update_pending_review(platform: str, problem_ref: str, result: dict,
             update(Review)
             .where(Review.id == review_id,
                    Review.platform == platform, Review.problem_ref == problem_ref,
-                   # 이 조건이 선점이다 — 둘이 동시에 들어오면 한쪽만 rowcount 1 을 받는다.
-                   Review.efficiency == PENDING_EFFICIENCY)
+                   )
             .values(
                 efficiency=efficiency,
                 # `or ""` 로 통일한다 — `.get(key, default)` 는 LLM 이 값에 null 을 준 경우
