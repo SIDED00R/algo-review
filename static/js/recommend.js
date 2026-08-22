@@ -2,9 +2,22 @@ const recommendBtn = document.getElementById('recommend-btn');
 recommendBtn.dataset.label = '추천받기';
 recommendBtn.dataset.loadingLabel = '추천 계산 중...';
 
-// 현재 세션에서 이미 본 문제 ID 목록 (페이지 이탈 시 자동 초기화)
+// 현재 세션에서 이미 본 문제 ID 목록 (페이지 이탈 시 자동 초기화).
+// 통째로 `&exclude=` 쿼리스트링에 실리므로 상한을 둔다 — 없으면 "다른 목록 추천받기" 를
+// 누를 때마다 회당 15개씩 무한히 늘어나 URL 길이 한계에 걸린다. Set 은 삽입 순서를
+// 유지하므로 앞(오래된 것)부터 버리면 최근에 본 것이 남는다.
+const _SHOWN_ID_LIMIT = 300;
 const _shownIds = new Set();
 
+function rememberShownId(id) {
+  _shownIds.add(String(id));
+  while (_shownIds.size > _SHOWN_ID_LIMIT) {
+    _shownIds.delete(_shownIds.values().next().value);
+  }
+}
+
+// 세대 토큰이 없는 유일한 비동기 렌더 경로다. 리셋 버튼은 매 렌더마다 새로 만들어지고
+// setLoading 이 추천 버튼을 disabled 로 만들어, 이 함수가 겹쳐 도는 경로가 없다.
 async function fetchRecommend(excludeIds = new Set()) {
   const result = document.getElementById('recommend-result');
   setLoading(recommendBtn, true);
@@ -90,7 +103,7 @@ function renderRecommend(container, data) {
 
   for (const rec of data.recommendations) {
     for (const p of rec.problems) {
-      _shownIds.add(String(p.id));
+      rememberShownId(p.id);
     }
   }
 

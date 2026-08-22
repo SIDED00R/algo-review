@@ -119,6 +119,9 @@
   --cf-master-fg:#E0AA7B; --cf-master-bg:#1F150D; --cf-master-line:#463220;
   --cf-grandmaster-fg:#E07E7B; --cf-grandmaster-bg:#1E0E0D; --cf-grandmaster-line:#452221;
 
+  /* 판정 배지는 지금 fg 만 쓴다. bg/line 은 tier·cf 와 같은 3종 세트를 유지해,
+     배경 있는 칩으로 바꿀 때 팔레트를 다시 고르지 않아도 되게 둔다.
+     good/poor 의 bg·line 은 아래 --status-* 별칭이 소비한다. */
   --eff-good-fg:#85D6A7; --eff-good-bg:#101C15; --eff-good-line:#264031;
   --eff-ok-fg:#E0C27B; --eff-ok-bg:#1E190D; --eff-ok-line:#453A21;
   --eff-poor-fg:#E07E7B; --eff-poor-bg:#1D0E0E; --eff-poor-line:#442422;

@@ -338,6 +338,7 @@ def test_rebuild_matches_the_incremental_basis_when_the_first_row_is_pending(at_
 
     with session_scope(commit=True) as session:
         session.query(db.models.TagStat).delete()
+    db.reset_tag_stats_rebuild_flag()   # 재계산 쿨다운이 지난 상태를 만든다
     restored = {s["tag"]: (s["total_count"], s["good_count"], s["poor_count"])
                 for s in db.get_tag_stats()}
 
@@ -358,6 +359,87 @@ def test_rebuild_handles_two_pending_rows_for_one_problem(at_time):
     incremental = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
     with session_scope(commit=True) as session:
         session.query(db.models.TagStat).delete()
+    db.reset_tag_stats_rebuild_flag()   # 재계산 쿨다운이 지난 상태를 만든다
     restored = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
 
     assert restored == incremental, f"증분 {incremental} vs 복원 {restored}"
+
+
+def test_codeforces_weakness_does_not_borrow_boj_verdicts(at_time):
+    """CF 취약 태그의 poor 비율은 CF 행만 센다.
+
+    tag_stats 는 BOJ 전용이라 CF 는 항상 폴백 경로를 탄다. 그 폴백이 BOJ 를 세면, 태그
+    이름이 겹치는 순간(solved.ac 가 ko 표시명을 주지 않는 `math`·`dp`·`greedy` 등) BOJ 의
+    판정이 CF 추천 점수로 새어 든다 — recommender._score_tags 가 가중치 0.3 으로 쓴다.
+    """
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=1, problem_ref="1", tags=["math"], efficiency="poor")
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=0, problem_ref="4A", platform="codeforces", tags=["math"],
+              efficiency="good", tier=0, tier_name="Codeforces 800")
+    at_time("2024-01-03T00:00:00")
+    mk_review(problem_id=0, problem_ref="5A", platform="codeforces", tags=["math"],
+              efficiency="good", tier=0, tier_name="Codeforces 800")
+
+    cf = {row["tag"]: row for row in db.get_tag_weakness_data("codeforces")}
+    assert cf["math"]["poor_ratio"] == 0.0, "BOJ 의 poor 판정이 CF 취약 점수로 샜다"
+
+    boj = {row["tag"]: row for row in db.get_tag_weakness_data("boj")}
+    assert boj["math"]["poor_ratio"] == 1.0
+
+
+def test_codeforces_weakness_matches_the_codeforces_stats_page(at_time):
+    """CF 폴백은 /api/stats 가 보여주는 것과 **같은 모집단**(전 회차)을 센다.
+
+    모집단이 갈리면 같은 데이터로 통계 화면과 추천의 poor 비율이 달라진다.
+    """
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=0, problem_ref="4A", platform="codeforces", tags=["dp"],
+              efficiency="poor", tier=0, tier_name="Codeforces 800")
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=0, problem_ref="4A", platform="codeforces", tags=["dp"],
+              efficiency="good", tier=0, tier_name="Codeforces 800")
+
+    stats = {s["tag"]: s for s in db.get_cf_tag_stats()}
+    weakness = {row["tag"]: row for row in db.get_tag_weakness_data("codeforces")}
+    expected = stats["dp"]["poor_count"] / stats["dp"]["total_count"]
+    assert weakness["dp"]["poor_ratio"] == expected
+
+
+def test_backfilled_reviews_are_reconciled_into_tag_stats(at_time):
+    """증분 경로를 타지 않고 들어온 행(백필·마이그레이션)도 재계산이 흡수한다.
+
+    "비어 있을 때만 복원" 방식은 이 상황을 벗어나지 못한다 — 백필 후 새 리뷰 1건이
+    들어오면 표가 그 1건짜리로 굳고, 표가 비어 있지 않으므로 다시 복원되지 않는다.
+    """
+    at_time("2024-01-01T00:00:00")
+    db.get_tag_stats()                       # 빈 DB 에서 한 번 조회 — 표는 계속 비어 있다
+    for i in range(3):                       # 증분 갱신을 타지 않는 경로를 흉내낸다
+        with session_scope(commit=True) as session:
+            session.add(db.models.Review(
+                platform="boj", problem_ref=str(2000 + i), problem_id=2000 + i,
+                title="t", tier=1, tier_name="Bronze V", tags='["math"]',
+                language="Python 3", code="x", feedback="", efficiency="poor",
+                complexity="", strengths="[]", weaknesses="[]",
+                created_at=f"2024-01-0{i + 2}T00:00:00"))
+
+    db.reset_tag_stats_rebuild_flag()        # 재계산 쿨다운이 지난 상태
+    assert {s["tag"]: s["total_count"] for s in db.get_tag_stats()} == {"math": 3}
+
+    at_time("2024-02-01T00:00:00")
+    mk_review(problem_id=3000, problem_ref="3000", tags=["math"], efficiency="good")
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert stats["math"]["total_count"] == 4, "백필분이 새 리뷰 1건에 밀려 사라졌다"
+    assert stats["math"]["poor_count"] == 3
+
+
+def test_reconcile_drops_tags_that_no_longer_exist(at_time):
+    """reviews 에서 사라진 태그의 잔재를 표에 남기지 않는다."""
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
+    assert "dp" in {s["tag"] for s in db.get_tag_stats()}
+
+    with session_scope(commit=True) as session:
+        session.query(db.models.Review).delete()
+    db.reset_tag_stats_rebuild_flag()
+    assert db.get_tag_stats() == []

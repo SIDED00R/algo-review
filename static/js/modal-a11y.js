@@ -25,6 +25,11 @@
    *  innerHTML 교체처럼 focusout 이 발화하지 않는 경로에서 직접 부른다. */
   function recoverFocus(root) {
     if (!root || root.classList.contains('hidden')) return;
+    // onOpen 이 아직 돌지 않았으면(장부가 비어 있다) 아무것도 하지 않는다. .hidden 제거는
+    // 동기지만 MutationObserver 는 마이크로태스크라, 그 사이에 포커스를 모달 안으로 옮기면
+    // onOpen 이 "열기 전 포커스" 로 모달 안의 요소를 기억한다. 그러면 닫을 때 숨겨진
+    // 요소에 focus() 를 걸어 무효가 되고 포커스가 <body> 로 떨어진다.
+    if (!restore.has(root)) return;
     if (document.activeElement && document.activeElement !== document.body) return;
     (focusables(root)[0] || root).focus();
   }

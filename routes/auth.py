@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from config import settings
 from routes.models import SetRepoRequest
+from routes.helpers import upstream_failure
 from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS
 
 _logger = logging.getLogger("uvicorn.error")
@@ -159,7 +160,6 @@ def get_github_repos():
         raise HTTPException(status_code=400, detail="GitHub 연결이 필요합니다.")
     try:
         repos = api_client.get_github_user_repos(gh_settings["access_token"])
-    except Exception:
-        _logger.exception("GitHub repos lookup failed")
-        raise HTTPException(status_code=500, detail="레포지토리 조회에 실패했습니다.")
+    except Exception as e:
+        raise upstream_failure("레포지토리 조회 실패", e)
     return {"repos": repos}

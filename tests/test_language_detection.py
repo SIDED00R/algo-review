@@ -67,6 +67,35 @@ _SAMPLES = [
     ("TypeScript", "interface Point { x: number }\nconst p: Point = { x: 1 };"),
 ]
 
+# 언어끼리 **마커를 공유하는** 조합. 표는 순서대로 첫 일치를 채택하므로, 넓은 마커를 가진
+# 언어가 앞에 놓이면 뒤 언어를 통째로 삼킨다. 그 흡수는 위 관용 코드 표본으로는 드러나지
+# 않는다 — 각 표본이 자기 언어의 마커만 담고 있기 때문이다. 여기서는 **공유 마커를 실제로
+# 쓰는 코드**를 언어별로 넣어 경계를 고정한다.
+_COLLISIONS = [
+    # puts/gets 는 C 표준 함수이기도 하다
+    ("C", '#include <stdio.h>\nint main(){ char s[9]; scanf("%s",s); puts("YES"); return 0; }'),
+    ("C", '#include <stdio.h>\nint main(){ char s[9]; gets(s); printf("%s\n",s); }'),
+    ("GNU C++17", '#include <bits/stdc++.h>\nusing namespace std;\nint main(){ puts("YES"); }'),
+    ("Ruby", "n = gets.to_i\nputs n * 2"),
+    ("Ruby", "a, b = gets.split.map(&:to_i)\nputs a + b"),
+    # `var 이름: 타입 =` 는 Swift·Kotlin 둘 다의 문법이다
+    ("Swift", "import Foundation\nvar n: Int = Int(readLine()!)!\nprint(n)"),
+    ("Kotlin", "fun main() {\n    var n: Int = 0\n    println(n)\n}"),
+    # `func …(…) ->` 는 Swift, `fun` 은 Kotlin — 한 글자 차이다
+    ("Swift", "func solve(a: Int) -> Int { return a * 2 }\nprint(solve(a: 3))"),
+    # `interface {` 와 `: number` 는 TypeScript 마커지만 Java·C# 도 interface 를 쓴다
+    ("Java", "import java.util.*;\ninterface Foo { int x(); }\npublic class Main {}"),
+    ("C#", "using System;\ninterface IFoo { int X { get; } }\nclass P { static void Main(){ Console.Write(1); } }"),
+    # `std::` 는 Rust 의 `use std::io` 와도 겹친다
+    ("Rust", "use std::io;\nfn main(){ let mut s = String::new(); io::stdin().read_line(&mut s).unwrap(); }"),
+    # `import` 는 거의 모든 언어에 있다
+    ("Java", "import java.io.*;\nclass Main { public static void main(String[] a) throws IOException {"
+             " BufferedReader br = new BufferedReader(new InputStreamReader(System.in)); } }"),
+    ("Python 3", "import sys\na, b = map(int, sys.stdin.readline().split())\nprint(a + b)"),
+]
+
+_SAMPLES = _SAMPLES + _COLLISIONS
+
 
 @pytest.mark.parametrize("expected,code", _SAMPLES,
                          ids=[f"{i}-{lang}" for i, (lang, _) in enumerate(_SAMPLES)])

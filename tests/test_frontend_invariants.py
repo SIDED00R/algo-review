@@ -175,8 +175,11 @@ def test_outage_is_not_reported_as_empty_data(js):
     # 전 파일에서 원시 fetch 를 막고, utils.js 안의 fetchJsonOk 정의 한 곳만 예외로 둔다.
     for name, src in js.items():
         for line_no, line in enumerate(src.split("\n"), 1):
-            # `window.fetch(` 도 원시 호출이다 — 룩비하인드로 `.` 만 걸러내면 통과한다.
-            if not re.search(r"(?<![.\w])fetch\s*\(|\bwindow\s*\.\s*fetch\s*\(", line):
+            # 전역 별칭도 원시 호출이다(`window.` `globalThis.` `self.`). 룩비하인드로
+            # `.` 만 걸러내면 그 형태들이 통과하므로, 앞에 오는 전역 이름을 함께 본다.
+            if not re.search(
+                    r"(?<![.\w])fetch\s*\(|\b(?:window|globalThis|self)\s*\.\s*fetch\s*\(",
+                    line):
                 continue
             assert name == "utils.js", (
                 f"{name}:{line_no} 이 원시 fetch 를 쓴다 — fetchJsonOk 를 써야 한다")
@@ -206,9 +209,9 @@ def test_loading_labels_are_specific_per_button(js):
 def test_repo_select_listener_is_bound_once(js):
     """데이터 로딩 함수 안에서 리스너를 걸면 재호출 시 누적된다."""
     assert re.search(r"repoSelect\.dataset\.bound", js["github.js"])
-    # try 의 닫는 괄호를 요구한다 — 그냥 `catch {}` 로 찾으면 이 결함을 설명하는
-    # 주석 문구까지 걸린다(문자열 검사의 취약함이 그대로 드러나는 예다).
-    assert not re.search(r"\}\s*catch\s*\{\s*\}", js["github.js"]),         "빈 catch 는 실패를 무음으로 만든다"
+    # 바인딩이 있는 형태(`} catch (e) {}`)도 빈 catch 다 — 괄호를 선택으로 둔다.
+    assert not re.search(r"\}\s*catch\s*(?:\([^)]*\)\s*)?\{\s*\}", js["github.js"]), (
+        "빈 catch 는 실패를 무음으로 만든다")
 
 
 # ── 접근성·CSS 불변식 ──
@@ -259,8 +262,8 @@ def test_control_borders_use_the_dedicated_token(css):
 def test_chrome_does_not_consume_verdict_tokens(css):
     """크롬 요소가 --eff-* 를 직접 쓰면 효율 판정 팔레트를 조정할 때 함께 변한다.
 
-    "GitHub 연결됨" 배지와 "효율적" 판정이 같은 토큰을 쓰던 상태를 막는다.
-    --eff-* 는 판정 배지(.eff-*)와 리뷰 결과(.points-box)만 쓴다.
+    "GitHub 연결됨" 배지와 "효율적" 판정이 같은 토큰을 쓰면 한쪽을 조정할 때 다른 쪽이
+    함께 변한다. --eff-* 는 판정 배지(.eff-*)와 리뷰 결과(.points-box)만 쓴다.
     """
     for name in ("components.css", "surfaces.css", "layout.css", "base.css"):
         for line_no, line in enumerate(css[name].split("\n"), 1):
@@ -273,9 +276,9 @@ def test_chrome_does_not_consume_verdict_tokens(css):
 def test_javascript_does_not_consume_verdict_tokens(js):
     """CSS 만 훑으면 소비처의 절반을 못 본다 — 통계 바와 티어 차트 색은 JS 가 읽는다.
 
-    실제로 stats.js 와 tier-chart.js 가 --eff-* 를 직접 읽고 있었고, 위 CSS 전용 검사는
-    그것을 통과시켰다. 데이터 시각화는 --bar-*/--chart-line 을 쓴다(tokens.css 에서
-    --eff-* 를 별칭으로 두므로 색은 같다).
+    통계 바와 티어 차트는 getComputedStyle 로 토큰을 읽으므로 위 CSS 전용 검사에 걸리지
+    않는다. 데이터 시각화는 --bar-*/--chart-line 을 쓴다(tokens.css 에서 --eff-* 를
+    별칭으로 두므로 색은 같다).
     """
     for name, src in js.items():
         for line_no, line in enumerate(src.split("\n"), 1):
@@ -306,15 +309,15 @@ def test_editor_focus_ring_is_on_the_wrapper(css):
 def test_row_hairlines_do_not_depend_on_dom_structure(css):
     """목록 행의 구분선이 컨테이너 구조에 의존하면 안 된다.
 
-    두 번 틀렸다. ① `.row:first-child` — #history-list 의 첫 자식은 항상 .toolbar 라
-    리뷰 기록 탭에서 매칭되지 않는다. ② `.row + .row` — 가져오기 목록은 행마다 코드 보기
-    패널 div 를 형제로 끼워 넣고, 인접(+)은 DOM 구조 기준이라 display:none 형제도
-    인접을 끊어 그 탭에서만 구분선이 2px 로 겹친다.
+    쓰면 안 되는 셀렉터가 둘이다. ① `.row:first-child` — #history-list 의 첫 자식은 항상
+    .toolbar 라 리뷰 기록 탭에서 매칭되지 않는다. ② `.row + .row` — 가져오기 목록은 행마다
+    코드 보기 패널 div 를 형제로 끼워 넣고, 인접(+)은 DOM 구조 기준이라 display:none
+    형제도 인접을 끊어 그 탭에서만 구분선이 2px 로 겹친다.
 
     일반 형제(~)는 중간 노드와 무관하게 매칭된다.
     """
     src = css["components.css"]
-    assert not re.search(r"\.row:first-child", src), "구조 의존 셀렉터가 돌아왔다"
+    assert not re.search(r"\.row:first-child", src), "구조 의존 셀렉터를 쓰고 있다"
     assert not re.search(r"\.row \+ \.row", src), "인접 결합자는 중간 노드에 깨진다"
     assert re.search(r"\.row ~ \.row\s*\{[^}]*border-top:\s*none", src)
 
@@ -420,10 +423,11 @@ def test_modal_a11y_is_shared_not_duplicated():
 def test_problem_modal_has_a_height_ceiling(css):
     """상한이 없으면 박스가 문제문 길이만큼 자란다.
 
-    `.pm-left`/`.pm-right` 의 상한을 지우면서 `.pm-box` 에 대체 상한을 넣지 않아,
-    긴 문제문에서 10,000px 이상까지 늘어났다(CDP 실측). 그러면 `.pm-body{overflow:hidden}`
-    과 두 열의 `overflow-y:auto` 가 전부 무효가 되고(scrollHeight == clientHeight),
-    닫기 버튼이 든 헤더가 화면 밖으로 스크롤되며 코드 에디터까지 같이 늘어난다.
+    `.pm-left`/`.pm-right` 든 `.pm-box` 든 어딘가에는 상한이 있어야 한다. 없으면 긴
+    문제문에서 박스가 10,000px 이상까지 자라고(CDP 실측), 그러면
+    `.pm-body{overflow:hidden}` 과 두 열의 `overflow-y:auto` 가 전부 무효가 된다
+    (scrollHeight == clientHeight). 닫기 버튼이 든 헤더가 화면 밖으로 스크롤되며
+    코드 에디터까지 같이 늘어난다.
     """
     # 줄 시작으로 앵커한다 — 앵커가 없으면 공유 규칙(`.modal-box, .pm-box {`)을 먼저 잡는다.
     box = re.search(r"^\.pm-box\s*\{([^}]*)\}", css["surfaces.css"], re.M)
@@ -438,9 +442,9 @@ def test_problem_modal_has_a_height_ceiling(css):
 def test_row_activation_does_not_swallow_child_control_keys(js):
     """행 안의 링크·버튼은 자기 동작을 해야 한다.
 
-    `makeRowActivatable` 의 keydown 핸들러가 preventDefault 로 앵커의 기본 활성화까지
-    취소해, 링크에 포커스한 채 Enter 를 눌러도 문제 페이지가 열리지 않고 행 모달이
-    열렸다(WCAG 2.1.1 위반). CDP 로 실제 Enter 를 주입해 확인했다.
+    `makeRowActivatable` 의 keydown 핸들러가 preventDefault 를 무조건 부르면 앵커의
+    기본 활성화까지 취소된다 — 링크에 포커스한 채 Enter 를 눌러도 문제 페이지가 열리지
+    않고 행 모달이 열린다(WCAG 2.1.1 위반). CDP 로 Enter 를 주입해 실측한 경계다.
     """
     src = js["utils.js"]
     fn = re.search(r"function makeRowActivatable[\s\S]*?\n\}", src)
@@ -449,8 +453,8 @@ def test_row_activation_does_not_swallow_child_control_keys(js):
     # click·keydown 양쪽에서 자식 대화형 요소를 걸러야 한다.
     assert body.count("closest('a, button')") >= 1 or body.count('closest("a, button")') >= 1
     assert body.count("fromChildControl(e)") >= 2, "click·keydown 양쪽에 가드가 필요하다"
-    # 인라인 핸들러로 우회하던 방식은 남아 있으면 안 된다.
-    assert "onclick=" not in js["history.js"], "인라인 onclick 이 돌아왔다"
+    # 인라인 핸들러로 우회하면 안 된다 — 위임 리스너가 유일한 배선이어야 한다.
+    assert "onclick=" not in js["history.js"], "인라인 onclick 이 남아 있다"
 
 
 def test_every_async_render_path_checks_its_generation_token(js):
@@ -481,7 +485,8 @@ def test_every_async_render_path_checks_its_generation_token(js):
             f"{name}:{signature} 의 catch 에 세대 가드가 없다 — 늦은 실패가 새 화면을 덮는다")
 
     # report.js 는 화살표 함수 핸들러라 시그니처로 자를 수 없다 — 파일 단위로 확인한다.
-    assert js["report.js"].count("token !== _reportToken") >= 2,         "report.js 의 성공·실패 경로 중 한쪽에 세대 가드가 없다"
+    assert js["report.js"].count("token !== _reportToken") >= 2, (
+        "report.js 의 성공·실패 경로 중 한쪽에 세대 가드가 없다")
 
 
 def test_history_load_is_not_assumed_to_be_single_flight(js):
@@ -536,37 +541,69 @@ def _global_function_owners() -> dict[str, str]:
     return owners
 
 
+# `/` 앞에 이 토큰이 오면 정규식 리터럴의 시작이다(나눗셈이 아니다). `=>` 의 `>` 가
+# 빠지면 `s => /\{/.test(s)` 의 정규식을 나눗셈으로 읽어 본문의 중괄호를 코드로 센다.
+_REGEX_PRECEDERS = "(,=:[!&|?{};+-*%~^<>"
+_REGEX_KEYWORDS = ("return", "typeof", "case", "in", "of", "new", "do", "else", "yield", "await")
+
+
 def _code_lines(src: str) -> list[tuple[int, str]]:
     """(그 줄 시작 시점의 중괄호 깊이, 리터럴·주석을 지운 줄) 목록.
 
     문자열·템플릿 리터럴·정규식·주석은 **파일 전체를 문자 스트림으로** 훑으며 지운다.
-    줄 단위로 처리하면 여러 줄에 걸친 템플릿 리터럴의 내부 중괄호가
-    코드로 세어져 깊이 카운터가 고착되고, 그 뒤 파일 전체가 검사에서 조용히 빠진다.
+    줄 단위로 처리하면 여러 줄에 걸친 템플릿 리터럴의 내부 중괄호가 코드로 세어져
+    깊이 카운터가 고착되고, 그 뒤 파일 전체가 검사에서 조용히 빠진다.
 
-    템플릿 리터럴 안의 `${...}` 는 코드지만 여기서는 로드 시점 **호출문**만 찾으므로
-    통째로 버린다 — 문자열 안에서 최상위 실행문이 시작될 수는 없다.
+    템플릿 리터럴의 `${...}` 는 코드로 되돌아가 훑는다 — 그 안에 또 템플릿이 오는 형태가
+    실제로 쓰이므로(`history.js`·`import-history.js`), 안쪽 백틱을 바깥 리터럴의 종료로
+    읽으면 그 뒤 전체가 어긋난다. 다만 `${}` 안의 문자는 최상위 실행문이 될 수 없으므로
+    줄 내용에는 담지 않고 중괄호 균형만 맞춘다.
     """
-    out = []
+    out: list[tuple[int, str]] = []
     depth = 0
     line_start_depth = 0
-    buf = []
+    buf: list[str] = []
+    stack: list[tuple[str, int]] = []   # ('tpl', 0) 템플릿 텍스트 / ('sub', 진입 깊이) ${} 안
     i = 0
     n = len(src)
 
-    def _flush():
+    def flush():
+        nonlocal line_start_depth
         out.append((line_start_depth, "".join(buf).strip()))
         buf.clear()
+        line_start_depth = depth
 
     while i < n:
         ch = src[i]
 
-        if ch == "\n":
-            _flush()
-            line_start_depth = depth
+        # --- 템플릿 리터럴의 텍스트 부분 ---
+        if stack and stack[-1][0] == "tpl":
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == "\n":
+                flush()
+                i += 1
+                continue
+            if ch == "`":
+                stack.pop()
+                i += 1
+                continue
+            if ch == "$" and i + 1 < n and src[i + 1] == "{":
+                stack.append(("sub", depth))
+                i += 2
+                continue
             i += 1
             continue
 
-        # 주석
+        in_subst = bool(stack) and stack[-1][0] == "sub"
+
+        if ch == "\n":
+            flush()
+            i += 1
+            continue
+
+        # --- 주석 ---
         if ch == "/" and i + 1 < n and src[i + 1] == "/":
             while i < n and src[i] != "\n":
                 i += 1
@@ -575,38 +612,35 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
             end_at = src.find("*/", i + 2)
             block = src[i:(end_at + 2) if end_at != -1 else n]
             for _ in range(block.count("\n")):
-                _flush()
-                line_start_depth = depth
+                flush()
             i = (end_at + 2) if end_at != -1 else n
             continue
 
-        # 문자열·템플릿 리터럴
-        if ch in "\"'`":
+        # --- 문자열·템플릿 리터럴 ---
+        if ch == "`":
+            stack.append(("tpl", 0))
+            i += 1
+            continue
+        if ch in "\"'":
             quote = ch
             i += 1
             while i < n:
                 if src[i] == "\\":
                     i += 2
                     continue
-                if src[i] == "\n" and quote != "`":
-                    break                      # 미종료 문자열 — 줄에서 끊는다
                 if src[i] == "\n":
-                    _flush()
-                    line_start_depth = depth
-                    i += 1
-                    continue
+                    break                      # 미종료 문자열 — 줄에서 끊는다
                 if src[i] == quote:
                     i += 1
                     break
                 i += 1
             continue
 
-        # 정규식 리터럴 — 앞의 유효 토큰으로 나눗셈과 구분한다
+        # --- 정규식 리터럴 — 앞의 유효 토큰으로 나눗셈과 구분한다 ---
         if ch == "/":
             before = "".join(buf).rstrip()
-            looks_regex = (not before or before[-1] in "(,=:[!&|?{};+-*%~^"
-                           or before.endswith(("return", "typeof")))
-            if looks_regex:
+            if (not before or before[-1] in _REGEX_PRECEDERS
+                    or before.endswith(_REGEX_KEYWORDS)):
                 i += 1
                 in_class = False
                 while i < n and src[i] != "\n":
@@ -623,20 +657,70 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
                     i += 1
                 continue
 
+        # --- 중괄호 ---
         if ch == "{":
             depth += 1
         elif ch == "}":
+            if in_subst and depth == stack[-1][1]:
+                stack.pop()                    # ${...} 가 닫혔다 — 템플릿 텍스트로 되돌아간다
+                i += 1
+                continue
             depth -= 1
-        buf.append(ch)
+
+        if not in_subst:
+            buf.append(ch)
         i += 1
 
-    _flush()
+    flush()
     return out
 
 
+def _strip_leading_trivia(src: str) -> str:
+    """파일 앞의 공백·주석을 걷어낸 나머지."""
+    i = 0
+    n = len(src)
+    while i < n:
+        if src[i].isspace():
+            i += 1
+        elif src.startswith("//", i):
+            nl = src.find("\n", i)
+            i = n if nl == -1 else nl + 1
+        elif src.startswith("/*", i):
+            end_at = src.find("*/", i + 2)
+            i = n if end_at == -1 else end_at + 2
+        else:
+            break
+    return src[i:]
+
+
 def _is_iife_module(src: str) -> bool:
-    """파일 전체가 `(function () { ... })();` 한 겹으로 감싸여 있는지."""
-    return bool(re.search(r"^\(function\s*\(\s*\)\s*\{", src, re.M))
+    """파일 **전체**가 `(function () { ... })();` 한 겹으로 감싸여 있는지.
+
+    파일 어디서든 매치하면(`re.M`) 파일 중간에 있는 내부 IIFE 에도 걸린다. 그러면 base 가
+    1 이 되어 그 파일의 진짜 최상위 실행문이 검사에서 통째로 빠진다 — 게이트가 그 파일을
+    보지 않게 되고, 아무것도 빨강이 나지 않는다(`github.js:106` 이 그 형태다).
+    """
+    body = _strip_leading_trivia(src)
+    if not re.match(r"\(function\s*\(\s*\)\s*\{", body):
+        return False
+    return body.rstrip().rstrip(";").rstrip().endswith(("})()", "}())"))
+
+
+def _load_time_calls_in(stripped: str) -> set[str]:
+    """한 줄에서 **로드 시점에 실행되는** 호출 이름.
+
+    선언문도 초기화식은 로드 시점에 평가된다 — `const X = helperFromAnotherFile();` 는
+    로드 순서에 의존한다. 다만 화살표·함수 본문 안의 호출은 나중에 실행되므로, 초기화식을
+    `=>` 나 `function` 에서 자른다(`const f = () => bar();` 의 `bar` 는 세지 않는다).
+    """
+    if stripped.startswith(("}", ")", "function", "async function", "class")):
+        return set()
+    if re.match(r"(?:const|let|var)\b", stripped):
+        _, sep, init = stripped.partition("=")
+        if not sep:
+            return set()
+        stripped = re.split(r"=>|\bfunction\b", init, maxsplit=1)[0]
+    return set(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", stripped))
 
 
 def _top_level_calls(src: str, name: str = "") -> set[str]:
@@ -657,12 +741,8 @@ def _top_level_calls(src: str, name: str = "") -> set[str]:
 
     calls = set()
     for depth, stripped in lines:
-        if depth != base or not stripped:
-            continue
-        if stripped.startswith(("}", ")", "function", "async function",
-                                "const", "let", "var", "class")):
-            continue
-        calls.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", stripped))
+        if depth == base and stripped:
+            calls.update(_load_time_calls_in(stripped))
     return calls
 
 
@@ -716,3 +796,71 @@ def test_the_load_order_check_sees_every_known_dependency(html):
         ("command-palette.js", "registerModal"),
     }
     assert expected <= cross, f"검사가 놓친 의존: {sorted(expected - cross)}"
+
+
+@pytest.mark.parametrize("path", sorted(_JS_DIR.glob("*.js")), ids=lambda p: p.name)
+def test_the_load_order_check_can_see_into_every_file(path):
+    """어느 파일도 게이트의 사각지대가 아니다.
+
+    파일마다 최상위 호출을 하나 주입해 게이트가 그것을 보는지 확인한다. 이 확인이 없으면
+    추출기가 한 파일을 통째로 못 보게 되어도 아무것도 빨강이 나지 않는다 — `_is_iife_module`
+    이 파일 중간의 내부 IIFE 에 걸려 `github.js` 를 깊이 1 기준으로 읽던 때가 그랬다.
+    """
+    src = path.read_text(encoding="utf-8")
+    base_calls = _top_level_calls(src, path.name)
+    if _is_iife_module(src):
+        # 래퍼 안쪽 끝에 주입한다 — 래퍼 본문이 그 파일의 로드 시점 실행이다.
+        closer = max(src.rfind("})()"), src.rfind("}())"))
+        assert closer != -1, f"{path.name}: IIFE 판정인데 닫는 형태를 찾지 못했다"
+        injected = src[:closer] + "\n  __probeMarker__();\n" + src[closer:]
+    else:
+        injected = src + "\n__probeMarker__();\n"
+    assert "__probeMarker__" in _top_level_calls(injected, path.name), \
+        f"{path.name}: 최상위 호출이 게이트에 보이지 않는다(기존 검출 {len(base_calls)}개)"
+
+
+@pytest.mark.parametrize("path", sorted(_JS_DIR.glob("*.js")), ids=lambda p: p.name)
+def test_handler_bodies_stay_out_of_the_load_order_check(path):
+    """이벤트 핸들러 **본문** 안의 호출은 로드 순서와 무관하다 — 세면 거짓 빨강이 난다.
+
+    깊이는 줄 단위로 본다. 한 줄에 다 담긴 핸들러(`el.onclick = () => f();`)는 최상위
+    줄이라 걸러지지 않는다 — 이 레포의 핸들러는 전부 여러 줄이고, 줄 안까지 파싱하려면
+    본격적인 JS 파서가 필요하다. 그 경계를 여기 명시해 둔다.
+    """
+    src = path.read_text(encoding="utf-8")
+    injected = src + ("\ndocument.addEventListener('x', () => {\n"
+                      "  __handlerMarker__();\n});\n")
+    assert "__handlerMarker__" not in _top_level_calls(injected, path.name)
+
+
+def test_only_whole_file_wrappers_count_as_iife_modules():
+    """파일 중간의 IIFE 는 래퍼가 아니다.
+
+    `re.M` 로 아무 줄머리나 맞히면 내부 IIFE 에도 걸려 base 가 1 이 되고, 그 파일의 진짜
+    최상위 실행문이 검사에서 통째로 빠진다.
+    """
+    assert _is_iife_module("(function () {\n  run();\n})();\n")
+    assert _is_iife_module("// 설명\n/* 블록 */\n(function () {\n  run();\n}());\n")
+    assert not _is_iife_module("run();\n(function () {\n  inner();\n})();\n")
+    assert not _is_iife_module("(function () {\n  inner();\n})();\nrun();\n")
+
+
+@pytest.mark.parametrize("src", [
+    # 파이썬 소스에도 JS 소스에도 백슬래시가 그대로 남아야 하므로 raw 문자열을 쓰고,
+    # 줄바꿈만 이어붙인다. 일반 문자열에 쓰면 `\{` 가 유효하지 않은 이스케이프가 된다.
+    r"const f = s => /\{/.test(s);" "\n",                 # 화살표 뒤 정규식
+    "const h = a => (a / 2) + (a/3);\n",                          # 나눗셈
+    r"""const q = s => /['"]/.test(s);""" "\n",  # 따옴표를 담은 정규식
+    "const t = `<div>${c ? `<b>{</b>` : ''}</div>`;\n",   # 중첩 템플릿의 홀중괄호
+    "const t = `<div>${c ? `<b>}</b>` : ''}</div>`;\n",
+    "const t = `${JSON.stringify({a: 1})}`;\n",                   # ${} 안의 객체 리터럴
+    "const t = `\nline {\nline }\n`;\n",  # 여러 줄 템플릿
+    r"const r = /a\/b{/;" "\nfoo();\n",           # 정규식 안의 이스케이프된 슬래시
+])
+def test_the_literal_scanner_keeps_brace_balance(src):
+    """유효한 JS 에서 깊이 카운터가 어긋나면 안 된다.
+
+    어긋나면 `_top_level_calls` 의 단정이 "리터럴 처리가 깨졌다" 라는, 원인과 무관한
+    메시지로 스위트 전체를 빨강으로 만든다(거짓 빨강).
+    """
+    assert _code_lines(src)[-1][0] == 0

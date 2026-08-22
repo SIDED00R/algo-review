@@ -64,7 +64,7 @@ function renderStats(container, data) {
         <div class="stat-bar-wrap">
           <div class="stat-bar" style="width:${Math.round(poorRatio*100)}%;background:${barColor}"></div>
         </div>
-        <span class="stat-counts">✓${s.good_count} ✗${s.poor_count}</span>
+        <span class="stat-counts">✓${escapeHtml(String(s.good_count))} ✗${escapeHtml(String(s.poor_count))}</span>
       </div>`;
   }).join('');
 
@@ -89,7 +89,7 @@ function renderStats(container, data) {
       <div class="summary-grid">
         <div class="summary-item">
           <div class="summary-label">총 리뷰 수</div>
-          <div class="summary-value">${data.total_reviews}개</div>
+          <div class="summary-value">${escapeHtml(String(data.total_reviews))}개</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">${levelLabel}</div>

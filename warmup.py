@@ -15,6 +15,8 @@ async def warm_theme_caches():
     운영(Cloud SQL)에서는 하루 중 첫 인스턴스만 실제 fetch를 수행한다."""
     for platform in PLATFORMS:
         for theme in theme_service.THEMES:
+            if await asyncio.to_thread(theme_service.theme_pool_is_fresh, platform, theme):
+                continue   # 외부 호출이 없다 — 예절 간격도 필요 없다
             try:
                 await asyncio.to_thread(theme_service.get_theme_problem_pool, platform, theme)
             except Exception as e:

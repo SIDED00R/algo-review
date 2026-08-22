@@ -1,6 +1,7 @@
 import base64
 import logging
 import re
+from urllib.parse import quote
 
 import requests
 from clients.utils import _ext_to_language
@@ -50,6 +51,18 @@ def get_github_user_repos(token: str) -> list[dict]:
     return repos
 
 
+def _url_path(path: str) -> str:
+    """저장소 경로를 URL 경로로 인코딩한다. `/` 는 구분자로 남긴다.
+
+    폴더명에 문제 제목이 그대로 들어가므로(routes.helpers.build_solution_target) `?` `#`
+    같은 URL 구조 문자가 경로에 섞인다. 인코딩하지 않으면 `?` 뒤는 쿼리스트링, `#` 뒤는
+    프래그먼트로 해석되어 요청이 **잘린 경로**로 나간다. push_solution 은 README 와 코드를
+    각각 PUT 하므로 둘이 같은 잘린 경로를 가리키고, 뒤에 올라간 것이 앞을 덮어쓴다.
+    GitHub 는 양쪽 모두 2xx 를 주기 때문에 호출부는 성공으로 집계한다.
+    """
+    return quote(path, safe="/")
+
+
 def get_github_file_sha(repo: str, path: str, token: str) -> str | None:
     """파일이 없으면(404) None. 그 외 실패(타임아웃 등)는 전파한다 —
     삼키면 호출부가 sha 없이 PUT해 새 파일로 오인, GitHub 422로 이어진다."""
@@ -57,7 +70,7 @@ def get_github_file_sha(repo: str, path: str, token: str) -> str | None:
         "Accept": "application/vnd.github.v3+json",
         "Authorization": f"token {token}",
     }
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    url = f"https://api.github.com/repos/{repo}/contents/{_url_path(path)}"
     resp = requests.get(url, headers=headers, timeout=10)
     if resp.status_code == 404:
         return None
@@ -70,7 +83,7 @@ def push_file_to_github(repo: str, token: str, path: str, content: str, commit_m
         "Accept": "application/vnd.github.v3+json",
         "Authorization": f"token {token}",
     }
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    url = f"https://api.github.com/repos/{repo}/contents/{_url_path(path)}"
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
     try:
         sha = get_github_file_sha(repo, path, token)
@@ -238,7 +251,7 @@ def get_baekjoonhub_problems(repo: str, token: str | None = None) -> list[dict]:
 
 
 def get_raw_github_content(repo: str, path: str, token: str | None = None) -> str:
-    url = f"https://raw.githubusercontent.com/{repo}/HEAD/{path}"
+    url = f"https://raw.githubusercontent.com/{repo}/HEAD/{_url_path(path)}"
     headers = {}
     if token:
         headers["Authorization"] = f"token {token}"

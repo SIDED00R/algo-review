@@ -32,7 +32,9 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
                 except ValueError:
                     pass
             else:
-                extra_exclude.add(raw)
+                # 저장 시 normalize_codeforces_problem_ref 가 대문자화하므로 여기서도 맞춘다 —
+                # `?exclude=4a` 가 저장된 `4A` 와 매칭되지 않으면 제외가 조용히 무효가 된다.
+                extra_exclude.add(raw.upper())
 
     if platform == "codeforces":
         avg_rating = db.get_average_cf_rating()

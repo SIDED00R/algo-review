@@ -3,6 +3,24 @@ from pydantic import BaseModel, Field, field_validator
 from constants import is_supported_platform, normalize_platform
 
 
+MAX_CODE_LENGTH = 50_000
+MAX_STATEMENT_LENGTH = 100_000
+
+
+def validate_code_length(value: str) -> str:
+    """제출 코드 길이 상한. 리뷰 요청과 저장소 push 요청이 같은 상한을 쓴다."""
+    if len(value) > MAX_CODE_LENGTH:
+        raise ValueError(f"코드는 {MAX_CODE_LENGTH:,}자를 초과할 수 없습니다.")
+    return value
+
+
+def validate_statement_length(value: str | None) -> str | None:
+    """문제 본문 길이 상한. 프롬프트와 저장소 README 양쪽으로 흘러간다."""
+    if value is not None and len(value) > MAX_STATEMENT_LENGTH:
+        raise ValueError(f"문제 설명은 {MAX_STATEMENT_LENGTH:,}자를 초과할 수 없습니다.")
+    return value
+
+
 def validate_platform(value: str) -> str:
     """플랫폼 문자열을 정규화·검증한다. 지원하지 않으면 ValueError.
 
@@ -34,9 +52,12 @@ class ReviewRequest(BaseModel):
     @field_validator("code")
     @classmethod
     def code_max_length(cls, v):
-        if len(v) > 50_000:
-            raise ValueError("코드는 50,000자를 초과할 수 없습니다.")
-        return v
+        return validate_code_length(v)
+
+    @field_validator("problem_statement")
+    @classmethod
+    def statement_max_length(cls, v):
+        return validate_statement_length(v)
 
 
 class ImportRequest(BaseModel):
@@ -132,6 +153,18 @@ class PushReviewRequest(BaseModel):
         if not value:
             raise ValueError("필수 입력값이 비어 있습니다.")
         return value
+
+    # /api/push-review 는 인증이 없고 값이 그대로 저장소에 커밋된다 — 리뷰 경로와 같은
+    # 상한을 둔다. 여기에만 상한이 없으면 50,000자 게이트가 이 경로로 우회된다.
+    @field_validator("code")
+    @classmethod
+    def code_max_length(cls, v):
+        return validate_code_length(v)
+
+    @field_validator("description", "input_desc", "output_desc")
+    @classmethod
+    def statement_max_length(cls, v):
+        return validate_statement_length(v)
 
 
 class ExecuteRequest(BaseModel):

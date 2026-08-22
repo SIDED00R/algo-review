@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from datetime import datetime
 
 from sqlalchemy import distinct, func, select, update
@@ -94,7 +95,11 @@ def save_review(problem_id: int, title: str, tier: int, tags: list,
 
 
 def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool:
-    """최신 '리뷰 대기' 행을 실제 리뷰 결과로 채운다. 대기 행이 없으면 False.
+    """**최신** '리뷰 대기' 행을 실제 리뷰 결과로 채운다. 대기 행이 없으면 False.
+
+    집계 기준선(`_first_submission_tag_counts`)은 **최초** non-pending 행이다. 지금 둘이
+    일치하는 이유는 유일한 호출자(routes/rereview.py)가 "가장 최신 행이 pending 일 때만"
+    부르기 때문이다 — 다른 호출자가 생기면 두 기준이 갈릴 수 있다.
 
     행을 새로 쌓지 않으므로 제출 회차가 늘지 않는다. save_review 가 미룬 tag_stats 집계는
     이 문제의 첫 리뷰인 경우 여기서 수행한다.
@@ -136,17 +141,20 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         return True
 
 
-def _first_submission_tag_counts(session) -> dict:
-    """BOJ 리뷰에서 **문제당 첫 판정 행**만 세어 태그별 good/poor 를 만든다.
+def _first_submission_tag_counts(session, platform: str) -> dict:
+    """한 플랫폼의 리뷰에서 **문제당 첫 판정 행**만 세어 태그별 good/poor 를 만든다.
 
     기준은 `_bump_tag_stats` 호출부와 같다 — **첫 non-pending 행**이다. 대기 행은
     판정이 없어 집계 대상이 아니므로 dedup 대상에서도 빼야 한다. 대기 행을 포함해
     "created_at 최소 행" 을 첫 제출로 보면, 대기 등록 후 리뷰한 문제는 첫 행이 pending
     이라 문제 전체가 집계에서 빠진다.
+
+    platform 은 호출부가 반드시 넘긴다 — 기본값을 두면 다른 플랫폼의 집계에 BOJ 행이
+    섞여도 호출부에서 드러나지 않는다.
     """
     rows = session.execute(
         select(Review.problem_ref, Review.tags, Review.efficiency)
-        .where(Review.platform == "boj", Review.efficiency != PENDING_EFFICIENCY)
+        .where(Review.platform == platform, Review.efficiency != PENDING_EFFICIENCY)
         .order_by(Review.created_at.asc())
     ).mappings().all()
 
@@ -160,35 +168,48 @@ def _first_submission_tag_counts(session) -> dict:
     return _tally_tag_efficiency(firsts)
 
 
-# 복원을 이미 시도했는지 기록한다. 복원 결과가 0행이면(BOJ 리뷰가 없다) 표가 계속 비어
-# 있어, 플래그가 없으면 `/api/stats` 호출마다 reviews 전체 스캔 + 쓰기 트랜잭션이 열린다.
-_tag_stats_rebuild_tried = False
+# 재계산 주기. 전면 스캔 + 쓰기 트랜잭션이라 매 요청 돌 수는 없고, `_bump_tag_stats` 가
+# 이 사이를 증분으로 메운다. 즉 표는 최대 이 시간만큼 뒤처진다. `/api/stats`·`/api/report`
+# 는 사용자가 페이지를 열 때만 부르는 경로라 이 주기의 스캔 비용은 무시할 수 있다.
+_TAG_STATS_RECONCILE_SEC = 60
+_tag_stats_reconciled_at: float | None = None
 
 
 def reset_tag_stats_rebuild_flag() -> None:
-    """프로세스 로컬 복원 플래그를 되돌린다. 테스트에서 DB 를 갈아끼울 때 쓴다."""
-    global _tag_stats_rebuild_tried
-    _tag_stats_rebuild_tried = False
+    """프로세스 로컬 재계산 쿨다운을 되돌린다. 테스트에서 DB 를 갈아끼울 때 쓴다."""
+    global _tag_stats_reconciled_at
+    _tag_stats_reconciled_at = None
 
 
-def _rebuild_tag_stats() -> None:
-    """비어 있는 tag_stats 를 reviews 에서 **한 번** 복원한다.
+def _reconcile_tag_stats() -> None:
+    """tag_stats 를 reviews 에서 통째로 다시 계산해 덮어쓴다.
 
-    읽기 경로에서 매번 폴백을 계산하면 스위치가 all-or-nothing 이라 통계가 튄다 —
-    백필로 들어온 BOJ 리뷰 500건 + 빈 tag_stats 상태에서 새 리뷰 **1건**을 저장하면
-    `_bump_tag_stats` 가 행 1개를 만들고, 다음 조회부터 폴백을 건너뛰어 `math: 120` 이
-    `math: 1` 로 붕괴한다. 상태를 수렴시켜 스위치 자체를 없앤다.
+    tag_stats 는 `_first_submission_tag_counts(session, "boj")` 의 캐시다. 증분 갱신
+    (`_bump_tag_stats`)은 리뷰 저장 경로만 지나가므로 백필·마이그레이션·직접 INSERT 로
+    들어온 행은 반영되지 않는다. 그래서 캐시는 비어 있는 상태뿐 아니라 **부분적으로
+    틀린** 상태로도 존재할 수 있다.
+
+    "비어 있을 때만 채우기" 로는 그 부분 상태를 벗어나지 못한다 — 백필 500건 + 빈 표
+    상태에서 새 리뷰 1건이 들어오면 표가 그 1건짜리(`math: 1`)로 굳고, 표가 비어 있지
+    않으므로 다시는 복원되지 않는다. 전면 재계산은 어떤 상태에서 시작하든 정답으로
+    수렴하므로 그 함정이 없다.
     """
-    global _tag_stats_rebuild_tried
     with session_scope(commit=True) as session:
-        if session.scalar(select(func.count()).select_from(TagStat)):
-            _tag_stats_rebuild_tried = True
-            return   # 다른 인스턴스가 먼저 채웠다
-        for tag, counts in _first_submission_tag_counts(session).items():
-            session.add(TagStat(tag=tag, good_count=counts["good_count"],
-                                poor_count=counts["poor_count"],
-                                total_count=counts["total_count"]))
-    _tag_stats_rebuild_tried = True
+        counts = _first_submission_tag_counts(session, "boj")
+        existing = {row.tag: row for row in session.scalars(select(TagStat)).all()}
+        for tag, c in counts.items():
+            row = existing.pop(tag, None)
+            if row is None:
+                session.add(TagStat(tag=tag, good_count=c["good_count"],
+                                    poor_count=c["poor_count"],
+                                    total_count=c["total_count"]))
+            else:
+                row.good_count = c["good_count"]
+                row.poor_count = c["poor_count"]
+                row.total_count = c["total_count"]
+        for row in existing.values():
+            # reviews 에서 사라진 태그(행 삭제·태그 수정)의 잔재를 남기지 않는다.
+            session.delete(row)
 
 
 def get_tag_stats() -> list:
@@ -199,10 +220,11 @@ def get_tag_stats() -> list:
     그러면 BOJ 리뷰가 아무리 많아도 `/api/report` 가 "아직 저장된 기록이 없습니다"(400)를
     내고 `/api/stats` 의 태그 통계도 빈다.
 
-    비어 있으면 **읽을 때마다 폴백을 계산하는 대신 테이블을 한 번 복원**한다. 폴백 방식은
-    스위치가 all-or-nothing 이라, 복원 전 상태에서 새 리뷰 1건이 들어오는 순간 통계가
-    붕괴한다(위 `_rebuild_tag_stats` docstring 참조).
+    그래서 이 경로가 표를 **주기적으로 전면 재계산**한다(`_reconcile_tag_stats`). 읽을
+    때마다 폴백을 계산하는 방식은 스위치가 all-or-nothing 이라 새 리뷰 1건에 통계가
+    붕괴하고, "비어 있을 때만 복원" 은 그 붕괴한 상태에서 빠져나오지 못한다.
     """
+    global _tag_stats_reconciled_at
     def _read():
         with session_scope() as session:
             return [
@@ -212,14 +234,16 @@ def get_tag_stats() -> list:
                     select(TagStat).order_by(TagStat.total_count.desc())).all()
             ]
 
-    rows = _read()
-    if rows or _tag_stats_rebuild_tried:
-        return rows
+    now = time.monotonic()
+    if (_tag_stats_reconciled_at is not None
+            and now - _tag_stats_reconciled_at < _TAG_STATS_RECONCILE_SEC):
+        return _read()
     try:
-        _rebuild_tag_stats()
+        _reconcile_tag_stats()
     except IntegrityError:
-        # 두 인스턴스가 동시에 복원하면 한쪽이 진다 — 상대가 넣은 값을 읽으면 된다.
-        logger.info("tag_stats 복원 경합 — 다른 인스턴스가 먼저 채웠다")
+        # 두 인스턴스가 같은 태그 행을 동시에 만들면 한쪽이 진다. 다음 주기가 다시 맞춘다.
+        logger.info("tag_stats 재계산 경합 — 다음 주기에 다시 맞춘다")
+    _tag_stats_reconciled_at = now
     return _read()
 
 
@@ -466,11 +490,15 @@ def get_tag_weakness_data(platform: str) -> list:
             if s["total_count"] > 0:
                 poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
     else:
-        # tag_stats 와 **같은 모집단**(문제당 첫 판정 행)을 쓴다. 전 회차를 세면 같은
-        # 데이터인데 tag_stats 유무에 따라 poor_ratio 가 달라지고, 그 값이
-        # recommender._score_tags 의 가중치 0.3 으로 들어가 추천 결과를 바꾼다.
-        with session_scope() as session:
-            tag_eff = _first_submission_tag_counts(session)
+        # 각 플랫폼의 통계 화면과 **같은 모집단**을 센다 — BOJ 는 tag_stats 와 같은
+        # "문제당 첫 판정 행", CF 는 get_cf_tag_stats 와 같은 "전 회차". 모집단이 갈리면
+        # 같은 데이터로 /api/stats 와 추천의 poor 비율이 달라지고, 그 값이
+        # recommender._score_tags 의 가중치 0.3 으로 들어가 추천 순위를 바꾼다.
+        if platform == "boj":
+            with session_scope() as session:
+                tag_eff = _first_submission_tag_counts(session, platform)
+        else:
+            tag_eff = _tally_tag_efficiency(review_rows)
         for tag, counts in tag_eff.items():
             if counts["total_count"] > 0:
                 poor_map[tag] = counts["poor_count"] / counts["total_count"]

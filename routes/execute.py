@@ -125,6 +125,6 @@ def execute_code(req: ExecuteRequest):
     elif "c++" in lang or "cpp" in lang or "gnu" in lang:
         result = _run_cpp(req.code, req.stdin, req.timeout_sec)
     else:
-        raise HTTPException(400, f"지원하지 않는 언어: {req.language}")
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 언어: {req.language}")
     result["time_ms"] = int((time.time() - start) * 1000)
     return result

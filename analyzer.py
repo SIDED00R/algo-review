@@ -133,7 +133,9 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
     )
 
     recent_problems = "\n".join(
-        f"- [{r['tier']}티어] {r['title']} ({', '.join(r['tags'][:3])}) → {r['efficiency']}"
+        # tier_name 을 쓴다 — CF 행은 tier 가 항상 0 이라 숫자만 쓰면 난이도 신호가 사라진다.
+        # tier_name 은 BOJ 가 "Gold V", CF 가 "Codeforces 1400" 으로 양쪽 다 의미를 갖는다.
+        f"- [{r['tier_name'] or '난이도 미상'}] {r['title']} ({', '.join(r['tags'][:3])}) → {r['efficiency']}"
         for r in review_history[:10]
     )
 

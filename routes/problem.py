@@ -3,6 +3,7 @@ import asyncio
 import requests
 
 import clients as api_client
+from clients.codeforces import normalize_codeforces_problem_ref
 from fastapi import APIRouter, HTTPException
 from routes.helpers import upstream_failure
 from demo_mode import IS_DEMO, DEMO_CF_PROBLEM
@@ -44,7 +45,12 @@ async def get_cf_problem(problem_ref: str):
     if IS_DEMO:
         return DEMO_CF_PROBLEM
 
-    ref_key = problem_ref.strip().upper()
+    # 정규화한 형태를 캐시 키로 쓴다 — `4A`·`4/A`·`4-A` 는 같은 문제인데 대문자화만
+    # 하면 항목이 셋으로 갈리고, 404 메시지도 입력에 따라 흔들린다.
+    try:
+        ref_key = "".join(str(part) for part in normalize_codeforces_problem_ref(problem_ref))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="잘못된 문제 번호 형식 (예: 4A, 1234B)") from None
     cached = _cache_get(ref_key)
     if cached is not None:
         return cached

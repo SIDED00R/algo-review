@@ -5,6 +5,7 @@ import pytest
 import requests
 
 from clients import codeforces
+from clients.utils import UpstreamUnavailable
 
 
 class _FakeResponse:
@@ -74,3 +75,67 @@ def test_signed_request_error_never_leaks_the_api_signature(monkeypatch):
     assert "DEADBEEF" not in message
     assert "apiSig" not in message
     assert "502" in message   # 상태코드는 남긴다
+
+
+class _MappedResponse:
+    """상태코드와 본문만 정한 CF 응답. 실제 requests.Response 와 같은 속성만 노출한다."""
+
+    def __init__(self, status, body):
+        self.status_code = status
+        self.ok = 200 <= status < 400
+        self._body = body
+
+    def json(self):
+        if self._body is _NO_JSON:
+            raise ValueError("not json")
+        return self._body
+
+
+_NO_JSON = object()
+_LIMIT = {"status": "FAILED", "comment": "Call limit exceeded"}
+
+# CF 가 실제로 주는 응답 형태 → 라우터가 매핑할 예외.
+# UpstreamUnavailable = 502(상류 장애), 그 외 ValueError = 400(요청자 입력 오류).
+_MAPPING = [
+    (503, _LIMIT,                                        UpstreamUnavailable),
+    (429, _LIMIT,                                        UpstreamUnavailable),
+    (500, {"status": "FAILED", "comment": "boom"},        UpstreamUnavailable),
+    (503, _NO_JSON,                                       UpstreamUnavailable),
+    (403, _NO_JSON,                                       UpstreamUnavailable),   # Cloudflare 차단
+    (200, _NO_JSON,                                       UpstreamUnavailable),   # 점검 페이지
+    (200, [1, 2, 3],                                      UpstreamUnavailable),   # dict 가 아닌 JSON
+    (200, {"status": "OK"},                               UpstreamUnavailable),   # result 누락
+    (400, {"status": "FAILED", "comment": "handle: bad"},  ValueError),
+    (404, {"status": "FAILED"},                            ValueError),
+]
+
+
+@pytest.mark.parametrize("status,body,expected", _MAPPING,
+                         ids=[f"{s}-{e.__name__}" for s, _, e in _MAPPING])
+def test_response_shape_maps_to_the_right_exception(monkeypatch, status, body, expected):
+    """상태코드를 comment 보다 먼저 본다.
+
+    CF 는 레이트리밋·점검 응답에도 `comment` 를 실어 준다. comment 유무로 먼저 갈라내면
+    5xx·429 가 400 으로 보고되어, 사용자는 자기 입력을 고치려 하고 상류 장애는 알림에
+    잡히지 않는다.
+    """
+    monkeypatch.setattr(codeforces.requests, "get",
+                        lambda *a, **k: _MappedResponse(status, body))
+    with pytest.raises(expected) as caught:
+        codeforces._codeforces_api_request("problemset.problems")
+    if expected is ValueError:
+        assert not isinstance(caught.value, UpstreamUnavailable)
+
+
+def test_no_exception_escapes_as_something_other_than_value_error(monkeypatch):
+    """이 함수를 나가는 예외는 전부 ValueError 계열이다.
+
+    쿼리스트링에 apiKey·apiSig 가 실리므로, 다른 타입이 새면 그 메시지가 라우터의
+    `except Exception` 을 타고 그대로 응답에 담길 수 있다.
+    """
+    for status, body in [(200, {"status": "OK"}), (200, {}), (200, [1]), (200, "text"),
+                         (500, _NO_JSON), (400, {"status": "FAILED"})]:
+        monkeypatch.setattr(codeforces.requests, "get",
+                            lambda *a, **k: _MappedResponse(status, body))
+        with pytest.raises(ValueError):
+            codeforces._codeforces_api_request("problemset.problems")
