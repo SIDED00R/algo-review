@@ -146,18 +146,48 @@ jobs:
       - name: Deploy ${{ matrix.service }}
         run: gcloud run deploy ${{ matrix.service }} --source . --region "$REGION" --project "$PROJECT_ID" ${{ matrix.extra_args }} --quiet
 
+      - name: Resolve ${{ matrix.service }} URL
+        id: url
+        run: |
+          echo "url=$(gcloud run services describe ${{ matrix.service }} \
+                       --region "$REGION" --project "$PROJECT_ID" \
+                       --format='value(status.url)')" >> "$GITHUB_OUTPUT"
+
+      # 운영은 비공개라 익명 호출이 403 이다. `gcloud auth print-identity-token` 은
+      # 외부 계정(WIF) 자격으로는 동작하지 않으므로, 연합 자격에서 곧바로 ID 토큰을
+      # 발급받는다(WIF 주체의 roles/iam.workloadIdentityUser 에
+      # iam.serviceAccounts.getOpenIdToken 이 포함된다).
+      # audience 는 서비스 URL 이라 배포 뒤에야 알 수 있어 auth 를 한 번 더 탄다.
+      # Cloud Run 의 invoker 판정이 email 클레임을 보므로 include_email 이 필요하다.
+      - name: Mint an ID token for ${{ matrix.service }}
+        id: idtoken
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: boj-code-review-2024
+          workload_identity_provider: projects/707325519995/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@boj-code-review-2024.iam.gserviceaccount.com
+          token_format: id_token
+          id_token_audience: ${{ steps.url.outputs.url }}
+          id_token_include_email: true
+
       - name: Smoke check ${{ matrix.service }}
         # 배포가 성공해도 서비스가 기능적으로 죽어 있을 수 있다 — server.py 는 DB 연결
         # 실패를 warning 한 줄로 넘기고 기동을 계속하고, /health 는 DB 가 죽어도 200 을
         # 준다(둘 다 온디맨드 DB 를 위한 의도된 설계다). 그래서 리비전은 Ready 가 되고
         # 워크플로는 초록인데 사용자만 503 을 본다. /health 의 db 필드로 그것을 가른다.
+        env:
+          URL: ${{ steps.url.outputs.url }}
+          ID_TOKEN: ${{ steps.idtoken.outputs.id_token }}
         run: |
-          URL=$(gcloud run services describe ${{ matrix.service }} \
-                  --region "$REGION" --project "$PROJECT_ID" --format='value(status.url)')
-          # 운영은 비공개라 익명 호출이 403 이다 — 배포 SA 의 ID 토큰으로 부른다.
-          TOKEN=$(gcloud auth print-identity-token)
-          BODY=$(curl -sS -m 30 -H "Authorization: Bearer $TOKEN" "$URL/health")
-          echo "$BODY"
+          CODE=$(curl -sS -m 30 -o /tmp/health.json -w '%{http_code}' \
+                   -H "Authorization: Bearer $ID_TOKEN" "$URL/health")
+          BODY=$(cat /tmp/health.json)
+          echo "$CODE $BODY"
+          # 403 을 "DB 이상" 으로 보고하면 엉뚱한 곳을 뒤지게 된다 — 원인을 갈라 준다.
+          if [ "$CODE" = "401" ] || [ "$CODE" = "403" ]; then
+            echo "::error::$URL 호출이 $CODE — 배포 SA 에 run.routes.invoke 가 있는지 확인하세요"
+            exit 1
+          fi
           echo "$BODY" | grep -q '"db":"ok"' || {
             echo "::error::$URL/health 가 db:ok 를 주지 않습니다 — DB 연결·env 를 확인하세요"
             exit 1
