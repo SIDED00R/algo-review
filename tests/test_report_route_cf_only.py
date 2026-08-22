@@ -41,7 +41,11 @@ def test_cf_only_history_is_not_400(minimal_client):
 
 
 def test_cf_report_is_reachable_even_when_boj_records_exist(minimal_client):
-    """데이터 공백 추론이 막고 있던 조합 — 이 경우가 실사용의 기본형이다."""
+    """두 플랫폼을 함께 쓰는 조합 — 이 경우가 실사용의 기본형이다.
+
+    "BOJ 태그 통계가 비면 CF" 같은 데이터 공백 추론으로 분기하면, BOJ 기록이 하나라도
+    있는 사용자는 CF 리포트를 볼 수 없다.
+    """
     db.save_review(**_BOJ_KW)
     db.save_review(**_CF_KW)
 

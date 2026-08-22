@@ -136,6 +136,7 @@ async function openReviewModal(platform, problemRef) {
   const token = ++_modalToken;
   modal.classList.remove('hidden');
   content.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
+  recoverModalFocus(modal);
 
   try {
     const data = await fetchJsonOk(`/api/reviews/problem/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`, undefined, '실패');

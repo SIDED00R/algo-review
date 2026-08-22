@@ -97,6 +97,9 @@
 
     // 열림/닫힘은 .hidden 토글로 표현된다 — 그 변화를 감시해 포커스를 다룬다.
     let wasOpen = !root.classList.contains('hidden');
+    // 등록 시점에 이미 열려 있으면 감시자는 아무 변화도 보지 못한다. 그러면 장부가 비어
+    // recoverFocus 가 영구 no-op 이 되므로, 여기서 한 번 열림 처리를 해 둔다.
+    if (wasOpen) onOpen(root, opts.initial);
     new MutationObserver(() => {
       const isOpen = !root.classList.contains('hidden');
       if (isOpen === wasOpen) return;

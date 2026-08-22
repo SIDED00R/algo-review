@@ -3,7 +3,7 @@ import analyzer
 from fastapi import APIRouter, HTTPException
 from config import settings
 from demo_mode import IS_DEMO, demo_block
-from routes.helpers import require_platform, upstream_failure
+from routes.helpers import require_platform, require_reviewable_code, upstream_failure
 from routes.problem_resolve import resolve_problem_info, resolve_statement
 from routes.review_response import save_and_build_response
 
@@ -23,6 +23,7 @@ def review_imported(platform: str, problem_ref: str):
         raise HTTPException(status_code=404, detail="가져온 기록에서 해당 문제를 찾을 수 없습니다.")
     if not problem.get("code"):
         raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 세션 쿠키로 다시 가져오기 해주세요.")
+    require_reviewable_code(problem["code"])
 
     if platform == "codeforces":
         # 조회 실패를 400/500 으로 매핑하는 공용 해석기를 쓴다(직접 호출하면 ValueError 가 500 으로만 샌다).

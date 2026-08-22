@@ -46,7 +46,7 @@ def import_codeforces_history(req: CodeforcesImportRequest):
         # 서명 호출 경로다 — 예외 원문에 apiKey·apiSig 가 실린 URL 이 들어올 수 있으므로
         # 타입명만 노출한다. 세부 내용은 서버 로그에서만 본다.
         logger.exception("Codeforces 기록 조회 실패")
-        raise HTTPException(status_code=500,
+        raise HTTPException(status_code=502,
                             detail=f"Codeforces 기록 조회 실패 ({type(e).__name__})") from None
 
     existing_keys = db.get_solved_problem_keys()

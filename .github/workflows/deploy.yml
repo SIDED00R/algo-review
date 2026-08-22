@@ -10,7 +10,7 @@ on:
 
 # main 에 연속 머지되면 두 배포가 경쟁해 나중 커밋이 먼저 끝날 수 있다 — 직렬화한다.
 # 그런데 그룹이 ref 단위라 PR 에도 적용된다. PR 은 배포하지 않으므로 구 실행을 붙잡을
-# 이유가 없다 — 연속 push 때 직렬 대기로 CI 분만 낭비했다.
+# 이유가 없다 — 붙잡으면 연속 push 때 직렬 대기로 CI 분만 쓴다.
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

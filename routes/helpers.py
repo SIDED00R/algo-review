@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 import db
 import clients as api_client
-from routes.models import validate_platform
+from routes.models import MAX_CODE_LENGTH, validate_platform
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -51,6 +51,22 @@ def require_platform(value: str) -> str:
         return validate_platform(value)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+def require_reviewable_code(code: str) -> str:
+    """LLM 에 넘길 코드의 길이 상한. 저장된 코드를 리뷰하는 경로가 공유한다.
+
+    `ReviewRequest` 는 pydantic 이 요청 본문에서 막지만, 가져오기로 들어온 코드는 그
+    검증을 거치지 않는다(`/api/import*` 는 크롤링·API 결과를 그대로 저장한다).
+    `analyzer.analyze_code` 는 문제 본문만 자르고 코드는 자르지 않으므로, 막지 않으면
+    큰 소스가 그대로 프롬프트가 되어 과금·타임아웃으로 간다.
+    """
+    if len(code or "") > MAX_CODE_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"코드가 {MAX_CODE_LENGTH:,}자를 넘어 리뷰할 수 없습니다. "
+                   "리뷰 탭에서 핵심 부분만 붙여 넣어 주세요.")
+    return code
 
 
 def require_language(language: str) -> str:

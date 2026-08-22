@@ -23,7 +23,7 @@ def _sqlite(path) -> str:
 @pytest.mark.parametrize("name", ["latest.db", "contest.db", "protest.db", "greatest.db",
                                   "my-tests.db", "testdata.db"])
 def test_names_that_merely_contain_test_are_rejected(name):
-    """`"test" in basename` 부분일치가 통과시키던 이름들.
+    """`"test" in basename` 부분일치로 판정하면 통과하는 이름들.
 
     `.env` 에 `DATABASE_URL=sqlite:///.../contest.db` 를 둔 개발자가 pytest 를 돌리면
     그 파일이 마이그레이션·DROP 대상이 된다.

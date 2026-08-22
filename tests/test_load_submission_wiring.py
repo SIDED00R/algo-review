@@ -43,7 +43,9 @@ def test_loader_always_assigns_problem_statement(client):
     본문이 남아 있으면 다른 문제를 그 본문으로 리뷰하는 조용한 오답이 난다.
     """
     js = _asset(client, "/static/js/load-submission.js")
-    assert "statement.value = review.problem_statement || ''" in js, \
+    # 공백·따옴표에 흔들리지 않게 정규식으로 본다 — 정확 문자열 검사는 포매팅 한 번에
+    # 조용히 통과한다(이 파일이 막으려는 것은 배선 끊김이지 서식이 아니다).
+    assert re.search(r"statement\s*\.\s*value\s*=\s*review\s*\.\s*problem_statement\s*\|\|", js), \
         "problem_statement 를 무조건 대입하는 코드가 사라졌다"
 
 
@@ -68,5 +70,6 @@ def test_tab_switching_lives_only_in_tabs_js(client):
     assert others, "다른 JS 자산을 찾지 못했다"
     for path in others:
         js = _asset(client, path)
-        assert "querySelectorAll('.tab-content')" not in js, \
+        # 따옴표 종류에 흔들리지 않게 정규식으로 본다.
+        assert not re.search(r"""querySelectorAll\s*\(\s*['"]\.tab-content['"]\s*\)""", js), \
             f"{path} 가 탭 전환을 자체 구현한다 — activateTab 을 쓰게 고쳐야 한다"
