@@ -73,22 +73,10 @@ async function loadTierChart() {
     document.getElementById('tier-chart').classList.remove('hidden');
     document.getElementById('tier-chart-empty').classList.add('hidden');
 
-    // 문제당 한 점만 쓴다. **첫 등장**을 남긴다 — tier 는 회차가 아니라 문제의 속성이라
-    // 값은 어느 회차를 골라도 같고, 바뀌는 건 그 문제가 시계열에 놓이는 날짜뿐이다.
-    // 마지막 회차를 남기면 예전 문제를 재제출할 때 그 점이 과거에서 사라져 오늘로 옮겨가고,
-    // 이미 지나간 구간의 레이팅이 소급 변한다.
-    // 서버가 created_at 오름차순으로 주므로 정순 1패스면 dedupe 와 정렬이 함께 끝난다.
-    const seenPids = new Set();
-    const deduped = [];
-    history.forEach(r => {
-      if (!seenPids.has(r.problem_id)) {
-        seenPids.add(r.problem_id);
-        deduped.push(r);
-      }
-    });
-
+    // 서버가 문제당 첫 등장 한 점씩, created_at 오름차순으로 준다(db.get_tier_history).
+    // 여기서 다시 거르지 않는다 — 같은 규칙을 두 곳에 두면 한쪽만 바뀌어 갈린다.
     const byDate = {};
-    deduped.forEach(r => {
+    history.forEach(r => {
       const d = r.created_at.slice(0, 10);
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(r);

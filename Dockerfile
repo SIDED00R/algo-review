@@ -23,4 +23,6 @@ USER appuser
 
 EXPOSE 8080
 
-CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
+# PORT 는 Cloud Run 이 주입한다. 하드코딩하면 서비스가 다른 포트로 설정될 때 컨테이너가
+# 트래픽을 받지 못한다. 셸 폼이라 ${PORT} 가 확장되고, 미설정 로컬에서는 8080 이다.
+CMD exec python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080}

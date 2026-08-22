@@ -3,32 +3,59 @@ historyBtn.dataset.label = '기록 불러오기';
 historyBtn.dataset.loadingLabel = '불러오는 중...';
 historyBtn.addEventListener('click', loadHistory);
 
-let allReviewProblems = [];
-
-// 세대 토큰 — "버튼이 disabled 라 단일 호출" 이 성립하지 않는다. 호출처가 셋이고
-// (버튼 · activateTab('history') · 재리뷰 성공 후) 그중 탭 전환은 버튼 상태와 무관하다.
-// 없으면 늦게 끝난 A 가 finally 로 버튼을 되살리고, 이어서 B 의 renderHistoryControls 가
-// 그 사이 사용자가 입력한 검색어·필터를 지운다.
+// 세대 토큰 — "버튼이 disabled 라 단일 호출" 이 성립하지 않는다. 호출처가 넷이고
+// (버튼 · activateTab('history') · 재리뷰 성공 후 · 필터 입력) 그중 탭 전환은 버튼
+// 상태와 무관하다. 없으면 늦게 끝난 A 가 finally 로 버튼을 되살리고, 이어서 B 의
+// renderHistoryControls 가 그 사이 사용자가 입력한 검색어·필터를 지운다.
 let _historyToken = 0;
+// 현재 페이지·전체 개수. 목록은 서버가 걸러 주므로 클라이언트가 들고 있지 않는다 —
+// 전 행을 받아 클라이언트에서 거르면 응답이 리뷰 수에 비례해 자란다(1만 행에서 1.41MB).
+let _historyPage = 1;
+let _historyTotal = 0;
+const HISTORY_PER_PAGE = 20;
 
-async function loadHistory() {
+function historyQuery() {
+  const tierKey = document.getElementById('h-tier')?.value || '';
+  return listQuery({
+    q: document.getElementById('h-search')?.value || '',
+    eff: document.getElementById('h-eff')?.value || '',
+    sort: document.getElementById('h-sort')?.value || 'recent',
+    page: _historyPage,
+    per_page: HISTORY_PER_PAGE,
+    ...tierGroupParams(tierKey),
+  });
+}
+
+async function loadHistory({ keepControls = false } = {}) {
   const list = document.getElementById('history-list');
   const token = ++_historyToken;
   setLoading(historyBtn, true);
-  list.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
+  if (!keepControls) {
+    _historyPage = 1;
+    list.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
+  }
 
   try {
-    const data = await fetchJsonOk('/api/reviews/grouped', undefined, '기록 로딩 실패');
+    const data = await fetchJsonOk(`/api/reviews/grouped?${historyQuery()}`,
+                                   undefined, '기록 로딩 실패');
     if (token !== _historyToken) return;
-    allReviewProblems = data.problems || [];
-    renderHistoryControls(list);
-    renderProblemList(list, getFilteredReviews(), allReviewProblems.length > 0);
+    _historyTotal = data.total || 0;
+    if (!keepControls) renderHistoryControls(list);
+    renderProblemList(list, data.problems || [], _historyTotal > 0 || hasHistoryFilter());
+    renderPager(document.getElementById('h-pager'), _historyPage,
+                Math.max(1, Math.ceil(_historyTotal / HISTORY_PER_PAGE)),
+                page => { _historyPage = page; loadHistory({ keepControls: true }); });
   } catch (e) {
     if (token !== _historyToken) return;
     showError(list, e.message);
   } finally {
     if (token === _historyToken) setLoading(historyBtn, false);
   }
+}
+
+/** 필터가 하나라도 걸려 있는지 — "기록 없음" 과 "검색 결과 없음" 을 가른다. */
+function hasHistoryFilter() {
+  return ['h-search', 'h-tier', 'h-eff'].some(id => (document.getElementById(id)?.value || ''));
 }
 
 function renderHistoryControls(container) {
@@ -56,36 +83,19 @@ function renderHistoryControls(container) {
     </select>`;
   container.innerHTML = '';
   container.appendChild(ctrl);
+  const pager = document.createElement('div');
+  pager.id = 'h-pager';
+  pager.className = 'pager';
+  container.appendChild(pager);
 
+  // 필터가 바뀌면 첫 페이지부터 다시 받는다. 입력마다 서버를 치지 않도록 묶는다 —
+  // 목록을 서버가 거르므로 이 요청이 유일한 갱신 경로다.
+  const reload = debounce(() => { _historyPage = 1; loadHistory({ keepControls: true }); });
   ['h-search', 'h-tier', 'h-eff', 'h-sort'].forEach(id => {
-    document.getElementById(id).addEventListener('input', () => {
-      renderProblemList(container, getFilteredReviews(), allReviewProblems.length > 0);
-    });
+    document.getElementById(id).addEventListener('input', reload);
   });
 }
 
-function getFilteredReviews() {
-  const q = (document.getElementById('h-search')?.value || '').toLowerCase();
-  const tier = document.getElementById('h-tier')?.value || '';
-  const eff = document.getElementById('h-eff')?.value || '';
-  const sort = document.getElementById('h-sort')?.value || 'recent';
-
-  let list = allReviewProblems.filter(p => {
-    if (!matchesProblemQuery(p, q)) return false;
-    if (tier && !tierInGroup(p.tier, tier, p.platform)) return false;
-    if (eff) {
-      const lastEff = p.last_efficiency;
-      if (lastEff !== eff) return false;
-    }
-    return true;
-  });
-
-  if (sort === 'recent') list.sort((a, b) => b.last_submitted.localeCompare(a.last_submitted));
-  else if (sort === 'tier_desc') list.sort((a, b) => b.tier - a.tier);
-  else if (sort === 'tier_asc') list.sort((a, b) => a.tier - b.tier);
-  else if (sort === 'pid_asc') list.sort(compareProblemLabel);
-  return list;
-}
 
 function renderProblemList(container, problems, hasAny = true) {
   container.querySelectorAll('.row, .alert').forEach(el => el.remove());

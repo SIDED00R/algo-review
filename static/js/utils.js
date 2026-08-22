@@ -10,20 +10,11 @@ const TIER_GROUP_LABELS = {
   platinum: 'Platinum', diamond: 'Diamond', ruby: 'Ruby', unrated: 'Unrated',
 };
 
-/** 난이도 그룹 판정. **BOJ 전용**이다 — 그룹 경계가 solved.ac 티어 1~30 체계다.
- *  CF 행은 tier 가 항상 0 이라(레이팅은 tier_name 에만 있다) 걸러 두지 않으면
- *  "Unrated" 선택에 CF 문제가 전량 딸려 온다. */
-function tierInGroup(tier, key, platform) {
-  if (platform && platform !== 'boj') return false;
-  const r = TIER_GROUPS[key];
-  return tier >= r[0] && tier <= r[1];
-}
-
 /** 난이도 필터 <option> 목록. 리뷰 기록 탭과 가져온 기록 탭이 같은 목록을 쓴다 —
  *  두 벌로 두면 한쪽에만 그룹이 추가돼 같은 필터가 다르게 동작한다. */
 function tierFilterOptionsHtml() {
   // 라벨에 적용 범위를 밝힌다 — 난이도 그룹은 BOJ 티어 체계라 CF 행은 어느 그룹에도
-  // 속하지 않는다(tierInGroup 이 platform 으로 걸러낸다). 그 사실을 적지 않으면
+  // 속하지 않는다(tierGroupParams 가 platform 을 boj 로 고정한다). 그 사실을 적지 않으면
   // 난이도를 고르는 순간 CF 기록이 통째로 사라지고 이유를 알 수 없다.
   return ['<option value="">전체 난이도</option>']
     .concat(Object.keys(TIER_GROUPS).map(
@@ -72,17 +63,60 @@ function problemLabel(problem) {
   return String(problem.problem_id ?? problem.problem_ref ?? '');
 }
 
-// 리뷰 기록 검색과 ⌘K 팔레트가 같은 판정을 쓴다 — 술어를 두 벌로 만들면
-// 한쪽만 고쳐졌을 때 같은 질의가 다른 결과를 준다.
-function matchesProblemQuery(problem, query) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return true;
-  const hay = `${problemLabel(problem)} ${problem.title || ''} ${(problem.tags || []).join(' ')}`;
-  return hay.toLowerCase().includes(q);
+/** 페이지 버튼 목록을 그린다. 리뷰 기록 탭과 가져온 기록 탭이 같은 것을 쓴다 —
+ *  두 벌로 두면 한쪽만 고쳐졌을 때 같은 목록이 탭마다 다르게 넘어간다.
+ *  @param {HTMLElement} pager  버튼을 담을 컨테이너
+ *  @param {number} page        현재 페이지(1부터)
+ *  @param {number} totalPages  전체 페이지 수
+ *  @param {function(number)} onGo  페이지 번호를 받는 이동 콜백 */
+function renderPager(pager, page, totalPages, onGo) {
+  if (!pager) return;
+  if (totalPages <= 1) { pager.innerHTML = ''; return; }
+
+  let html = `<button class="page-btn" ${page === 1 ? 'disabled' : ''} data-page="${page - 1}">‹</button>`;
+  let start = Math.max(1, page - 3);
+  const end = Math.min(totalPages, start + 6);
+  if (end - start < 6) start = Math.max(1, end - 6);
+
+  if (start > 1) html += `<button class="page-btn" data-page="1">1</button>${start > 2 ? '<span class="page-ellipsis">…</span>' : ''}`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i === page ? 'active' : ''}" data-page="${i}">${i}</button>`;
+  }
+  if (end < totalPages) html += `${end < totalPages - 1 ? '<span class="page-ellipsis">…</span>' : ''}<button class="page-btn" data-page="${totalPages}">${totalPages}</button>`;
+  html += `<button class="page-btn" ${page === totalPages ? 'disabled' : ''} data-page="${page + 1}">›</button>`;
+  pager.innerHTML = html;
+
+  pager.querySelectorAll('.page-btn:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => onGo(Number(btn.dataset.page)));
+  });
 }
 
-function compareProblemLabel(a, b) {
-  return problemLabel(a).localeCompare(problemLabel(b), undefined, { numeric: true });
+/** 입력이 멈춘 뒤 한 번만 실행한다. 필터 입력마다 서버를 치면 글자당 요청이 나간다. */
+function debounce(fn, ms = 250) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+/** 난이도 그룹 키를 서버가 이해하는 tier 범위로 푼다.
+ *  그룹 경계의 정의는 이 파일 한 곳에만 둔다 — 서버가 같은 표를 또 가지면 두 벌이 갈린다.
+ *  그룹 경계는 solved.ac 티어 1~30 체계라 CF 행(tier 가 항상 0)은 어느 그룹에도 속하지
+ *  않는다 — platform 을 함께 고정하지 않으면 'Unrated' 선택에 CF 문제가 전량 딸려 온다. */
+function tierGroupParams(key) {
+  const r = TIER_GROUPS[key];
+  if (!r) return {};
+  return { tier_min: r[0], tier_max: r[1], platform: 'boj' };
+}
+
+/** 객체를 쿼리스트링으로 만든다 — 빈 값은 빼서 서버 기본값을 쓰게 한다. */
+function listQuery(params) {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== '' && v !== null && v !== undefined) sp.set(k, String(v));
+  });
+  return sp.toString();
 }
 
 function cfRefToUrl(ref) {

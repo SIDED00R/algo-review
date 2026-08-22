@@ -42,6 +42,9 @@ class Review(Base):
         Index("idx_reviews_platform", "platform"),
         Index("idx_reviews_platform_ref", "platform", "problem_ref"),
         Index("idx_reviews_created_at", "created_at"),
+        # get_review_history 의 `WHERE platform=? ORDER BY created_at DESC LIMIT 20` 용.
+        # 없으면 platform 인덱스로 고른 행을 전부 임시 B-트리에 넣어 정렬한다.
+        Index("idx_reviews_platform_created", "platform", "created_at"),
     )
 
 

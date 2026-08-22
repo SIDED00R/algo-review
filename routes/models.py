@@ -1,3 +1,5 @@
+import re
+
 from pydantic import BaseModel, Field, field_validator
 
 from constants import is_supported_platform, normalize_platform
@@ -5,6 +7,14 @@ from constants import is_supported_platform, normalize_platform
 
 MAX_CODE_LENGTH = 50_000
 MAX_STATEMENT_LENGTH = 100_000
+# 저장소 경로 세그먼트·커밋 메시지·README 헤더로 나가는 값들. GitHub 경로 상한(255바이트/
+# 세그먼트)과 사람이 읽을 수 있는 길이를 함께 고려한 값이다.
+MAX_TITLE_LENGTH = 200
+MAX_TAGS = 30
+MAX_TAG_LENGTH = 100
+MAX_URL_LENGTH = 500
+# 가져오기 페이지 수 상한. 한 페이지가 제출 20건이므로 50페이지 = 1,000건이다.
+MAX_IMPORT_PAGES = 50
 
 
 def validate_code_length(value: str) -> str:
@@ -76,9 +86,11 @@ class ImportRequest(BaseModel):
     @field_validator("max_pages")
     @classmethod
     def max_pages_bounds(cls, v):
-        # 9999("전체") 선택 시 모든 기록을 가져온다 — 무한 루프 방지용 안전 상한만 둔다.
-        # get_user_submissions가 더 가져올 기록이 없으면 자동으로 멈추므로 이 상한은 거의 도달하지 않는다.
-        return max(1, min(v, 1000))
+        # 9999("전체") 선택 시 모든 기록을 가져온다. 상한이 필요한 이유는 무한 루프
+        # 방지만이 아니다 — 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40)의
+        # 슬롯을 페이지당 최대 15초(HTTP) + 0.5초(예절 간격) 동안 붙든다. 1000 이면
+        # 요청 하나가 4시간 넘게 슬롯을 점유해 /health 까지 막을 수 있다.
+        return max(1, min(v, MAX_IMPORT_PAGES))
 
 
 class GithubImportRequest(BaseModel):
@@ -160,6 +172,39 @@ class PushReviewRequest(BaseModel):
     @classmethod
     def code_max_length(cls, v):
         return validate_code_length(v)
+
+    # title·tier_name 은 저장소 **경로 세그먼트**가 되고, tags·url 은 README 본문이 된다.
+    # 상한이 없으면 요청 1건으로 수 MB 파일을 커밋하거나 경로 길이 한계를 넘길 수 있다.
+    @field_validator("title", "tier_name", "language")
+    @classmethod
+    def short_text_fields(cls, v):
+        if len(v or "") > MAX_TITLE_LENGTH:
+            raise ValueError(f"{MAX_TITLE_LENGTH}자를 초과할 수 없습니다.")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def url_bounds(cls, v):
+        value = (v or "").strip()
+        if not value:
+            return value
+        if len(value) > MAX_URL_LENGTH:
+            raise ValueError(f"URL 은 {MAX_URL_LENGTH}자를 초과할 수 없습니다.")
+        # README 의 링크가 되는 값이다 — 프론트 problemUrl 과 같은 허용목록을 쓴다.
+        if not re.match(r"^https?://", value, re.I):
+            raise ValueError("문제 링크는 http(s) 주소여야 합니다.")
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def tag_bounds(cls, v):
+        tags = v or []
+        if len(tags) > MAX_TAGS:
+            raise ValueError(f"태그는 {MAX_TAGS}개를 초과할 수 없습니다.")
+        for tag in tags:
+            if len(tag) > MAX_TAG_LENGTH:
+                raise ValueError(f"태그는 {MAX_TAG_LENGTH}자를 초과할 수 없습니다.")
+        return tags
 
     @field_validator("description", "input_desc", "output_desc")
     @classmethod

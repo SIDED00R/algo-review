@@ -5,11 +5,12 @@ import time
 from datetime import datetime
 
 from sqlalchemy import distinct, func, select, update
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
 from db.normalize import normalize_common_row
+from db.paging import DEFAULT_PAGE_SIZE, paging_bounds, search_filter
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -39,13 +40,33 @@ def _normalize_review_row(row: dict) -> dict:
 
 
 def _bump_tag_stats(session, tags: list, efficiency: str) -> None:
-    """태그별 good/poor 카운트를 누적한다. BOJ 첫 리뷰에서만 호출한다."""
+    """태그별 good/poor 카운트를 누적한다. BOJ 첫 리뷰에서만 호출한다.
+
+    없는 태그는 **savepoint 안에서** 만든다. `get` → 없으면 `add` → `flush` 는 두 트랜잭션이
+    둘 다 "없음" 을 본 창에서 뒤엣것이 PK 중복으로 진다(CI postgres 다리에서 재현). 그
+    IntegrityError 가 `save_review` 를 빠져나가면 트랜잭션이 통째로 롤백되어 **LLM 응답을
+    이미 받아 과금된 리뷰 행까지 사라진다** — 라우터는 분석 후에 저장한다.
+
+    savepoint 로 감싸면 충돌한 INSERT 만 되돌리고 바깥 트랜잭션은 살아 있다. 되돌린 뒤
+    상대가 넣은 행을 다시 읽어 그 위에 누적한다.
+    """
     for tag in tags:
         stat = session.get(TagStat, tag)
         if stat is None:
-            stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
-            session.add(stat)
-            session.flush()
+            try:
+                with session.begin_nested():
+                    stat = TagStat(tag=tag, good_count=0, poor_count=0, total_count=0)
+                    session.add(stat)
+                    session.flush()
+            except IntegrityError:
+                # 다른 트랜잭션이 먼저 만들었다 — 그 행을 읽어 이어서 센다.
+                session.expunge_all()
+                stat = session.get(TagStat, tag)
+                if stat is None:
+                    # 커밋되지 않은 상대의 INSERT 였다면 여기서도 안 보인다.
+                    # 이 회차의 집계는 건너뛴다 — 60초 주기 전면 재계산이 정답으로 맞춘다.
+                    logger.info("tag_stats 동시 생성 경합 — 재계산이 맞춘다 (tag=%s)", tag)
+                    continue
         stat.total_count += 1
         if efficiency == "good":
             stat.good_count += 1
@@ -140,6 +161,23 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         if platform == "boj" and reviewed_before == 0:
             _bump_tag_stats(session, json.loads(row.tags), efficiency)
         return True
+
+
+def get_stored_problem_statement(platform: str, problem_ref: str) -> str:
+    """그 문제의 회차 중 **비어 있지 않은 가장 최근 본문**.
+
+    `problem_statement` 는 회차(reviews 행)마다 저장되지만 의미는 **문제**의 속성이다.
+    최신 행만 보면, 1회차에 붙여 넣은 본문이 본문 없이 저장된 2회차에 가려진다 — BOJ 는
+    acmicpc.net 종료로 스크래핑이 상시 실패하므로 앱이 이미 가진 본문을 두고 사용자에게
+    다시 붙여넣으라고 요구하게 되고, 재리뷰는 빈 문제 설명으로 유료 호출을 낸다.
+    """
+    platform = (platform or "boj").strip().lower()
+    with session_scope() as session:
+        return session.scalar(
+            select(Review.problem_statement)
+            .where(Review.platform == platform, Review.problem_ref == str(problem_ref).strip(),
+                   Review.problem_statement != "")
+            .order_by(Review.created_at.desc()).limit(1)) or ""
 
 
 def refresh_unresolved_problem_metadata(problem_id: int, info: dict) -> int:
@@ -293,10 +331,11 @@ def get_tag_stats() -> list:
             return _read()
         try:
             _reconcile_tag_stats()
-        except DBAPIError:
+        except DBAPIError as e:
             # 다른 인스턴스와 같은 행을 동시에 건드리면 PK 충돌·잠금 경합으로 진다.
-            # 재계산은 멱등이라 다음 주기가 다시 맞춘다.
-            logger.info("tag_stats 재계산 경합 — 다음 주기에 다시 맞춘다")
+            # 재계산은 멱등이라 다음 주기가 다시 맞춘다. 다만 OperationalError 도
+            # DBAPIError 라, 예외를 버리면 진짜 DB 장애가 "경합" 한 줄로 사라진다.
+            logger.warning("tag_stats 재계산 실패 — 다음 주기에 다시 맞춘다: %s", e)
         _tag_stats_reconciled_at = now
     finally:
         _tag_stats_lock.release()
@@ -310,7 +349,9 @@ def get_total_review_count(platform: str | None = None) -> int:
     platform 을 함께 distinct 해야 두 플랫폼의 같은 문자열이 하나로 합쳐지지 않는다.
     """
     with session_scope() as session:
-        stmt = select(func.count(distinct(func.concat(Review.platform, ":", Review.problem_ref))))
+        # `||` 연결을 쓴다 — func.concat 은 SQLite 3.44(2023-11)+ 에서만 있어서,
+        # 그보다 낮은 런타임에서는 "no such function: concat" 이 난다.
+        stmt = select(func.count(distinct(Review.platform + ":" + Review.problem_ref)))
         if platform:
             stmt = stmt.where(Review.platform == platform.strip().lower())
         return session.scalar(stmt)
@@ -378,40 +419,83 @@ def get_average_tier() -> float:
 
 def has_graded_tier() -> bool:
     """등급(tier > 0)이 있는 BOJ 리뷰가 하나라도 있는지."""
+    # 존재만 보면 되므로 LIMIT 1 이다 — COUNT 는 조건에 맞는 행을 전부 센다(5만 행에서 37ms).
     with session_scope() as session:
         return session.scalar(
-            select(func.count()).select_from(Review)
-            .where(Review.platform == "boj", Review.tier > 0)) > 0
+            select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
-def get_problems_grouped() -> list:
+def get_problems_grouped(q: str = "", platform: str = "", tier_min: int | None = None,
+                         tier_max: int | None = None, eff: str = "",
+                         sort: str = "recent", page: int = 1,
+                         per_page: int = DEFAULT_PAGE_SIZE) -> dict:
+    """문제 단위로 접은 리뷰 기록 **한 페이지**. `{"problems": [...], "total": N}`.
+
+    필터·정렬·페이지를 전부 SQL 에서 한다. 전 행을 파이썬으로 끌어와 접으면 응답 크기와
+    메모리가 리뷰 수에 비례해 자란다(실측: 리뷰 1만 행 → 444ms·1.41MB, 5만 행 →
+    5,575ms·7.37MB·피크 76.6MB). 화면은 한 번에 20건만 보여준다.
+
+    난이도 그룹(bronze/silver/…)의 정의는 **프론트에 한 벌만** 둔다 — 호출부가 그 경계를
+    tier_min/tier_max 로 풀어서 보낸다. 서버가 같은 표를 또 가지면 두 벌이 갈린다.
+    """
+    page, per_page = paging_bounds(page, per_page)
+
+    # (platform, problem_ref) 로 묶는다 — 재제출 사이 제목/태그가 바뀌어도 한 문제다.
+    part = (Review.platform, Review.problem_ref)
+    latest = func.row_number().over(partition_by=part,
+                                    order_by=Review.created_at.desc()).label("rn")
+    total_rounds = func.count().over(partition_by=part).label("submission_count")
+    last_at = func.max(Review.created_at).over(partition_by=part).label("last_submitted")
+
+    ranked = select(
+        Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+        Review.tier, Review.tier_name, Review.tags,
+        Review.efficiency.label("last_efficiency"),
+        latest, total_rounds, last_at,
+    ).subquery()
+
+    stmt = select(ranked).where(ranked.c.rn == 1)
+    if platform:
+        stmt = stmt.where(ranked.c.platform == platform.strip().lower())
+    if tier_min is not None:
+        stmt = stmt.where(ranked.c.tier >= tier_min)
+    if tier_max is not None:
+        stmt = stmt.where(ranked.c.tier <= tier_max)
+    if eff:
+        stmt = stmt.where(ranked.c.last_efficiency == eff)
+    if (q or "").strip():
+        stmt = stmt.where(search_filter(
+            (ranked.c.title, ranked.c.problem_ref, ranked.c.tags), q))
+
+    order = {
+        "tier_desc": (ranked.c.tier.desc(), ranked.c.problem_ref.asc()),
+        "tier_asc": (ranked.c.tier.asc(), ranked.c.problem_ref.asc()),
+        # 번호순은 problem_id(정수)로 센다 — problem_ref 는 문자열이라 `1000` 이 `999`
+        # 보다 앞선다. CF 는 problem_id 가 0 이라 한 덩어리로 묶이고, 그 안에서만
+        # problem_ref 로 갈린다("1700A" < "1700B").
+        "pid_asc": (ranked.c.problem_id.asc(), ranked.c.problem_ref.asc()),
+    }.get(sort, (ranked.c.last_submitted.desc(), ranked.c.problem_ref.asc()))
+
     with session_scope() as session:
+        if not (platform or eff or (q or "").strip()
+                or tier_min is not None or tier_max is not None):
+            # 필터가 없으면 "문제 수" 가 곧 전체 수다 — 좁은 DISTINCT 로 센다.
+            # 윈도우 서브쿼리를 세면 같은 값을 얻는 데 50배 넘게 든다(실측 3ms vs 160ms).
+            total = session.scalar(
+                select(func.count(distinct(Review.platform + ":" + Review.problem_ref))))
+        else:
+            # 필터는 **최신 회차의 값**에 걸린다 — 어느 회차든 맞으면 되는 DISTINCT 로
+            # 세면 수가 달라진다(재제출 사이 제목·티어·판정이 바뀌는 경우).
+            total = session.scalar(select(func.count()).select_from(stmt.subquery()))
         rows = session.execute(
-            select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
-                   Review.tier, Review.tier_name, Review.tags, Review.efficiency, Review.created_at)
-            .order_by(Review.created_at.desc())
+            stmt.order_by(*order).limit(per_page).offset((page - 1) * per_page)
         ).mappings().all()
 
-    # (platform, problem_ref) 로 묶는다 — 재제출 사이 제목/태그가 바뀌어도 한 문제로 합쳐진다.
-    grouped: dict[tuple, dict] = {}
+    problems = []
     for r in rows:
-        key = (r["platform"], r["problem_ref"])
-        # rows 가 created_at DESC 라 처음 만난 행이 최신 회차다.
-        g = grouped.setdefault(key, {
-            "problem_id": r["problem_id"], "platform": r["platform"],
-            "problem_ref": r["problem_ref"], "title": r["title"],
-            "tier": r["tier"], "tier_name": r["tier_name"], "tags": r["tags"],
-            "submission_count": 0, "last_submitted": r["created_at"],
-            # 값 하나만 내려보낸다 — 소비처(history.js)가 최신 회차 배지에만 쓴다.
-            # 목록을 CSV 로 만들면 판정 문자열에 콤마가 들어갈 때 깨진다.
-            "last_efficiency": r["efficiency"],
-        })
-        g["submission_count"] += 1
-
-    result = list(grouped.values())
-    for g in result:
-        normalize_common_row(g)
-    return result
+        item = {k: v for k, v in r.items() if k != "rn"}
+        problems.append(normalize_common_row(item))
+    return {"problems": problems, "total": total or 0}
 
 
 def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
@@ -475,12 +559,27 @@ def set_problem_statement(platform: str, problem_ref: str, statement: str) -> in
 
 
 def get_tier_history() -> list:
+    """성장 곡선용 — **문제당 첫 등장 한 점씩**, created_at 오름차순.
+
+    tier 는 회차가 아니라 문제의 속성이라 값은 어느 회차를 골라도 같고, 바뀌는 건 그 문제가
+    시계열에 놓이는 날짜뿐이다. 마지막 회차를 남기면 예전 문제를 재제출할 때 그 점이
+    과거에서 사라져 오늘로 옮겨가고, 이미 지나간 구간의 레이팅이 소급 변한다.
+
+    dedup 을 SQL 에서 한다 — 전 회차를 보내면 소비처(tier-chart.js)가 버릴 행까지
+    전송·파싱한다(실측: 리뷰 1만 행에서 1.88MB, 회차가 늘수록 선형으로 자란다).
+    """
+    rn = func.row_number().over(
+        partition_by=(Review.platform, Review.problem_ref),
+        order_by=Review.created_at.asc()).label("rn")
+    ranked = select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+                    Review.tier, Review.tier_name, Review.created_at, rn).where(
+        Review.platform == "boj", Review.tier > 0).subquery()
     with session_scope() as session:
         rows = session.execute(
-            select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
-                   Review.tier, Review.tier_name, Review.created_at)
-            .where(Review.platform == "boj", Review.tier > 0)
-            .order_by(Review.created_at.asc())
+            select(ranked.c.problem_id, ranked.c.platform, ranked.c.problem_ref,
+                   ranked.c.title, ranked.c.tier, ranked.c.tier_name, ranked.c.created_at)
+            .where(ranked.c.rn == 1)
+            .order_by(ranked.c.created_at.asc())
         ).mappings().all()
     return [dict(r) for r in rows]
 

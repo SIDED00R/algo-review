@@ -39,10 +39,12 @@ def test_tier_history_returns_boj_rows_in_ascending_order(at_time):
     assert rows[0]["tier_name"] == "Silver I"
 
 
-def test_tier_history_keeps_every_submission_of_a_problem(at_time):
-    """문제당 한 점만 쓰는 것은 프론트의 책임이다 — 서버는 모든 회차를 준다.
+def test_tier_history_gives_one_point_per_problem_at_its_first_date(at_time):
+    """문제당 첫 등장 한 점만 준다 — 재제출이 지나간 구간의 곡선을 바꾸면 안 된다.
 
-    여기서 회차를 줄이면 tier-chart 의 dedupe(첫 등장 유지)가 무의미해진다.
+    dedup 은 서버가 한다. 소비처(tier-chart.js)가 버릴 회차까지 보내면 응답이 회차 수에
+    비례해 자란다. 마지막 회차를 남기는 구현은 예전 문제를 다시 풀 때 그 점을 오늘로 옮겨,
+    이미 지나간 날짜의 평균 티어를 소급해서 바꾼다.
     """
     at_time("2026-01-01T10:00:00")
     _save(1000, "1000")
@@ -51,8 +53,8 @@ def test_tier_history_keeps_every_submission_of_a_problem(at_time):
 
     rows = db.get_tier_history()
 
-    assert len(rows) == 2
-    assert [r["created_at"][:7] for r in rows] == ["2026-01", "2026-08"]
+    assert len(rows) == 1
+    assert rows[0]["created_at"][:7] == "2026-01"
 
 
 def test_tier_history_excludes_codeforces_and_unrated():

@@ -42,7 +42,7 @@
 
 ┌───────────────────────────────────────────────────────────────────┐
 │  warmup.py — server.py lifespan 기동 시 백그라운드 태스크로 실행     │
-│  themes.py.get_theme_problem_pool() 를 플랫폼×테마 전수 호출해 예열 │
+│  themes.py: 신선하지 않은 플랫폼×테마만 골라 문제 풀 캐시 예열      │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -168,7 +168,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 |--------|--------|------|
 | `server.py` | `db.run_migrations` | lifespan 기동 시 Alembic `upgrade head` |
 | `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
-| `warmup.py` | `themes.get_theme_problem_pool` | 플랫폼×테마 전수 순회하며 캐시 예열 |
+| `warmup.py` | `themes.theme_pool_is_fresh` · `themes.get_theme_problem_pool` | 플랫폼×테마를 돌며 신선도를 먼저 보고 **신선하지 않은 것만** 예열한다. 하루 첫 인스턴스 외에는 외부 호출이 0이다 |
 | `routes/problem_resolve.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
 | `routes/problem_resolve.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
 | `routes/review.py` | `analyzer.analyze_code` | LLM 코드 분석 (모델은 `OPENAI_MODEL`, 기본 gpt-4o — `.env.example` 은 Gemini 호환 엔드포인트도 안내한다) |
@@ -219,6 +219,30 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
 | 5 | `server.py` | 전역 예외 핸들러 — DB 연결 실패(`OperationalError`)는 503 + 안내, 그 외 미처리 예외는 500 generic(내부 상세 비노출) + traceback 로깅 |
 | 6 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
+| 7 | `.github/workflows/deploy.yml` | 접근 정책을 **코드가 정본**으로 갖는다 — 운영은 `--no-allow-unauthenticated`, 데모만 `--allow-unauthenticated`. 명시하지 않으면 배포가 기존 IAM 을 "보존" 하므로, 콘솔에서 공개로 바뀐 상태가 배포로 되돌아가지 않는다 |
+| 8 | `routes/helpers.py` | `merged_github_target` 은 저장소·토큰을 **짝으로만** 받는다. 한쪽만 override 하면 나머지가 저장된 값으로 폴백해, 요청자가 고른 저장소에 저장된 토큰(`scope=repo`)으로 커밋된다 |
+| 9 | `routes/models.py` | `PushReviewRequest` 의 경로·README 로 나가는 필드에 상한 — title/tier_name/language 200자, tags 30개×100자, url 은 `http(s)` 500자. 없으면 요청 1건으로 수 MB README 를 커밋하거나 경로 길이 한계를 넘긴다 |
+| 10 | `routes/models.py` | `max_pages` 상한 50. 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40) 슬롯을 페이지당 최대 15.5초 붙든다 — 상한이 크면 요청 몇 건으로 `/health` 까지 막힌다 |
+
+### 남아 있는 위험 — 앱에 인증이 없다
+
+이 앱에는 로그인·세션·사용자 구분이 **없다**(`Depends`/`Security` 사용 0건). 그런데 사용자의
+GitHub OAuth 토큰(`scope=repo`)을 DB 에 저장하고 공개 엔드포인트가 그 토큰으로 커밋한다.
+
+따라서 **서비스에 접근할 수 있는 사람 = 그 토큰을 쓸 수 있는 사람**이다. 접근 통제를 앱이
+아니라 **Cloud Run IAM** 이 담당한다(위 7번). 운영 서비스를 다시 공개로 돌리면 URL 을 아는
+누구나 아래를 할 수 있다:
+
+- `GET /auth/github/repos` — 비공개 저장소 이름 전량 조회
+- `POST /api/push-review` · `/api/import-codeforces` — 저장된 토큰으로 임의 저장소에 커밋
+- `DELETE /auth/github` · `POST /auth/github/repo` — 연결 해제 / 대상 저장소 변경
+- `GET /api/reviews/problem/...` — 저장된 소스코드·리뷰 전문 열람
+- `/api/report` · `/api/problem/cf/...` — 무제한 유료 LLM 호출
+- `DELETE /api/solved-history` — 가져온 기록 전량 삭제
+
+데모 서비스는 공개로 두어도 된다 — `DEMO_MODE` 가 쓰기·과금·코드 실행을 전부 차단하고
+DB 가 컨테이너 임시 파일이다.
+
 
 ---
 
@@ -279,7 +303,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 만료 없는 캐시의 추측값 | 추측 키를 만료 없는 성공 캐시에 넣으면 프로세스 수명 동안 남는다. 그 키로 검색하면 200 + 빈 목록이라 예외도 나지 않아 추천이 error 없이 조용히 빈다 | 추측은 **만료를 달아** 별도 dict 에 둔다. "조회 실패"(짧게)와 "조회 성공 + 목록에 없음"(길게)은 성격이 달라 TTL 도 나눈다 |
 | 게이트 자신의 사각지대 | 정적 검사가 한 파일을 통째로 못 보게 되어도 **아무것도 빨강이 나지 않는다**(`_is_iife_module` 이 `re.M` 으로 파일 중간의 IIFE 에 걸려 `github.js` 를 깊이 1 기준으로 읽던 때가 그랬다) | 파일마다 마커를 주입해 게이트가 그것을 보는지 확인한다(`test_the_load_order_check_can_see_into_every_file`). 커버리지는 검사 대상 개수의 하한으로도 함께 못박는다 |
 | 파생 캐시의 트리거 소유자 | 비정규화 캐시를 최신으로 만드는 코드가 **한 소비자에게만** 붙어 있으면, 그 경로를 부르지 않는 소비자는 낡은 값을 인스턴스 수명 내내 읽는다(`/api/stats` 만 재계산을 트리거하는데 `/api/recommend` 도 같은 표를 읽던 상태) | 캐시를 읽는 소비자는 재계산도 함께 트리거하거나, **아예 원본에서 센다**. 추천은 후자를 택한다 — 이미 같은 행을 읽어 왔으므로 추가 쿼리도 없다 |
-| 프로세스 전역 쿨다운 | check 와 set 사이가 보호되지 않으면 콜드 스타트의 동시 요청 N 개가 전부 전면 스캔 + 전면 재기록을 한다. 그 재기록이 증분 갱신의 read-modify-write 와 겹치면 정답이 stale+1 로 덮인다 | `threading.Lock` 을 `acquire(blocking=False)` 로 잡고, 못 잡으면 기다리지 않고 현재 값을 돌려준다. 전면 재기록은 `ORDER BY` 로 잠금 순서를 고정한다 |
+| 프로세스 전역 쿨다운 | check 와 set 사이가 보호되지 않으면 콜드 스타트의 동시 요청 N 개가 전부 전면 스캔 + 전면 재기록을 한다. 그 재기록이 증분 갱신의 read-modify-write 와 겹치면 정답이 stale+1 로 덮인다 | `threading.Lock` 으로 감싼다. 표가 **차 있으면** `acquire(blocking=False)` 로 잡고 못 잡으면 기다리지 않는다(최대 `_TAG_STATS_RECONCILE_SEC` 만큼 뒤처진 값을 돌려준다). 표가 **비어 있으면** 최대 `_TAG_STATS_LOCK_WAIT_SEC`(5초) 기다린다 — 그 상태로 응답하면 `/api/report` 가 400 "아직 저장된 기록이 없습니다" 를 낸다. 전면 재기록은 `ORDER BY` 로 잠금 순서를 고정한다 |
 | 문자 스트림 파서의 문맥 | 템플릿 리터럴의 `${}` 안을 줄 내용에서 빼면, 그 안의 `/` 앞이 빈 문자열로 보여 나눗셈이 정규식으로 오독된다. 그러면 정규식 본문의 중괄호가 깊이에 섞여 **정상 JS 가 "리터럴 처리가 깨졌다" 는 무관한 메시지로 빨강**이 된다 | 줄 내용용 버퍼와 **정규식 판별용 문맥**을 따로 둔다. 문맥은 `${}` 안도 담고 줄을 넘어 이어진다. `${` 자체는 식의 시작이므로 문맥에 남긴다 |
 | 로드 시점 실행의 범위 | 최상위 `if (x) { f(); }` 의 `f()` 는 깊이가 1 이지만 **로드 시점에 실행된다**. 깊이만으로 걸러내면 진짜 로드 순서 위반이 통과한다 | 중괄호마다 그것을 연 것이 제어 블록인지 함수·객체·클래스인지 기록하고, 제어 블록만 거쳐 온 줄은 최상위로 본다 |
 | 매직 문자열 계약 | 생산자가 실패를 문자열로 표현하고 소비자가 접두사로 판별하면, 양쪽을 각각 리터럴로 검사하는 테스트는 **문구가 갈려도 전부 초록**이다 | `requests` 만 스텁하고 **실제 생산자**를 호출해 판별자에 넣는다. 정상 본문을 실패로 보지 않는 반대 방향도 함께 고정한다 |

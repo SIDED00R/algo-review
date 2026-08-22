@@ -124,32 +124,35 @@ def test_all_fill_review_form_entry_points_confirm_overwrite():
             f"{name}({label}) 에서 덮어쓰기 확인이 fillReviewForm 호출보다 뒤에 있다")
 
 
-def test_imported_review_updates_the_list_data_not_just_the_dom(js):
-    """서버가 행을 실제로 삭제하므로 목록 데이터에서도 빼야 한다.
+def test_imported_review_refetches_instead_of_mutating_a_snapshot(js):
+    """AI 리뷰가 끝나면 목록을 **서버에서 다시 받는다**.
 
-    이 함수가 톱레벨에 있으면 allProblems 클로저에 접근할 수 없어 DOM 만 지우게 되고,
-    필터를 한 번 만지면 삭제된 항목이 되살아난다(재클릭 시 404).
+    서버가 그 행을 실제로 지우므로 화면도 그것을 반영해야 한다. 클라이언트가 들고 있는
+    스냅샷을 고쳐서 맞추면, 그 스냅샷을 잡은 늦은 호출이 나중에 화면을 되돌린다(리뷰 완료
+    직후 목록이 옛 개수로 후퇴). 목록의 정본을 서버 하나로 두면 그 경로가 사라진다.
     """
     src = js["import-history.js"]
-    assert not re.search(r"^async function requestImportedReview", src, re.M), \
-        "톱레벨에 있으면 allProblems 클로저에 접근할 수 없다"
-    assert re.search(r"^  async function requestImportedReview", src, re.M)
-    assert re.search(r"allProblems\.splice\(", src)
+    body = _js_function_body(src, "async function requestImportedReview")
+    assert body.count("refreshImportList()") >= 2, \
+        "성공·실패 양쪽에서 목록을 다시 받아야 한다"
+    assert "splice(" not in src, "목록 스냅샷을 직접 고치면 안 된다 — 서버가 정본이다"
+    assert "allProblems" not in src, "목록 전체를 클로저에 잡지 않는다"
 
 
-def test_tier_chart_keeps_the_first_occurrence_per_problem(js):
-    """마지막 회차를 남기면 재제출이 과거 곡선을 소급 변경한다.
+def test_tier_chart_consumes_the_server_order_without_re_deriving_it(js):
+    """문제당 첫 등장만 남기는 규칙은 서버(db.get_tier_history) 한 곳에만 둔다.
 
-    tier 는 회차가 아니라 문제의 속성이라 값은 같고 날짜만 이동한다.
+    같은 규칙을 프론트에도 두면 한쪽만 바뀌어 갈린다. 마지막 회차를 남기는 쪽으로 갈리면
+    재제출이 과거 곡선을 소급 변경한다 — tier 는 회차가 아니라 문제의 속성이라 값은 같고
+    그 문제가 시계열에 놓이는 날짜만 이동하기 때문이다.
+    (동작 자체는 test_db_untested_queries.py 가 실제 데이터로 고정한다.)
     """
     src = js["tier-chart.js"]
     assert ".reverse()" not in src, "reverse 하면 문제당 마지막 회차가 남는다"
-    # 서버가 오름차순으로 주므로 재정렬이 필요 없다.
-    assert not re.search(r"deduped\.sort\(", src)
-    # 부정 단정만 있으면 dedupe 블록을 통째로 지워도 통과한다 — 구현의 존재도 고정한다.
-    assert re.search(r"new Set\(", src), "문제별 중복 제거가 없다"
-    assert re.search(r"if\s*\(!\s*seenPids\.has\(", src), "첫 등장 유지 판정이 없다"
-    assert re.search(r"history\.forEach\(", src), "정순 1패스가 아니다"
+    # 날짜 키 정렬(Object.keys(byDate).sort())은 정당하다 — 금지 대상은 회차 행의 재정렬이다.
+    assert not re.search(r"history\.sort\(", src), "서버가 오름차순으로 준다 — 재정렬은 순서를 뒤집는다"
+    assert not re.search(r"seenPids|new Set\(", src), "중복 제거를 프론트에 다시 두지 않는다"
+    assert re.search(r"history\.forEach\(", src), "서버가 준 순서 그대로 1패스여야 한다"
 
 
 def test_pasted_statement_wins_over_the_viewer_cache(js):
@@ -473,7 +476,7 @@ def test_every_async_render_path_checks_its_generation_token(js):
         ("stats.js", "async function loadStats", r"token !== _statsToken"),
         ("history.js", "async function loadHistory", r"token !== _historyToken"),
         ("history.js", "async function openReviewModal", r"token !== _modalToken"),
-        ("command-palette.js", "async function showProblems", r"token !== _paletteToken"),
+        ("command-palette.js", "async function searchProblems", r"token !== _paletteToken"),
         ("command-palette.js", "async function showLedger", r"token !== _paletteToken"),
     ]
     for name, signature, pattern in guarded:
@@ -518,11 +521,14 @@ def test_modal_recovers_focus_that_escapes_to_the_body(js):
 def test_tier_filter_is_boj_only(js):
     """난이도 그룹 경계는 solved.ac 티어 1~30 체계다. CF 행은 tier 가 항상 0 이라
     플랫폼을 보지 않으면 'Unrated' 선택에 CF 문제가 전량 딸려 온다."""
-    assert re.search(r"function tierInGroup\(tier, key, platform\)", js["utils.js"])
-    assert re.search(r"platform !== ['\"]boj['\"]", js["utils.js"])
+    # 그룹 경계의 정의는 utils.js 한 곳에만 둔다 — 서버가 같은 표를 또 가지면 두 벌이 갈린다.
+    assert re.search(r"function tierGroupParams\(key\)", js["utils.js"])
+    body = _js_function_body(js["utils.js"], "function tierGroupParams")
+    assert re.search(r"platform:\s*['\"]boj['\"]", body), \
+        "난이도 그룹을 고르면 platform 을 boj 로 고정해야 한다"
+    assert "TIER_GROUPS[key]" in body, "경계는 TIER_GROUPS 한 곳에서만 읽는다"
     for name in ("history.js", "import-history.js"):
-        assert re.search(r"tierInGroup\([^)]*p\.platform\)", js[name]), \
-            f"{name} 이 플랫폼을 넘기지 않는다"
+        assert "tierGroupParams(" in js[name], f"{name} 이 그룹을 서버 질의로 풀지 않는다"
 
 
 def _global_function_owners() -> dict[str, str]:

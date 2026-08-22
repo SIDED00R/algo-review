@@ -17,10 +17,12 @@ from db.reviews import (
     get_review_history,
     get_average_cf_rating,
     get_tag_weakness_data,
+    get_stored_problem_statement,
     refresh_unresolved_problem_metadata,
 )
 from db.solved import (
     save_solved_problem,
+    claim_solved_problem,
     delete_solved_problem,
     clear_solved_history,
     get_cached_problem_info,
@@ -50,8 +52,8 @@ __all__ = [
     "get_problems_grouped", "get_problems_missing_statement",
     "get_reviews_by_problem", "get_tier_history", "set_problem_statement",
     "get_review_history", "get_average_cf_rating",
-    "get_tag_weakness_data", "refresh_unresolved_problem_metadata",
-    "save_solved_problem", "delete_solved_problem", "clear_solved_history",
+    "get_tag_weakness_data", "get_stored_problem_statement", "refresh_unresolved_problem_metadata",
+    "save_solved_problem", "claim_solved_problem", "delete_solved_problem", "clear_solved_history",
     "get_cached_problem_info", "get_solved_problem", "get_solved_history",
     "get_solved_cf_refs", "get_solved_problem_ids", "get_solved_problem_keys",
     "get_github_settings", "save_github_settings",

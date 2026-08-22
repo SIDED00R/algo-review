@@ -6,10 +6,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, TimeoutError as SQLTimeoutError
 
 import db
 import warmup
@@ -49,6 +50,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="알고리즘 코드 리뷰 & 문제 추천", lifespan=lifespan)
 
 
+# 커넥션 풀 고갈은 OperationalError 가 아니라 sqlalchemy.exc.TimeoutError 다 — 같은
+# "지금은 DB 를 못 쓴다" 상황이므로 함께 503 으로 보낸다.
+@app.exception_handler(SQLTimeoutError)
+async def _pool_timeout_handler(request: Request, exc: SQLTimeoutError):
+    logger.warning("DB 커넥션 풀 대기 시간 초과: %s", exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "데이터베이스가 혼잡합니다. 잠시 후 다시 시도해주세요."},
+    )
+
+
 @app.exception_handler(OperationalError)
 async def _db_unavailable_handler(request: Request, exc: OperationalError):
     # 온디맨드 DB 정지 등으로 연결이 안 되면 500 대신 503 + 안내를 준다.
@@ -66,6 +78,12 @@ async def _unhandled_handler(request: Request, exc: Exception):
     # 미처리 예외 1건당 트레이스백이 2개가 되므로 요약만 남긴다.
     logger.error("처리되지 않은 예외: %r", exc)
     return JSONResponse(status_code=500, content={"detail": "서버 내부 오류가 발생했습니다."})
+
+
+# 목록 응답이 수 MB 가 된다(실측: reviews 5만 행에서 /api/reviews/grouped 7.37MB).
+# JSON 은 압축률이 10배 안팎이라 전송 시간이 그만큼 줄고 압축 CPU 는 100ms 수준이다.
+# minimum_size 아래(대부분의 API 응답)는 그대로 통과한다.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 allowed_origins = [
