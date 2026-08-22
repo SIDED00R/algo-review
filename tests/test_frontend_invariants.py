@@ -551,7 +551,7 @@ _CONTROL_BLOCK = re.compile(
     r"^(?:\}\s*)?(?:if|else|for|while|switch|try|catch|finally|do)\b|^\{$")
 
 
-def _code_lines(src: str) -> list[tuple[int, str, bool]]:
+def _code_lines(src: str, unterminated: list | None = None) -> list[tuple[int, str, bool]]:
     """(그 줄 시작 시점의 중괄호 깊이, 리터럴·주석을 지운 줄, 로드 시점 실행 여부) 목록.
 
     문자열·템플릿 리터럴·정규식·주석은 **파일 전체를 문자 스트림으로** 훑으며 지운다.
@@ -653,7 +653,10 @@ def _code_lines(src: str) -> list[tuple[int, str, bool]]:
                     i += 2
                     continue
                 if src[i] == "\n":
-                    break                      # 미종료 문자열 — 줄에서 끊는다
+                    # 줄을 넘는 따옴표 문자열은 JS 에서 SyntaxError 다 — 호출부가 요청하면 알린다.
+                    if unterminated is not None:
+                        unterminated.append(len(out) + 1)
+                    break
                 if src[i] == quote:
                     i += 1
                     break
@@ -1044,3 +1047,25 @@ def test_error_detail_handles_the_validation_error_shape(js):
     """FastAPI 의 422 detail 은 **배열**이다 — 그대로 문자열에 넣으면 `[object Object]`."""
     body = _js_function_body(js["utils.js"], "function errorDetail")
     assert "Array.isArray" in body, "배열 detail 분기가 없다"
+
+
+def _unterminated_string_lines(src: str) -> list[int]:
+    """따옴표가 줄 끝까지 닫히지 않은 줄 번호.
+
+    `_code_lines` 를 그대로 쓴다 — 정규식 리터럴 안의 따옴표(`/"/g`)와 여러 줄 템플릿
+    리터럴을 이미 올바르게 다룬다. 줄 단위로 다시 세면 그 둘이 거짓 양성이 된다.
+    """
+    found: list[int] = []
+    _code_lines(src, found)
+    return found
+
+
+@pytest.mark.parametrize("path", sorted(_JS_DIR.glob("*.js")), ids=lambda p: p.name)
+def test_no_unterminated_string_literals(path):
+    """`'…'`·`"…"` 는 줄을 넘을 수 없다 — 넘으면 그 파일 전체가 SyntaxError 다.
+
+    편집 스크립트가 `\n` 이스케이프를 실제 개행으로 바꾸는 사고가 반복해서 났고, 그때마다
+    로컬 게이트는 전부 초록이었다(node 가 없으면 구문 검사를 건너뛴다).
+    """
+    bad = _unterminated_string_lines(path.read_text(encoding="utf-8"))
+    assert not bad, f"{path.name}: {bad} 번 줄의 문자열이 줄 끝까지 닫히지 않았다"

@@ -359,6 +359,9 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
   font-size: var(--fs-label); letter-spacing: .02em; }
 
 .markdown-body { font-size: var(--fs-md); line-height: 1.7; }
+/* LLM 피드백에는 URL 과 긴 스네이크케이스 식별자가 일상적으로 들어온다 — 끊지 않으면
+   카드를 뚫고 나가 페이지에 가로 스크롤이 생긴다(.pm-text 와 같은 처리). */
+.markdown-body, .points-box li, .summary-value-sm { overflow-wrap: anywhere; }
 .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: var(--s-4) 0 var(--s-2); }
 .markdown-body p { margin-bottom: var(--s-2); }
 .markdown-body ul, .markdown-body ol { padding-left: var(--s-5); margin-bottom: var(--s-2); }

@@ -142,6 +142,27 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         return True
 
 
+def refresh_unresolved_problem_metadata(problem_id: int, info: dict) -> int:
+    """자리표시 메타로 저장된 BOJ 행들을 실제 문제 메타로 갱신하고, 갱신한 행 수를 돌려준다.
+
+    solved.ac 일시 장애 중 저장된 행은 제목이 "문제 {번호}", 티어 0, 태그 없음이다.
+    제목·티어·태그는 제출이 아니라 **문제**의 속성이라 갱신이 맞다 — 제출 코드·판정·
+    피드백은 건드리지 않는다.
+
+    집계 기준(`_first_judged_rows`)이 문제당 첫 판정 행이므로, 이 갱신이 없으면 새 리뷰를
+    아무리 해도 그 문제의 태그가 통계·추천에 영영 들어오지 않는다.
+    """
+    placeholder = f"문제 {problem_id}"
+    tags_json = json.dumps(info.get("tags") or [], ensure_ascii=False)
+    with session_scope(commit=True) as session:
+        return session.execute(
+            update(Review)
+            .where(Review.platform == "boj", Review.problem_id == problem_id,
+                   Review.title == placeholder, Review.tier == 0)
+            .values(title=info["title"], tier=info["tier"],
+                    tier_name=info.get("tier_name") or "", tags=tags_json)
+        ).rowcount
+
 def _first_judged_rows(rows: list) -> list:
     """문제당 **첫 판정 행**만 남긴다. 입력은 created_at 오름차순이어야 한다.
 
@@ -184,6 +205,9 @@ _tag_stats_reconciled_at: float | None = None
 # 쿨다운 확인과 갱신 사이를 보호한다 — 없으면 콜드 스타트에 동시 요청 N 개가 전부 전면
 # 스캔 + 전면 재기록을 수행한다(db/connection.py 의 엔진 싱글턴과 같은 이유의 락이다).
 _tag_stats_lock = threading.Lock()
+# 표가 비어 있을 때만 이만큼 기다린다. 전면 스캔은 3만 행에서 1초 미만이라, 이 상한에
+# 걸리는 것은 재계산이 아니라 DB 자체가 느려진 경우다.
+_TAG_STATS_LOCK_WAIT_SEC = 5
 
 
 def reset_tag_stats_rebuild_flag() -> None:
@@ -207,8 +231,8 @@ def _reconcile_tag_stats() -> None:
     """
     with session_scope(commit=True) as session:
         counts = _first_submission_tag_counts(session, "boj")
-        # 잠금 순서를 결정론적으로 고정한다 — 두 인스턴스가 서로 다른 순서로
-        # 같은 행들을 잠그면 데드락이 난다.
+        # tag 순으로 읽는다 — 읽는 순서 자체가 잠금을 잡지는 않지만(FOR UPDATE 가 아니다),
+        # 이 dict 의 순회 순서가 아래 delete 의 순서가 되므로 실행마다 같아진다.
         existing = {row.tag: row for row in
                     session.scalars(select(TagStat).order_by(TagStat.tag)).all()}
         for tag, c in counts.items():
@@ -249,15 +273,24 @@ def get_tag_stats() -> list:
             ]
 
     rows = _read()
-    now = time.monotonic()
-    # 재계산은 한 번에 하나만 돈다. 이미 도는 중이면 기다리지 않고 지금 값을 돌려준다 —
-    # 표는 어차피 다음 요청에서 맞춰지고, 여기서 블로킹하면 /api/stats 가 스캔만큼 느려진다.
-    if not _tag_stats_lock.acquire(blocking=False):
+    # 재계산은 한 번에 하나만 돈다. 표가 이미 차 있으면 기다리지 않는다 — 최대
+    # _TAG_STATS_RECONCILE_SEC 만큼 뒤처진 값이라도 응답을 지연시키는 것보다 낫다.
+    # 표가 **비어 있으면** 기다린다. 그 상태로 응답하면 /api/report 가 400 "아직 저장된
+    # 기록이 없습니다", /api/stats 가 "아직 데이터가 없습니다" 로 나가, 리뷰 기록이 있는
+    # 사용자가 기록이 없다는 화면을 본다.
+    if rows:
+        acquired = _tag_stats_lock.acquire(blocking=False)
+    else:
+        acquired = _tag_stats_lock.acquire(timeout=_TAG_STATS_LOCK_WAIT_SEC)
+    if not acquired:
         return rows
     try:
+        now = time.monotonic()
         if (_tag_stats_reconciled_at is not None
                 and now - _tag_stats_reconciled_at < _TAG_STATS_RECONCILE_SEC):
-            return rows
+            # 기다리는 동안 다른 스레드가 채웠을 수 있다 — 대기 전에 읽은 값이 아니라
+            # 지금 값을 돌려준다.
+            return _read()
         try:
             _reconcile_tag_stats()
         except DBAPIError:
@@ -336,8 +369,19 @@ def get_average_tier() -> float:
         ).all()
 
     if not tiers:
+        # 등급 있는 기록이 없다. 추천 난이도의 기본값으로 쓰라고 주는 값이지 **표시값이
+        # 아니다** — 그대로 화면에 쓰면 기록이 없는 사용자에게 "Silver I" 가 뜬다.
+        # 호출부는 has_graded_tier() 로 구분한다.
         return 10.0
     return sum(tiers) / len(tiers)
+
+
+def has_graded_tier() -> bool:
+    """등급(tier > 0)이 있는 BOJ 리뷰가 하나라도 있는지."""
+    with session_scope() as session:
+        return session.scalar(
+            select(func.count()).select_from(Review)
+            .where(Review.platform == "boj", Review.tier > 0)) > 0
 
 
 def get_problems_grouped() -> list:
@@ -486,37 +530,40 @@ def get_tag_weakness_data(platform: str) -> list:
     낡은 값이 인스턴스 수명 내내 유지된다. 그 값은 `recommender._score_tags` 에 가중치
     0.3 으로 들어가 추천 문제 선정을 바꾼다.
 
-    모집단은 그 플랫폼의 통계 화면과 같다 — BOJ 는 tag_stats 와 같은 "문제당 첫 판정 행",
-    CF 는 get_cf_tag_stats 와 같은 "전 회차".
+    poor 비율의 모집단은 그 플랫폼의 통계 화면과 같다 — BOJ 는 tag_stats 와 같은
+    "문제당 첫 판정 행", CF 는 get_cf_tag_stats 와 같은 "전 회차".
+    solve_count 는 회차가 아니라 **문제 수**를 센다(리뷰 기록 + 가져온 기록 합집합).
     """
     with session_scope() as session:
         rstmt = (select(Review.problem_ref, Review.tags, Review.efficiency, Review.created_at)
                  .where(Review.platform == platform)
                  .order_by(Review.created_at.asc()))   # _first_judged_rows 가 순서를 요구한다
-        sstmt = select(SolvedHistory.tags, SolvedHistory.imported_at).where(SolvedHistory.platform == platform)
+        sstmt = (select(SolvedHistory.problem_ref, SolvedHistory.tags, SolvedHistory.imported_at)
+                 .where(SolvedHistory.platform == platform))
         review_rows = [dict(r) for r in session.execute(rstmt).mappings().all()]
         solved_rows = [dict(r) for r in session.execute(sstmt).mappings().all()]
 
+    # solve_count 는 **문제 수**다. 전 회차를 세면 같은 문제를 여러 번 고쳐 올린 태그일수록
+    # 수가 부풀어 recommender._score_tags 의 count_score(가중치 0.5)에서 "덜 취약" 으로
+    # 평가된다 — 가장 많이 고쳐 쓴, 즉 가장 어려워한 태그가 추천에서 밀리는 방향이다.
     tag_data = {}
-    for row in review_rows:
-        tags = json.loads(row["tags"])
-        date = row.get("created_at", "")
+    seen_refs: dict[str, set] = {}
+
+    def _tally(tags, ref, date):
         for tag in tags:
             if tag not in tag_data:
                 tag_data[tag] = {"count": 0, "last_date": ""}
-            tag_data[tag]["count"] += 1
+                seen_refs[tag] = set()
+            if ref not in seen_refs[tag]:
+                seen_refs[tag].add(ref)
+                tag_data[tag]["count"] += 1
             if date > tag_data[tag]["last_date"]:
                 tag_data[tag]["last_date"] = date
 
+    for row in review_rows:
+        _tally(json.loads(row["tags"]), row["problem_ref"], row.get("created_at", ""))
     for row in solved_rows:
-        tags = json.loads(row["tags"])
-        date = row.get("imported_at", "")
-        for tag in tags:
-            if tag not in tag_data:
-                tag_data[tag] = {"count": 0, "last_date": ""}
-            tag_data[tag]["count"] += 1
-            if date > tag_data[tag]["last_date"]:
-                tag_data[tag]["last_date"] = date
+        _tally(json.loads(row["tags"]), row["problem_ref"], row.get("imported_at", ""))
 
     # 위에서 이미 읽어온 행으로 센다 — 같은 테이블을 다시 스캔하지 않는다.
     counted = _first_judged_rows(review_rows) if platform == "boj" else review_rows

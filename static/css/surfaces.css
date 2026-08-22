@@ -60,11 +60,18 @@
 .pm-header {
   display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
+  flex-shrink: 0; flex-wrap: wrap;
 }
-.pm-header h2 { font-size: var(--fs-md); flex: 1; }
+/* min-width:0 이 없으면 제목이 자기 콘텐츠 폭 아래로 줄지 않아 형제들을 밀어낸다 —
+   좁은 화면에서 닫기 버튼이 오버레이 밖으로 나간다. */
+.pm-header h2 { font-size: var(--fs-md); flex: 1; min-width: 0;
+  overflow-wrap: anywhere; }
 .pm-meta { font-size: var(--fs-xs); color: var(--fg-dim); white-space: nowrap;
   font-family: var(--font-mono); }
+@media (max-width: 560px) {
+  /* 제한 표기는 줄바꿈을 허용한다 — nowrap 인 채로 두면 헤더 폭을 혼자 결정한다. */
+  .pm-meta { white-space: normal; }
+}
 .pm-link a { font-size: var(--fs-xs); text-decoration: underline;
   text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 .pm-link a:hover { text-decoration-color: var(--fg); }
@@ -123,7 +130,9 @@
 /* ═══ CodeMirror ═══
    .cm-wrap 과 .pm-code 는 높이만 다르므로 공통 규칙으로 묶는다. */
 .cm-wrap, .pm-code { border-radius: var(--r); overflow: hidden; }
-.pm-code { flex: 1; display: flex; flex-direction: column; }
+/* min-height 를 래퍼에도 준다 — overflow:hidden 이 flex 자동 최소 크기를 0 으로 만들어
+   래퍼만 안쪽 min-height 아래로 축소되고, 그 차이를 잘라낸다(좁은 화면에서 35px). */
+.pm-code { flex: 1; display: flex; flex-direction: column; min-height: 260px; }
 .cm-wrap .CodeMirror, .pm-code .CodeMirror {
   height: auto;
   border: 1px solid var(--line-control);

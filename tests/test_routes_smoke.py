@@ -15,12 +15,18 @@ def minimal_client(minimal_app):
 
 
 def test_stats_boj_empty(minimal_client):
+    """등급 있는 기록이 없으면 평균 티어를 표시하지 않는다.
+
+    `get_average_tier` 의 10.0 은 추천 난이도의 기본값이지 표시값이 아니다 — 그대로
+    내보내면 기록이 하나도 없는 사용자 화면에 "Silver I" 가 뜬다.
+    """
     r = minimal_client.get("/api/stats", params={"platform": "boj"})
     assert r.status_code == 200
     body = r.json()
     assert body["platform"] == "boj"
     assert body["total_reviews"] == 0
-    assert body["avg_tier"] == 10.0
+    assert body["avg_tier"] == 0
+    assert body["avg_tier_name"] == "N/A"
 
 
 def test_stats_codeforces_empty(minimal_client):

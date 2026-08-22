@@ -90,16 +90,47 @@ def require_language(language: str) -> str:
     return value
 
 
+def require_problem_ref(platform: str, problem_ref) -> str:
+    """저장소 경로·URL 에 쓸 문제 번호를 플랫폼 형식으로 검증한다.
+
+    통과시키면 `get_problem_url` 이 던지는 ValueError 가 라우터를 그대로 빠져나가
+    500 "서버 내부 오류" 가 된다 — 같은 오류를 리뷰 경로는 400 + 형식 안내로 준다.
+    """
+    ref = str(problem_ref or "").strip()
+    if platform == "boj":
+        if not ref.isdigit():
+            raise HTTPException(status_code=400, detail="BOJ 문제 번호는 숫자여야 합니다.")
+        return ref
+    try:
+        contest_id, index = api_client.normalize_codeforces_problem_ref(ref)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    return f"{contest_id}{index}"
+
+
+# 저장소 경로 **세그먼트 구분자**만 바꾼다. `/` 가 제목에 있으면 폴더가 한 단계 깊어져
+# 재가져오기 파서(`get_boj_readme_paths` · `get_baekjoonhub_problems` 의 4세그먼트 규약)가
+# 그 문제를 조용히 빠뜨린다. 나머지 특수문자(`?` `#` 등)는 clients.github._url_path 가
+# 인코딩하므로 폴더명을 바꾸지 않는다 — 바꾸면 이미 올라간 폴더와 어긋난다.
+_PATH_SEPARATORS = str.maketrans({"/": "-", "\\": "-"})
+
+
+def safe_path_segment(text: str) -> str:
+    """문제 제목을 폴더명 한 세그먼트로 쓸 수 있게 만든다."""
+    return " ".join(text.translate(_PATH_SEPARATORS).split()).strip(". ") or "제목 없음"
+
+
 def build_solution_target(platform: str, problem_ref, title: str, tier_name: str = "") -> tuple[str, str]:
     """플랫폼별 저장소 폴더명과 커밋 메시지를 조립해 (folder, msg) 반환."""
+    name = safe_path_segment(str(title))
     if platform == "boj":
         # `" "` 는 truthy 지만 split() 이 [] 라 그대로 인덱싱하면 IndexError 다.
-        tier_cat = (tier_name.split() or ["Unrated"])[0]
-        folder = f"백준/{tier_cat}/{problem_ref}번. {title}"
-        msg = f"[BOJ] {problem_ref}번. {title}"
+        tier_cat = safe_path_segment((tier_name.split() or ["Unrated"])[0])
+        folder = f"백준/{tier_cat}/{problem_ref}번. {name}"
+        msg = f"[BOJ] {problem_ref}번. {name}"
     else:
-        folder = f"Codeforces/{problem_ref}. {title}"
-        msg = f"[Codeforces] {problem_ref}. {title}"
+        folder = f"Codeforces/{problem_ref}. {name}"
+        msg = f"[Codeforces] {problem_ref}. {name}"
     return folder, msg
 
 
@@ -165,6 +196,9 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     마커가 들어 있으면 build_readme 가 세 섹션으로 되쪼갠다.
     """
     ext = api_client.get_file_extension(language)
+    # 스크래핑 분기 밖에서 확인한다 — 안에 두면 본문을 함께 보낸 요청이 검증을 건너뛰어
+    # `백준/Codeforces/abc번. …` 같은 경로가 저장소에 실제로 커밋된다.
+    problem_ref = require_problem_ref(platform, problem_ref)
     url = url or api_client.get_problem_url(platform, problem_ref)
     folder, msg = build_solution_target(platform, problem_ref, title, tier_name)
 
@@ -173,11 +207,7 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     # 호출자가 넘긴 값을 스크래핑 결과가 덮어쓴다.
     if not (description or input_desc or output_desc):
         if platform == "boj":
-            try:
-                boj_problem_id = int(problem_ref)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="BOJ 문제 번호는 숫자여야 합니다.")
-            sections = api_client.get_boj_problem_sections(boj_problem_id)
+            sections = api_client.get_boj_problem_sections(int(problem_ref))
         else:
             sections = api_client.get_cf_problem_sections(problem_ref)
         if not sections or not any(sections.values()):

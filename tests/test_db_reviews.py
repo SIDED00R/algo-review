@@ -503,3 +503,46 @@ def test_weakness_does_not_read_the_denormalised_table(at_time):
         session.query(db.models.TagStat).delete()
     after = {row["tag"]: row["poor_ratio"] for row in db.get_tag_weakness_data("boj")}
     assert after == before == {"greedy": 1.0}
+
+
+def test_solve_count_counts_problems_not_submissions(at_time):
+    """solve_count 는 회차가 아니라 **문제 수**다.
+
+    전 회차를 세면 같은 문제를 여러 번 고쳐 올린 태그일수록 수가 부풀고,
+    recommender._score_tags 의 count_score(가중치 0.5)에서 "덜 취약" 으로 평가된다 —
+    가장 많이 고쳐 쓴, 즉 가장 어려워한 태그가 추천에서 밀리는 방향이다.
+    """
+    at_time("2024-01-01T00:00:00")
+    for i in range(5):                        # 같은 문제를 5회 재제출
+        at_time(f"2024-01-0{i + 1}T00:00:00")
+        mk_review(problem_id=8000, problem_ref="8000", tags=["dp"], efficiency="poor")
+    at_time("2024-02-01T00:00:00")
+    mk_review(problem_id=8001, problem_ref="8001", tags=["greedy"], efficiency="poor")
+
+    weakness = {row["tag"]: row["solve_count"] for row in db.get_tag_weakness_data("boj")}
+    assert weakness == {"dp": 1, "greedy": 1}, "재제출이 문제 수를 부풀렸다"
+
+
+def test_solve_count_merges_reviews_and_imported_history(at_time):
+    """리뷰 기록과 가져온 기록에 같은 문제가 있어도 한 번만 센다."""
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=9000, problem_ref="9000", tags=["dp"], efficiency="poor")
+    db.save_solved_problem(9000, "t", 1, ["dp"], code="x", language="Python 3",
+                           platform="boj", problem_ref="9000", tier_name="Bronze V")
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=9001, problem_ref="9001", tags=["dp"], efficiency="good")
+
+    weakness = {row["tag"]: row["solve_count"] for row in db.get_tag_weakness_data("boj")}
+    assert weakness["dp"] == 2, "같은 문제가 두 표에 있어 두 번 세어졌다"
+
+
+def test_average_tier_is_not_shown_without_graded_rows(at_time):
+    """get_average_tier 의 10.0 은 추천 난이도 기본값이지 표시값이 아니다."""
+    assert not db.has_graded_tier()
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=9100, problem_ref="9100", tags=["dp"], tier=0, efficiency="poor")
+    assert not db.has_graded_tier(), "티어 0 행이 등급으로 세어졌다"
+
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=9101, problem_ref="9101", tags=["dp"], tier=5, efficiency="poor")
+    assert db.has_graded_tier()

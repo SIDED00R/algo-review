@@ -11,6 +11,18 @@ recommendBtn.dataset.loadingLabel = '추천 계산 중...';
 const _SHOWN_ID_LIMIT = 300;
 const _shownIds = new Set();
 
+// 플랫폼을 바꾸면 이전 결과를 지운다 — 남겨 두면 "토글=백준, 화면=Codeforces 목록" 이라는
+// 조용한 불일치가 되고, CF 카드의 인앱 뷰어가 계속 열린다(report.js 와 같은 처리).
+// 자동 재요청은 하지 않는다 — 추천은 외부 검색 API 를 여러 번 친다.
+document.getElementById('recommend-platform')?.addEventListener('change', () => {
+  _shownIds.clear();   // 세션 캐시도 플랫폼별이다 — CF id 가 BOJ 요청의 exclude 로 나간다
+  const result = document.getElementById('recommend-result');
+  if (result.innerHTML.trim()) {
+    result.innerHTML =
+      '<div class="alert alert-info">플랫폼을 바꿨습니다. \'추천받기\'를 눌러주세요.</div>';
+  }
+});
+
 function rememberShownId(id) {
   _shownIds.add(String(id));
   while (_shownIds.size > _SHOWN_ID_LIMIT) {

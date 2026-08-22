@@ -31,10 +31,13 @@ def get_stats(platform: str | None = "boj"):
 
     avg_tier = db.get_average_tier()
     tag_stats = db.get_tag_stats()
+    # 등급 있는 기록이 없으면 avg_tier 는 추천용 기본값(10.0)이다 — 그대로 표시하면
+    # 기록이 없는 사용자에게 "Silver I" 가 뜬다.
+    graded = db.has_graded_tier()
     return {
         "platform": "boj",
-        "avg_tier": avg_tier,
-        "avg_tier_name": TIER_NAMES.get(int(avg_tier), "N/A"),
+        "avg_tier": avg_tier if graded else 0,
+        "avg_tier_name": TIER_NAMES.get(int(avg_tier), "N/A") if graded else "N/A",
         "total_reviews": total_reviews,
         "tag_stats": tag_stats,
         "history": history,

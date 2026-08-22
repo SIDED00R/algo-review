@@ -173,4 +173,10 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
             "데이터가 너무 많을 수 있습니다."
         )
 
-    return choice_text(response)
+    text = choice_text(response)
+    if not text.strip():
+        # 빈 문자열을 그대로 돌려주면 프론트가 내용 없는 리포트 카드를 그리고, 사용자는
+        # 오류 안내도 재시도 유도도 받지 못한다. 리포트는 캐시가 없어 매번 재생성되므로
+        # 과금만 반복된다(analyze_code 와 같은 가드다).
+        raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
+    return text
