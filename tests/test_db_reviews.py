@@ -242,7 +242,7 @@ def test_save_review_survives_null_string_fields():
 
 
 def test_analyzer_normalizes_null_string_fields():
-    """생산자에서 끝낸다 — 소비처마다 막으면 한쪽이 빠진다(실제로 그랬다)."""
+    """생산자에서 끝낸다 — 소비처마다 막으면 한쪽이 빠진다."""
     import analyzer
 
     result = {"efficiency": "good", "complexity": None, "feedback": None,
@@ -317,3 +317,47 @@ def test_tag_stats_fallback_ignores_codeforces_and_pending_rows():
 
     stats = {s["tag"]: s for s in db.get_tag_stats()}
     assert stats["dp"]["total_count"] == 1, "CF 행이나 대기 행이 BOJ 집계에 섞였다"
+
+
+def test_rebuild_matches_the_incremental_basis_when_the_first_row_is_pending(at_time):
+    """복원 기준은 `_bump_tag_stats` 와 같아야 한다 — **첫 non-pending 행**.
+
+    대기 등록 후 리뷰 탭에서 다시 리뷰하면 행이 [pending, good] 이 된다. 복원이
+    "created_at 최소 행" 을 첫 제출로 보면 그 행이 pending 이라 문제 전체가 집계에서
+    빠지고, 표가 non-empty 가 되는 순간 다시 복원되지 않아 영구 고착된다.
+    """
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=1, problem_ref="1", tags=["math"], efficiency="good")
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=2, problem_ref="2", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    at_time("2024-01-03T00:00:00")
+    mk_review(problem_id=2, problem_ref="2", tags=["dp"], efficiency="poor")
+
+    incremental = {s["tag"]: (s["total_count"], s["good_count"], s["poor_count"])
+                   for s in db.get_tag_stats()}
+
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+    restored = {s["tag"]: (s["total_count"], s["good_count"], s["poor_count"])
+                for s in db.get_tag_stats()}
+
+    assert restored == incremental, f"증분 {incremental} vs 복원 {restored}"
+
+
+def test_rebuild_handles_two_pending_rows_for_one_problem(at_time):
+    """같은 문제를 두 번 대기 등록하면 오래된 대기 행이 남는다 — 그 행이 첫 행이어도
+    집계는 첫 non-pending 행을 따라야 한다."""
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=5, problem_ref="5", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=5, problem_ref="5", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
+    assert db.update_pending_review("boj", "5", {"efficiency": "good", "complexity": "",
+                                                 "better_algorithm": "", "feedback": "",
+                                                 "strengths": [], "weaknesses": []})
+
+    incremental = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+    restored = {s["tag"]: s["total_count"] for s in db.get_tag_stats()}
+
+    assert restored == incremental, f"증분 {incremental} vs 복원 {restored}"

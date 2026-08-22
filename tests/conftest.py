@@ -92,6 +92,24 @@ def _assert_disposable_target(url):
 
 
 @pytest.fixture(autouse=True)
+def clean_process_caches():
+    """프로세스 수명 캐시를 테스트마다 비운다.
+
+    DB 는 테스트마다 갈아끼우는데 이 값들은 모듈 전역이라 남는다 — 앞 테스트가 심은
+    상태가 뒤 테스트의 판정을 바꾼다.
+    """
+    from clients import codeforces, solved_ac
+
+    db.reset_tag_stats_rebuild_flag()
+    solved_ac._TAG_KEY_CACHE.clear()
+    solved_ac._TAG_KEY_FALLBACK.clear()
+    codeforces._snapshot = None
+    codeforces._lookup = None
+    codeforces._last_force_refresh = 0.0
+    yield
+
+
+@pytest.fixture(autouse=True)
 def fresh_db(tmp_path, monkeypatch):
     if IS_POSTGRES:
         _assert_disposable_target(_resolved_url())

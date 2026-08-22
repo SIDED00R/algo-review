@@ -19,8 +19,8 @@ function tierInGroup(tier, key, platform) {
   return tier >= r[0] && tier <= r[1];
 }
 
-/** 난이도 필터 <option> 목록. 두 벌로 두면 갈린다 — 실제로 리뷰 기록 탭에는 Ruby·Unrated
- *  두 벌로 두면 갈린다. */
+/** 난이도 필터 <option> 목록. 리뷰 기록 탭과 가져온 기록 탭이 같은 목록을 쓴다 —
+ *  두 벌로 두면 한쪽에만 그룹이 추가돼 같은 필터가 다르게 동작한다. */
 function tierFilterOptionsHtml() {
   return ['<option value="">전체 난이도</option>']
     .concat(Object.keys(TIER_GROUPS).map(
@@ -88,7 +88,9 @@ function cfRefToUrl(ref) {
 }
 
 function problemUrl(problem) {
-  if (problem.problem_url) return problem.problem_url;
+  // href 에 들어가는 값이므로 http(s) 만 통과시킨다. escapeHtml 은 `javascript:` 스킴을
+  // 무력화하지 못한다(problem-modal.js 의 수식 이미지 마커도 같은 허용목록을 쓴다).
+  if (/^https?:\/\//i.test(problem.problem_url || '')) return problem.problem_url;
   if (problem.platform === 'codeforces') {
     // 파싱이 실패해도 BOJ 로 흘려보내지 않는다 — "CF 문제인데 백준 링크" 는
     // 깨진 링크보다 알아채기 어려운 조용한 오답이다.
@@ -150,7 +152,7 @@ function errorDetail(data) {
 
 /** 마크다운을 안전한 HTML 로 만든다. CDN(marked·DOMPurify)이 막히면 평문으로 폴백한다 —
  *  가드가 없으면 ReferenceError 가 나고, 서버가 이미 저장·과금한 리뷰 결과가
- *  화면에서 통째로 사라졌다. Chart·KaTeX 는 이미 같은 가드가 있다. */
+ *  화면에서 통째로 사라진다. Chart·KaTeX 도 같은 가드를 쓴다. */
 function renderMarkdown(text) {
   const raw = text || '';
   if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
@@ -185,23 +187,27 @@ function makeRowActivatable(el, onActivate) {
 // 코드 본문에서 제출 언어를 추론한다. 반환값의 도메인은 #code-language 의 option value
 // 와 같다 — 어느 것도 맞지 않으면 '' 를 돌려주고, 호출부가 사용자에게 직접 선택을 요구한다.
 //
-// 순서가 곧 규칙이다: **언어 고유 마커를 먼저**, 여러 언어가 공유하는 마커를 나중에 본다.
-// `import`·`print(`·`std::` 같은 마커는 여러 언어에 공통이라, 먼저 두면 그 마커를 함께
-// 쓰는 다른 언어를 전부 흡수한다.
+// 순서가 곧 규칙이다: **좁은 마커를 먼저**, 여러 언어가 공유하는 넓은 마커를 나중에 본다.
+// `import`·`print(`·`std::`·`require(` 같은 마커는 여러 언어에 공통이라, 먼저 두면 그
+// 마커를 함께 쓰는 다른 언어를 전부 흡수한다.
+// 판정 결과는 tests/test_language_detection.py 가 언어별 관용 코드로 고정한다.
 const _LANG_PATTERNS = [
-  // 1) 한 언어에만 있는 선언 형태
-  ['Kotlin', /\bfun\s+main\s*\(/],
-  ['Rust', /\bfn\s+main\s*\(/],
-  ['Go', /\bpackage\s+main\b|\bfmt\s*\./],
-  ['C#', /\busing\s+System\b|\bConsole\s*\.\w/],
-  ['Java', /\bpublic\s+class\b|\bSystem\s*\.\s*out\b|\bBufferedReader\b|\bScanner\b/],
-  ['Swift', /\bimport\s+Foundation\b|readLine\(\)!|\bfunc\s+\w+\s*\([^)]*\)\s*(->|\{)/],
+  // 1) 한 언어에만 나타나는 선언·호출 형태
+  ['Kotlin', /\bfun\s+\w+\s*\(|\breadLine\(\)!!|\bval\s+\w+\s*=|\bvar\s+\w+\s*:\s*\w+\s*=/],
+  ['Rust', /\bfn\s+main\s*\(|\blet\s+mut\b|\buse\s+std::/],
+  ['Go', /\bpackage\s+main\b|\bfmt\.(?:Print|Scan|Sprint|Fprint)/],
+  ['C#', /\busing\s+System\b|\bConsole\s*\.\s*(?:Write|Read)/],
+  ['Java', /\bpublic\s+class\b|\bSystem\s*\.\s*out\b|\bBufferedReader\b|\bScanner\b|\bimport\s+java\./],
+  ['Swift', /\bimport\s+Foundation\b|\breadLine\(\)!(?!!)|\bfunc\s+\w+\s*\([^)]*\)\s*(?:->|\{)/],
+  ['Ruby', /\bputs\b|\bgets\b|\.to_i\b|^\s*end\s*$/m],
   // 2) C 계열 — C++ 고유 마커가 있으면 C++, 없으면 C
   ['GNU C++17', /\bstd::|\bcout\b|\bcin\b|\busing\s+namespace\s+std\b|\bvector\s*<|\bendl\b/],
   ['C', /#include\b|\bprintf\s*\(|\bscanf\s*\(/],
-  // 3) 여러 언어가 공유하는 마커
-  ['JavaScript', /\bconsole\s*\.\s*log\b|\brequire\s*\(/],
-  ['Python 3', /\bdef\s+\w|\bprint\s*\(|\binput\s*\(|\brange\s*\(|\bimport\s+\w/],
+  // 3) TypeScript 는 JavaScript 의 상위집합이라 타입 표기로만 구분된다
+  ['TypeScript', /\binterface\s+\w+\s*\{|:\s*(?:string|number|boolean|void|any)\b|\bas\s+(?:string|number)\b/],
+  // 4) 여러 언어가 공유하는 마커
+  ['JavaScript', /\bconsole\s*\.\s*log\b|\brequire\s*\(|\bdocument\s*\./],
+  ['Python 3', /\bdef\s+\w+\s*\(|\bprint\s*\(|\binput\s*\(|\brange\s*\(|\bimport\s+\w/],
 ];
 
 function detectLanguage(code) {

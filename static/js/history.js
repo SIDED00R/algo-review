@@ -289,8 +289,8 @@ async function runRereview(e) {
   }
 }
 
-// 모달은 #tab-history 안에 있다 — 닫지 않고 탭을 옮기면 그대로 남으므로
-// 닫기 경로를 한 곳으로 모은다.
+// 닫기 경로를 한 곳으로 모은다 — 세대 토큰 무효화와 .hidden 부여가 항상 함께 일어나야
+// 진행 중인 조회의 늦은 응답이 닫힌 모달에 렌더되지 않는다.
 function closeReviewModal() {
   _modalToken++;
   document.getElementById('review-modal').classList.add('hidden');

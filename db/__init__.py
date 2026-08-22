@@ -4,6 +4,7 @@ from db.reviews import (
     save_review,
     update_pending_review,
     get_tag_stats,
+    reset_tag_stats_rebuild_flag,
     get_total_review_count,
     get_cf_tag_stats,
     get_average_tier,
@@ -42,7 +43,7 @@ from db.cache import (
 __all__ = [
     "run_migrations",
     "PENDING_EFFICIENCY",
-    "save_review", "update_pending_review", "get_tag_stats", "get_total_review_count",
+    "save_review", "update_pending_review", "get_tag_stats", "reset_tag_stats_rebuild_flag", "get_total_review_count",
     "get_cf_tag_stats", "get_average_tier",
     "get_problems_grouped", "get_problems_missing_statement",
     "get_reviews_by_problem", "get_tier_history", "set_problem_statement",

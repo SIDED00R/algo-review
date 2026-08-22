@@ -200,7 +200,7 @@ async function loadImportedHistory() {
   });
 
   // 클로저 안에 둔다 — 톱레벨에 있으면 allProblems 에 접근할 수 없어 DOM 만 지우게 되고,
-  // 서버는 행을 실제로 삭제하므로 필터를 한 번 만지면 삭제된 항목이 되살아났다.
+  // 서버는 행을 실제로 삭제하므로 필터를 한 번 만지면 삭제된 항목이 되살아난다.
   async function requestImportedReview(btn) {
     const platform = btn.dataset.platform;
     const problemRef = btn.dataset.problemRef;

@@ -75,7 +75,7 @@ function renderStats(container, data) {
       <td><a href="${escapeHtml(problemUrl(r))}" target="_blank" rel="noopener noreferrer">${escapeHtml(problemLabel(r))}. ${escapeHtml(r.title)}</a></td>
       <td>${tierLabel}</td>
       <td class="${effClass(r.efficiency)}">${escapeHtml(effLabel(r.efficiency))}</td>
-      <td class="td-dim">${String(r.created_at || '').slice(0,10)}</td>
+      <td class="td-dim">${escapeHtml(String(r.created_at || '').slice(0, 10))}</td>
     </tr>`;
   }).join('');
 

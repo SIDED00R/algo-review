@@ -37,7 +37,7 @@ def _run_python(code: str, stdin: str, timeout: int) -> dict:
         # 작업 디렉터리를 격리한다. cwd 를 지정하지 않으면 서버의 CWD 를 상속해
         # sys.path[0] 가 리포 루트가 되고, 제출 코드가 `import config` 로 .env 를 읽을 수
         # 있다(config 의 env_file 은 CWD 상대 경로다). -I 는 환경변수·사용자 site 기반
-        # import 까지 끊는다. 환경변수 필터만으로는 이 경로가 막히지 않았다.
+        # import 까지 끊는다. 환경변수 필터만으로는 이 경로를 막지 못한다.
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [sys.executable, "-I", "-X", "utf8=1", "-u", "-c", code],

@@ -4,7 +4,11 @@ from constants import is_supported_platform, normalize_platform
 
 
 def validate_platform(value: str) -> str:
-    """pydantic 검증용 — 패키지 밖 3개 모듈이 쓰므로 이름에 밑줄을 두지 않는다."""
+    """플랫폼 문자열을 정규화·검증한다. 지원하지 않으면 ValueError.
+
+    pydantic validator 가 직접 쓰는 형태다. 라우터는 이것을 감싸 400 으로 바꾸는
+    `routes.helpers.require_platform` 을 쓴다.
+    """
     platform = normalize_platform(value)
     if not is_supported_platform(platform):
         raise ValueError("지원하지 않는 플랫폼입니다. 'boj' 또는 'codeforces'만 가능합니다.")

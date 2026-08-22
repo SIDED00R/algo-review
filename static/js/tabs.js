@@ -1,5 +1,5 @@
 // 탭 전환은 여기 한 곳에만 둔다 — 다른 모듈이 같은 클래스 토글을
-// 따로 갖고 있어서 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛰었다.
+// 따로 가지면 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛴다.
 function activateTab(name) {
   const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
   const tab = document.getElementById(`tab-${name}`);

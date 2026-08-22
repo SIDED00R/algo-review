@@ -25,7 +25,7 @@ _USED_NONCES: dict[str, float] = {}
 
 def _new_state() -> tuple[str, str]:
     """(state, nonce). nonce 를 함께 돌려준다 — 호출부가 방금 만든 문자열을
-    `state.split(".")[0]` 로 되파싱하던 왕복을 없앤다."""
+    되파싱하지 않아도 된다."""
     nonce = secrets.token_urlsafe(16)
     ts = str(int(time.time()))
     sig = hmac.new(_HMAC_KEY, f"{nonce}.{ts}".encode(), hashlib.sha256).hexdigest()

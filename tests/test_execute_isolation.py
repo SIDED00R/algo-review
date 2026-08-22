@@ -119,7 +119,7 @@ def test_demo_mode_blocks_even_when_enabled(monkeypatch):
 #
 # `-I`(isolated)는 `-E` 를 포함해 **모든 PYTHON* 환경변수를 무시**한다. 그래서
 # PYTHONIOENCODING/PYTHONUTF8 를 env 로 넘겨도 적용되지 않았고, 비-ASCII 를 출력하는
-# 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽었다. 커맨드라인 플래그로 줘야 한다.
+# 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽는다. 커맨드라인 플래그로 줘야 한다.
 
 @pytest.mark.parametrize("text", ["안녕하세요", "你好世界", "Привет", "😀🎉", "café"])
 def test_non_ascii_output_survives(text):
