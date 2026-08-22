@@ -59,10 +59,11 @@ def test_tier_history_shape(minimal_client):
 def test_reviews_grouped_shape(minimal_client):
     r = minimal_client.get("/api/reviews/grouped")
     assert r.status_code == 200
-    assert r.json() == {"problems": []}
+    # total 은 페이저가 읽는다 — 빠지면 프론트가 페이지 수를 못 세고 1페이지에 갇힌다.
+    assert r.json() == {"problems": [], "total": 0}
 
 
 def test_solved_history_shape(minimal_client):
     r = minimal_client.get("/api/solved-history")
     assert r.status_code == 200
-    assert r.json() == {"problems": []}
+    assert r.json() == {"problems": [], "total": 0}

@@ -1,6 +1,6 @@
 import db
 import analyzer
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from config import settings
 from demo_mode import IS_DEMO, demo_block
 from routes.helpers import require_platform, require_reviewable_code, upstream_failure
@@ -105,6 +105,14 @@ def get_solved_history_detail(platform: str, problem_ref: str):
 
 
 @router.get("/api/solved-history")
-def get_solved_history():
-    rows = db.get_solved_history()
-    return {"problems": rows}
+def get_solved_history(
+    q: str = Query(""),
+    platform: str = Query(""),
+    tier_min: int | None = Query(None),
+    tier_max: int | None = Query(None),
+    sort: str = Query("date-desc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1),
+):
+    return db.get_solved_history(q=q, platform=platform, tier_min=tier_min,
+                                 tier_max=tier_max, sort=sort, page=page, per_page=per_page)

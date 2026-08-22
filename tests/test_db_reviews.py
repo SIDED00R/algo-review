@@ -99,8 +99,9 @@ def test_problems_grouped_counts_and_reports_latest_efficiency(at_time):
     at_time("2024-01-02T00:00:00")
     mk_review(problem_id=1, problem_ref="1", efficiency="poor")
     grouped = db.get_problems_grouped()
-    assert len(grouped) == 1
-    row = grouped[0]
+    assert grouped["total"] == 1
+    assert len(grouped["problems"]) == 1
+    row = grouped["problems"][0]
     assert row["submission_count"] == 2
     # 최신 회차(poor, 01-02)의 판정만 내려간다 — 프론트(history.js)가 그 하나만 배지로 쓴다.
     assert row["last_efficiency"] == "poor"

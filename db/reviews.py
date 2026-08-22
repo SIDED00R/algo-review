@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
 from db.normalize import normalize_common_row
+from db.paging import DEFAULT_PAGE_SIZE, paging_bounds, search_filter
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -424,34 +425,77 @@ def has_graded_tier() -> bool:
             select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
-def get_problems_grouped() -> list:
+def get_problems_grouped(q: str = "", platform: str = "", tier_min: int | None = None,
+                         tier_max: int | None = None, eff: str = "",
+                         sort: str = "recent", page: int = 1,
+                         per_page: int = DEFAULT_PAGE_SIZE) -> dict:
+    """문제 단위로 접은 리뷰 기록 **한 페이지**. `{"problems": [...], "total": N}`.
+
+    필터·정렬·페이지를 전부 SQL 에서 한다. 전 행을 파이썬으로 끌어와 접으면 응답 크기와
+    메모리가 리뷰 수에 비례해 자란다(실측: 리뷰 1만 행 → 444ms·1.41MB, 5만 행 →
+    5,575ms·7.37MB·피크 76.6MB). 화면은 한 번에 20건만 보여준다.
+
+    난이도 그룹(bronze/silver/…)의 정의는 **프론트에 한 벌만** 둔다 — 호출부가 그 경계를
+    tier_min/tier_max 로 풀어서 보낸다. 서버가 같은 표를 또 가지면 두 벌이 갈린다.
+    """
+    page, per_page = paging_bounds(page, per_page)
+
+    # (platform, problem_ref) 로 묶는다 — 재제출 사이 제목/태그가 바뀌어도 한 문제다.
+    part = (Review.platform, Review.problem_ref)
+    latest = func.row_number().over(partition_by=part,
+                                    order_by=Review.created_at.desc()).label("rn")
+    total_rounds = func.count().over(partition_by=part).label("submission_count")
+    last_at = func.max(Review.created_at).over(partition_by=part).label("last_submitted")
+
+    ranked = select(
+        Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+        Review.tier, Review.tier_name, Review.tags,
+        Review.efficiency.label("last_efficiency"),
+        latest, total_rounds, last_at,
+    ).subquery()
+
+    stmt = select(ranked).where(ranked.c.rn == 1)
+    if platform:
+        stmt = stmt.where(ranked.c.platform == platform.strip().lower())
+    if tier_min is not None:
+        stmt = stmt.where(ranked.c.tier >= tier_min)
+    if tier_max is not None:
+        stmt = stmt.where(ranked.c.tier <= tier_max)
+    if eff:
+        stmt = stmt.where(ranked.c.last_efficiency == eff)
+    if (q or "").strip():
+        stmt = stmt.where(search_filter(
+            (ranked.c.title, ranked.c.problem_ref, ranked.c.tags), q))
+
+    order = {
+        "tier_desc": (ranked.c.tier.desc(), ranked.c.problem_ref.asc()),
+        "tier_asc": (ranked.c.tier.asc(), ranked.c.problem_ref.asc()),
+        # 번호순은 problem_id(정수)로 센다 — problem_ref 는 문자열이라 `1000` 이 `999`
+        # 보다 앞선다. CF 는 problem_id 가 0 이라 한 덩어리로 묶이고, 그 안에서만
+        # problem_ref 로 갈린다("1700A" < "1700B").
+        "pid_asc": (ranked.c.problem_id.asc(), ranked.c.problem_ref.asc()),
+    }.get(sort, (ranked.c.last_submitted.desc(), ranked.c.problem_ref.asc()))
+
     with session_scope() as session:
+        if not (platform or eff or (q or "").strip()
+                or tier_min is not None or tier_max is not None):
+            # 필터가 없으면 "문제 수" 가 곧 전체 수다 — 좁은 DISTINCT 로 센다.
+            # 윈도우 서브쿼리를 세면 같은 값을 얻는 데 50배 넘게 든다(실측 3ms vs 160ms).
+            total = session.scalar(
+                select(func.count(distinct(Review.platform + ":" + Review.problem_ref))))
+        else:
+            # 필터는 **최신 회차의 값**에 걸린다 — 어느 회차든 맞으면 되는 DISTINCT 로
+            # 세면 수가 달라진다(재제출 사이 제목·티어·판정이 바뀌는 경우).
+            total = session.scalar(select(func.count()).select_from(stmt.subquery()))
         rows = session.execute(
-            select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
-                   Review.tier, Review.tier_name, Review.tags, Review.efficiency, Review.created_at)
-            .order_by(Review.created_at.desc())
+            stmt.order_by(*order).limit(per_page).offset((page - 1) * per_page)
         ).mappings().all()
 
-    # (platform, problem_ref) 로 묶는다 — 재제출 사이 제목/태그가 바뀌어도 한 문제로 합쳐진다.
-    grouped: dict[tuple, dict] = {}
+    problems = []
     for r in rows:
-        key = (r["platform"], r["problem_ref"])
-        # rows 가 created_at DESC 라 처음 만난 행이 최신 회차다.
-        g = grouped.setdefault(key, {
-            "problem_id": r["problem_id"], "platform": r["platform"],
-            "problem_ref": r["problem_ref"], "title": r["title"],
-            "tier": r["tier"], "tier_name": r["tier_name"], "tags": r["tags"],
-            "submission_count": 0, "last_submitted": r["created_at"],
-            # 값 하나만 내려보낸다 — 소비처(history.js)가 최신 회차 배지에만 쓴다.
-            # 목록을 CSV 로 만들면 판정 문자열에 콤마가 들어갈 때 깨진다.
-            "last_efficiency": r["efficiency"],
-        })
-        g["submission_count"] += 1
-
-    result = list(grouped.values())
-    for g in result:
-        normalize_common_row(g)
-    return result
+        item = {k: v for k, v in r.items() if k != "rn"}
+        problems.append(normalize_common_row(item))
+    return {"problems": problems, "total": total or 0}
 
 
 def get_reviews_by_problem(platform: str, problem_ref: str) -> list:
@@ -515,12 +559,27 @@ def set_problem_statement(platform: str, problem_ref: str, statement: str) -> in
 
 
 def get_tier_history() -> list:
+    """성장 곡선용 — **문제당 첫 등장 한 점씩**, created_at 오름차순.
+
+    tier 는 회차가 아니라 문제의 속성이라 값은 어느 회차를 골라도 같고, 바뀌는 건 그 문제가
+    시계열에 놓이는 날짜뿐이다. 마지막 회차를 남기면 예전 문제를 재제출할 때 그 점이
+    과거에서 사라져 오늘로 옮겨가고, 이미 지나간 구간의 레이팅이 소급 변한다.
+
+    dedup 을 SQL 에서 한다 — 전 회차를 보내면 소비처(tier-chart.js)가 버릴 행까지
+    전송·파싱한다(실측: 리뷰 1만 행에서 1.88MB, 회차가 늘수록 선형으로 자란다).
+    """
+    rn = func.row_number().over(
+        partition_by=(Review.platform, Review.problem_ref),
+        order_by=Review.created_at.asc()).label("rn")
+    ranked = select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
+                    Review.tier, Review.tier_name, Review.created_at, rn).where(
+        Review.platform == "boj", Review.tier > 0).subquery()
     with session_scope() as session:
         rows = session.execute(
-            select(Review.problem_id, Review.platform, Review.problem_ref, Review.title,
-                   Review.tier, Review.tier_name, Review.created_at)
-            .where(Review.platform == "boj", Review.tier > 0)
-            .order_by(Review.created_at.asc())
+            select(ranked.c.problem_id, ranked.c.platform, ranked.c.problem_ref,
+                   ranked.c.title, ranked.c.tier, ranked.c.tier_name, ranked.c.created_at)
+            .where(ranked.c.rn == 1)
+            .order_by(ranked.c.created_at.asc())
         ).mappings().all()
     return [dict(r) for r in rows]
 

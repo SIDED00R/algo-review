@@ -1,12 +1,13 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import case, delete, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from db.connection import session_scope
 from db.models import Review, SolvedHistory
 from db.normalize import normalize_common_row, resolve_tier_name
+from db.paging import DEFAULT_PAGE_SIZE, paging_bounds, search_filter
 
 
 def _row_to_dict(obj) -> dict:
@@ -108,20 +109,58 @@ def get_solved_problem(platform: str, problem_ref: str) -> dict | None:
     return normalize_common_row(row)
 
 
-def get_solved_history() -> list:
+def get_solved_history(q: str = "", platform: str = "", tier_min: int | None = None,
+                       tier_max: int | None = None, sort: str = "date-desc",
+                       page: int = 1, per_page: int = DEFAULT_PAGE_SIZE) -> dict:
+    """가져온 기록 **한 페이지**. `{"problems": [...], "total": N}`.
+
+    필터·정렬·페이지를 SQL 에서 한다. 전 행을 보내면 화면이 20건만 그리는데도 응답이
+    행 수에 비례해 자란다(실측: 5천 행에서 1.07MB).
+
+    난이도 그룹의 정의는 프론트에 한 벌만 둔다 — 호출부가 tier_min/tier_max 로 풀어서
+    보낸다(`get_problems_grouped` 과 같은 규약).
+
+    `code` 는 목록에 싣지 않는다 — 있는지 여부만 `has_code` 로 준다.
+    """
+    page, per_page = paging_bounds(page, per_page)
     has_code = case((SolvedHistory.code != "", 1), else_=0).label("has_code")
+
+    stmt = select(SolvedHistory.problem_id, SolvedHistory.platform, SolvedHistory.problem_ref,
+                  SolvedHistory.title, SolvedHistory.tier, SolvedHistory.tier_name,
+                  SolvedHistory.language, SolvedHistory.imported_at,
+                  has_code)
+    if platform:
+        stmt = stmt.where(SolvedHistory.platform == platform.strip().lower())
+    if tier_min is not None:
+        stmt = stmt.where(SolvedHistory.tier >= tier_min)
+    if tier_max is not None:
+        stmt = stmt.where(SolvedHistory.tier <= tier_max)
+    if (q or "").strip():
+        stmt = stmt.where(search_filter(
+            (SolvedHistory.title, SolvedHistory.problem_ref, SolvedHistory.tags), q))
+
+    order = {
+        # 번호순은 problem_id(정수)로 센다 — problem_ref 는 문자열이라 `1000` 이 `999`
+        # 보다 앞선다(`get_problems_grouped` 의 pid_asc 와 같은 규약).
+        "id-asc": (SolvedHistory.problem_id.asc(), SolvedHistory.problem_ref.asc()),
+        "id-desc": (SolvedHistory.problem_id.desc(), SolvedHistory.problem_ref.desc()),
+        "tier-desc": (SolvedHistory.tier.desc(), SolvedHistory.problem_ref.asc()),
+        "tier-asc": (SolvedHistory.tier.asc(), SolvedHistory.problem_ref.asc()),
+    }.get(sort, (SolvedHistory.imported_at.desc(), SolvedHistory.problem_ref.asc()))
+
     with session_scope() as session:
+        total = session.scalar(select(func.count()).select_from(stmt.subquery()))
         rows = session.execute(
-            select(SolvedHistory.problem_id, SolvedHistory.platform, SolvedHistory.problem_ref,
-                   SolvedHistory.title, SolvedHistory.tier, SolvedHistory.tier_name,
-                   SolvedHistory.language, SolvedHistory.imported_at, has_code)
-            .order_by(SolvedHistory.imported_at.desc())
+            stmt.order_by(*order).limit(per_page).offset((page - 1) * per_page)
         ).mappings().all()
-    result = [dict(r) for r in rows]
-    for r in result:
-        normalize_common_row(r)
-        r["has_code"] = bool(r["has_code"])
-    return result
+
+    problems = []
+    for r in rows:
+        item = dict(r)
+        normalize_common_row(item)
+        item["has_code"] = bool(item["has_code"])
+        problems.append(item)
+    return {"problems": problems, "total": total or 0}
 
 
 def get_solved_cf_refs() -> set:

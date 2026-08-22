@@ -21,7 +21,7 @@ def mk_solved(**kw):
 def test_save_solved_is_idempotent_on_same_key():
     mk_solved(problem_id=1, problem_ref="1", title="첫 제목")
     mk_solved(problem_id=1, problem_ref="1", title="둘째 제목")
-    history = db.get_solved_history()
+    history = db.get_solved_history()["problems"]
     assert len(history) == 1
     # (platform, problem_ref) 충돌 시 무시 — 최초 값이 유지된다.
     assert history[0]["title"] == "첫 제목"
@@ -30,7 +30,7 @@ def test_save_solved_is_idempotent_on_same_key():
 def test_has_code_flag_reflects_stored_code():
     mk_solved(problem_id=1, problem_ref="1", code="print(1)")
     mk_solved(problem_id=2, problem_ref="2", code="")
-    by_ref = {r["problem_ref"]: r for r in db.get_solved_history()}
+    by_ref = {r["problem_ref"]: r for r in db.get_solved_history()["problems"]}
     assert by_ref["1"]["has_code"] is True
     assert by_ref["2"]["has_code"] is False
 

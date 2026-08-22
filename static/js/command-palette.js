@@ -18,9 +18,13 @@
   const crumbEl = document.getElementById('cmdk-crumb');
 
   let mode = 'root';        // root | problems | ledger
-  let rows = [];            // 현재 화면에 보이는 항목 [{label, meta, run}]
+  let rows = [];            // 실행 가능한 항목만 [{label, meta, run}]
+  // 실행할 수 없는 안내 한 줄(불러오는 중 · 결과 없음 · 오류 · 초과 건수). rows 에 섞으면
+  // ↑↓ 가 그 줄에 멈추고 Enter 가 아무 일도 하지 않는 죽은 항목이 된다.
+  let notice = '';
   let cursor = 0;
-  let problems = null;      // /api/reviews/grouped 캐시 (팔레트를 여는 동안만)
+  // 검색은 서버가 한다 — 전 목록을 받아 클라이언트에서 거르면 팔레트를 열 때마다
+  // 리뷰 수에 비례한 응답을 받고(1만 행에서 1.41MB) 정작 40건만 보여준다.
 
   function isOpen() { return !overlay.classList.contains('hidden'); }
 
@@ -29,17 +33,24 @@
     crumbEl.classList.toggle('hidden', !text);
   }
 
+  /** 항목과 안내를 한 번에 갈아 끼운다 — 둘이 따로 놀면 옛 안내가 새 목록 밑에 남는다. */
+  function setRows(newRows, message = '') {
+    rows = newRows;
+    notice = message;
+    cursor = 0;
+  }
+
   function render() {
     cursor = Math.max(0, Math.min(cursor, rows.length - 1));
-    listEl.innerHTML = rows.length
-      ? rows.map((r, i) => `
+    const noticeText = notice || (rows.length ? '' : '결과가 없습니다.');
+    listEl.innerHTML = rows.map((r, i) => `
           <li>
             <button type="button" class="cmdk-item ${i === cursor ? 'active' : ''}" data-idx="${i}">
               <span class="cmdk-item-label">${escapeHtml(r.label)}</span>
               ${r.meta ? `<span class="cmdk-item-meta">${escapeHtml(r.meta)}</span>` : ''}
             </button>
           </li>`).join('')
-      : '<li class="cmdk-empty">결과가 없습니다.</li>';
+      + (noticeText ? `<li class="cmdk-empty">${escapeHtml(noticeText)}</li>` : '');
     listEl.querySelectorAll('.cmdk-item').forEach(b => {
       b.addEventListener('click', () => run(Number(b.dataset.idx)));
     });
@@ -70,40 +81,39 @@
   // 세대 토큰 — 목록 조회가 늦게 끝나면 이미 다른 모드로 넘어간 팔레트를 덮는다.
   let _paletteToken = 0;
 
-  async function showProblems() {
-    const token = ++_paletteToken;
+  const PALETTE_RESULTS = 40;
+
+  function showProblems() {
     mode = 'problems';
     setCrumb('제출 불러오기');
     input.value = '';
     input.placeholder = '문제 번호 · 제목 · 태그로 검색';
-    rows = [{ label: '불러오는 중...', meta: '', run: () => {} }];
-    render();
-    try {
-      if (!problems) {
-        const data = await fetchJsonOk('/api/reviews/grouped', undefined, '기록 조회 실패');
-        // 캐시에 쓰기 **전에** 세대를 확인한다 — 닫는 사이에 도착한 응답이 open() 이 막
-        // 비운 problems 를 다시 채우면, 다음에 열었을 때 묵은 목록이 그대로 보인다.
-        if (token !== _paletteToken) return;
-        problems = data.problems || [];
-      }
-      if (token !== _paletteToken) return;
-      refresh();
-    } catch (e) {
-      if (token !== _paletteToken) return;
-      rows = [{ label: e.message, meta: '', run: () => {} }];
-      render();
-    }
+    return searchProblems('');
   }
 
-  function problemRows(query) {
-    return (problems || [])
-      .filter(p => matchesProblemQuery(p, query))
-      .slice(0, 40)
-      .map(p => ({
+  // 검색어마다 서버에 묻는다. 입력이 멈춘 뒤 한 번만 나가도록 refresh 쪽에서 묶는다.
+  async function searchProblems(query) {
+    const token = ++_paletteToken;
+    setRows([], '불러오는 중...');
+    render();
+    try {
+      const data = await fetchJsonOk(
+        `/api/reviews/grouped?${listQuery({ q: query, per_page: PALETTE_RESULTS })}`,
+        undefined, '기록 조회 실패');
+      if (token !== _paletteToken) return;
+      const found = data.problems || [];
+      const over = (data.total || 0) - found.length;
+      setRows(found.map(p => ({
         label: `${problemLabel(p)}. ${p.title}`,
         meta: `제출 ${p.submission_count || 0}회 · ${String(p.last_submitted || '').slice(0, 10)}`,
         run: () => showLedger(p),
-      }));
+      })), over > 0 ? `그 외 ${over}건 — 검색어를 좁혀주세요` : '');
+      render();
+    } catch (e) {
+      if (token !== _paletteToken) return;
+      setRows([], e.message);
+      render();
+    }
   }
 
   async function showLedger(problem) {
@@ -114,7 +124,7 @@
     setCrumb(`${problemLabel(problem)}. ${problem.title} — 회차 선택`);
     input.value = '';
     input.placeholder = '회차를 고르세요';
-    rows = [{ label: '불러오는 중...', meta: '', run: () => {} }];
+    setRows([], '불러오는 중...');
     render();
     try {
       const data = await fetchJsonOk(
@@ -123,7 +133,7 @@
       if (token !== _paletteToken) return;
       const reviews = data.reviews || [];
       const total = reviews.length;
-      rows = reviews.map((r, i) => ({
+      setRows(reviews.map((r, i) => ({
         label: `#${total - i}  ${String(r.created_at || '').slice(0, 10)}  ${r.complexity || '-'}`,
         meta: effLabel(r.efficiency),
         run: () => {
@@ -131,19 +141,28 @@
           close();
           fillReviewForm(r, total - i, total);
         },
-      }));
-      if (!rows.length) rows = [{ label: '기록이 없습니다.', meta: '', run: () => {} }];
+      })), reviews.length ? '' : '기록이 없습니다.');
       render();
     } catch (e) {
       if (token !== _paletteToken) return;
-      rows = [{ label: e.message, meta: '', run: () => {} }];
+      setRows([], e.message);
       render();
     }
   }
 
+  // 문제 검색은 서버로 나가므로 입력이 멈춘 뒤 한 번만 보낸다.
+  const searchProblemsDebounced = debounce(query => searchProblems(query), 200);
+
   function refresh() {
-    if (mode === 'root') rows = rootRows(input.value);
-    else if (mode === 'problems') rows = problemRows(input.value);
+    if (mode === 'root') {
+      setRows(rootRows(input.value));
+      render();
+      return;
+    }
+    if (mode === 'problems') {
+      searchProblemsDebounced(input.value);
+      return;
+    }
     // ledger 는 회차가 몇 개뿐이라 검색으로 걸러내지 않는다.
     cursor = 0;
     render();
@@ -157,7 +176,6 @@
   function open() {
     overlay.classList.remove('hidden');
     mode = 'root';
-    problems = null;   // 팔레트를 열 때마다 최신 목록을 받는다
     setCrumb('');
     input.value = '';
     input.placeholder = '무엇을 할까요?';
@@ -168,8 +186,8 @@
   }
 
   function close() {
-    // 진행 중인 조회를 무효화한다 — 그러지 않으면 닫는 사이에 도착한 응답이 open() 이
-    // 막 비운 problems 를 다시 채워, 다음에 열었을 때 묵은 목록이 그대로 보인다.
+    // 진행 중인 조회를 무효화한다 — 그러지 않으면 닫는 사이에 도착한 응답이 다시 연
+    // 팔레트에 렌더된다(다른 검색어의 결과가 보인다).
     _paletteToken++;
     overlay.classList.add('hidden');
   }
