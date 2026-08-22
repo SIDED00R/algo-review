@@ -73,10 +73,10 @@ def _assert_disposable_target(url):
     스위트는 DROP TABLE·전 테이블 DELETE 를 수행한다. 격리가 어긋나면 실DB 가 대상이
     되므로, 조용히 진행하지 않고 즉시 멈춘다.
 
-    sqlite 는 파일명을 **정확히** 본다. `"test" in name` 같은 부분일치는 `latest.db`·
-    `contest.db`·`protest.db` 를 통과시킨다 — 개발자가 `.env` 에
+    sqlite 는 **리포 밖**이면서 파일명이 정확히 `test.db` 이거나 경로에 `pytest` 세그먼트가
+    있는 것만 허용한다. `"test" in name` 같은 부분일치는 `latest.db`·`contest.db`·
+    `protest.db` 를 통과시킨다 — 개발자가 `.env` 에
     `DATABASE_URL=sqlite:///.../contest.db` 를 두면 그 파일이 DROP 대상이 된다.
-    리포 안의 파일도 거부한다 — 임시 디렉터리 밖은 전부 실데이터로 본다.
     """
     backend = url.get_backend_name()
     if backend.startswith("sqlite"):

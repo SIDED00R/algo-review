@@ -5,7 +5,7 @@ import analyzer
 import db
 from config import settings
 from fastapi import APIRouter, HTTPException
-from routes.helpers import (merged_github_target, push_review_bundle,
+from routes.helpers import (merged_github_target, push_review_bundle, require_reviewable_code,
                             require_platform, upstream_failure)
 from routes.problem_resolve import resolve_statement
 from demo_mode import IS_DEMO, DEMO_REVIEW_RESULT
@@ -32,6 +32,9 @@ def _run_review(platform: str, review: dict) -> dict:
     # 종료로 스크래핑이 죽어 빈 본문이 되므로, 넘기지 않으면 백필한 본문과 사용자가 붙여 넣은
     # 원문이 LLM 프롬프트에서 버려진다. 아래 _repush_bundle 도 같은 값을 쓴다.
     statement = resolve_statement(platform, problem_info, review.get("problem_statement"))
+    # 재리뷰 대상에는 /api/review-imported 로 들어온 행도 있다 — 그 코드는 요청 본문
+    # 검증을 거치지 않았으므로 여기서 상한을 확인한다.
+    require_reviewable_code(review["code"])
     try:
         return analyzer.analyze_code(problem_info, statement, review["code"])
     except ValueError as e:
@@ -49,7 +52,7 @@ def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool,
     if not github_repo or not github_token:
         return False, "GitHub 연결·저장소 선택이 필요합니다. 리뷰는 저장되었습니다."
     if not review.get("language"):
-        # language 컬럼이 없던 시절의 기록 — 확장자를 모르면 엉뚱한 파일을 새로 만들게 된다.
+        # language 가 빈 기록이다 — 확장자를 모르면 엉뚱한 파일을 새로 만들게 된다.
         return False, ("저장된 언어 정보가 없어 파일명을 재현할 수 없습니다. "
                        "리뷰 탭에서 언어를 선택해 다시 올려주세요. 리뷰는 저장되었습니다.")
 
@@ -70,7 +73,9 @@ def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool,
         # 본문 수집·URL 정규화 등에서 새는 예외까지 잡는다 — 리뷰는 이미 저장돼 있으므로
         # 500 으로 터뜨리면 "리뷰는 유지한다"는 계약이 깨진다.
         logger.warning("재업로드 실패 (%s/%s): %s", platform, problem_ref, e)
-        return False, f"GitHub 업로드 실패: {e} 리뷰는 저장되었습니다."
+        # 타입명만 싣는다 — 하류에 requests 호출이 하나 늘면 예외 메시지에 요청 URL 전문이
+        # 들어오고, 그것이 그대로 응답이 된다(routes/helpers.py upstream_failure 와 같은 정책).
+        return False, f"GitHub 업로드 실패({type(e).__name__}). 리뷰는 저장되었습니다."
     return True, None
 
 

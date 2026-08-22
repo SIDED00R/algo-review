@@ -38,8 +38,8 @@ ghImportBtn.addEventListener('click', async () => {
                    'BOJ·Codeforces 에서 직접 가져온 기록도 함께 삭제되며, ' +
                    '그쪽은 다시 가져오기를 따로 실행해야 합니다. 계속할까요?')) return;
       try {
-        // 응답을 확인한다 — 데모(403)나 DB 정지(503)에서 삭제가 실패해도 그대로 재수입이
-        // 진행되어 "전체 삭제" 계약이 조용히 깨졌다.
+        // 응답을 확인한다 — 확인하지 않으면 데모(403)나 DB 정지(503)에서 삭제가 실패해도
+        // 그대로 재수입이 진행되어 "전체 삭제" 계약이 조용히 깨진다.
         await fetchJsonOk('/api/solved-history', { method: 'DELETE' }, '기록 삭제 실패');
       } catch (e) {
         showError(result, e.message);

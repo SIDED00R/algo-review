@@ -25,7 +25,10 @@ def get_report(platform: str = "boj"):
     # 가 태그 통계와 최근 풀이 기록을 함께 프롬프트에 넣는다.
     tag_stats = db.get_tag_stats() if platform == "boj" else db.get_cf_tag_stats()
     if not tag_stats:
-        # 기록이 없으면 아래 history 조회는 헛돈다 — 먼저 거절한다.
+        # 요청 자체는 유효하고 서버에 자료가 없는 상태다. 그래도 400 으로 내는 것은
+        # 프론트(report.js)가 이 코드를 "안내 문구를 그대로 보여줄 조건" 으로 쓰기
+        # 때문이다 — 200 + 빈 본문으로 바꾸려면 프론트 계약을 함께 바꿔야 한다.
+        # 아래 history 조회는 어차피 헛돌므로 여기서 끊는다.
         raise HTTPException(status_code=400, detail="아직 저장된 기록이 없습니다.")
 
     # 대기 행은 판정이 없어 프롬프트에 '→ pending' 으로 새어 나간다 — 리포트에서는 제외한다.

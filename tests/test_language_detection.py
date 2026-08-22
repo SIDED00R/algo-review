@@ -78,6 +78,8 @@ _COLLISIONS = [
     ("GNU C++17", '#include <bits/stdc++.h>\nusing namespace std;\nint main(){ puts("YES"); }'),
     ("Ruby", "n = gets.to_i\nputs n * 2"),
     ("Ruby", "a, b = gets.split.map(&:to_i)\nputs a + b"),
+    # `end` 한 줄만으로 Ruby 를 판정하면 다른 언어를 삼킨다 — Ruby 블록과 짝지어야 한다
+    ("Ruby", "class Solver\n  def run\n    1\n  end\nend"),   # puts/gets 없는 Ruby
     # `var 이름: 타입 =` 는 Swift·Kotlin 둘 다의 문법이다
     ("Swift", "import Foundation\nvar n: Int = Int(readLine()!)!\nprint(n)"),
     ("Kotlin", "fun main() {\n    var n: Int = 0\n    println(n)\n}"),
@@ -104,8 +106,14 @@ def test_idiomatic_code_is_detected_as_its_language(table, expected, code):
 
 
 def test_unknown_code_returns_empty(table):
-    """어느 패턴도 맞지 않으면 '' 를 돌려주고 호출부가 직접 선택을 요구한다."""
+    """어느 패턴도 맞지 않으면 '' 를 돌려주고 호출부가 직접 선택을 요구한다.
+
+    지원하지 않는 언어를 억지로 맞히면 안 된다 — 그 값이 저장소 확장자와 DB `language`
+    가 되고 `_ext_to_language` 가 같은 값을 되돌려 재리뷰로도 복구되지 않는다.
+    """
     assert _detect(table, "main :: IO ()\nmain = putStrLn \"hi\"") == ""     # Haskell
+    assert _detect(table, "local a = 1\nfor i=1,10 do\nend") == ""          # Lua
+    assert _detect(table, "x = 1\nend") == ""                               # 정체불명
     assert _detect(table, "") == ""
 
 

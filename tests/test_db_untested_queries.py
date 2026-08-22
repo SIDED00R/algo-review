@@ -76,7 +76,7 @@ def test_review_history_returns_newest_first_and_respects_limit(at_time):
 
     assert [r["problem_id"] for r in rows] == [1002, 1001]   # 최신순
     assert rows[0]["tier_name"] == "Silver I"
-    assert rows[0]["tags"] == ["구현"]                        # 정규화를 통과했다
+    assert rows[0]["tags"] == ["구현"]                        # 정규화를 거친 값이다
 
 
 def test_review_history_filters_by_platform():

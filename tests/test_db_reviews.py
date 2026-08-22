@@ -443,3 +443,63 @@ def test_reconcile_drops_tags_that_no_longer_exist(at_time):
         session.query(db.models.Review).delete()
     db.reset_tag_stats_rebuild_flag()
     assert db.get_tag_stats() == []
+
+
+def test_boj_weakness_matches_the_boj_stats_page_without_a_reconcile(at_time):
+    """추천의 poor 비율이 통계 화면과 같아야 한다 — **재계산을 트리거하지 않고도**.
+
+    tag_stats 의 재계산은 `get_tag_stats()` 만 트리거하고 그것은 /api/stats·/api/report
+    에서만 불린다. 추천만 쓰는 프로세스가 표를 읽으면, 증분 경로를 타지 않고 들어온
+    행(백필)이 반영되지 않은 값을 인스턴스 수명 내내 쓴다.
+    """
+    at_time("2024-01-01T00:00:00")
+    for i in range(10):                      # 증분 경로를 타지 않는 백필
+        with session_scope(commit=True) as session:
+            session.add(db.models.Review(
+                platform="boj", problem_ref=str(4000 + i), problem_id=4000 + i,
+                title="t", tier=1, tier_name="Bronze V", tags='["math"]',
+                language="Python 3", code="x", feedback="", efficiency="poor",
+                complexity="", strengths="[]", weaknesses="[]",
+                created_at=f"2024-01-{i + 1:02d}T00:00:00"))
+    at_time("2024-02-01T00:00:00")
+    mk_review(problem_id=5000, problem_ref="5000", tags=["math"], efficiency="good")
+
+    # get_tag_stats() 를 부르기 **전에** 읽는다 — 추천만 쓰는 프로세스와 같은 상태다.
+    weakness = {row["tag"]: row["poor_ratio"] for row in db.get_tag_weakness_data("boj")}
+
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    expected = stats["math"]["poor_count"] / stats["math"]["total_count"]
+    assert weakness["math"] == expected, (
+        f"추천 {weakness['math']} vs 통계 화면 {expected} — 재계산 없이 표를 읽었다")
+
+
+def test_weakness_counts_pending_rows_the_same_way_the_stats_table_does(at_time):
+    """대기 행은 판정이 없어 poor 비율 모집단에서 빠진다 — 두 경로가 같아야 한다."""
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=6000, problem_ref="6000", tags=["dp"],
+              efficiency=db.PENDING_EFFICIENCY)
+    at_time("2024-01-02T00:00:00")
+    mk_review(problem_id=6000, problem_ref="6000", tags=["dp"], efficiency="poor")
+    at_time("2024-01-03T00:00:00")
+    mk_review(problem_id=6001, problem_ref="6001", tags=["dp"], efficiency="good")
+
+    weakness = {row["tag"]: row["poor_ratio"] for row in db.get_tag_weakness_data("boj")}
+    stats = {s["tag"]: s for s in db.get_tag_stats()}
+    assert weakness["dp"] == stats["dp"]["poor_count"] / stats["dp"]["total_count"]
+    assert stats["dp"]["total_count"] == 2, "대기 행이 모집단에 섞였다"
+
+
+def test_weakness_does_not_read_the_denormalised_table(at_time):
+    """표를 통째로 지워도 추천의 poor 비율은 그대로여야 한다.
+
+    이 단정이 "tag_stats 를 읽지 않는다" 는 계약을 고정한다 — 읽는다면 표를 지운 순간
+    값이 달라진다.
+    """
+    at_time("2024-01-01T00:00:00")
+    mk_review(problem_id=7000, problem_ref="7000", tags=["greedy"], efficiency="poor")
+    before = {row["tag"]: row["poor_ratio"] for row in db.get_tag_weakness_data("boj")}
+
+    with session_scope(commit=True) as session:
+        session.query(db.models.TagStat).delete()
+    after = {row["tag"]: row["poor_ratio"] for row in db.get_tag_weakness_data("boj")}
+    assert after == before == {"greedy": 1.0}

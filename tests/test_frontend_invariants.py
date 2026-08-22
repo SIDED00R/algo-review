@@ -192,7 +192,7 @@ def test_code_view_caches_only_successful_loads(js):
     """404 에도 loaded 를 세우면 오류 상태가 영구 캐시돼 재시도가 막힌다."""
     src = js["import-history.js"]
     body = _js_function_body(src, "async function toggleCodeView")
-    # 양성 단정을 함께 둔다 — 부정 단정만 있으면 대입을 통째로 지워도 통과했다.
+    # 양성 단정을 함께 둔다 — 부정 단정만 있으면 대입을 통째로 지워도 통과한다.
     assert re.search(r"dataset\.loaded\s*=", body), "성공 경로에 loaded 표시가 없다"
     # catch 블록 안에는 없어야 한다(문자 수 윈도우 대신 중괄호 균형으로 자른다).
     catch_body = _js_function_body(body[body.index("} catch"):], "catch")
@@ -545,10 +545,14 @@ def _global_function_owners() -> dict[str, str]:
 # 빠지면 `s => /\{/.test(s)` 의 정규식을 나눗셈으로 읽어 본문의 중괄호를 코드로 센다.
 _REGEX_PRECEDERS = "(,=:[!&|?{};+-*%~^<>"
 _REGEX_KEYWORDS = ("return", "typeof", "case", "in", "of", "new", "do", "else", "yield", "await")
+# 이 키워드로 시작하는 블록은 **로드 시점에 실행된다**. 함수·객체·클래스 본문과 달리
+# 나중에 불리는 게 아니라 그 자리에서 돈다.
+_CONTROL_BLOCK = re.compile(
+    r"^(?:\}\s*)?(?:if|else|for|while|switch|try|catch|finally|do)\b|^\{$")
 
 
-def _code_lines(src: str) -> list[tuple[int, str]]:
-    """(그 줄 시작 시점의 중괄호 깊이, 리터럴·주석을 지운 줄) 목록.
+def _code_lines(src: str) -> list[tuple[int, str, bool]]:
+    """(그 줄 시작 시점의 중괄호 깊이, 리터럴·주석을 지운 줄, 로드 시점 실행 여부) 목록.
 
     문자열·템플릿 리터럴·정규식·주석은 **파일 전체를 문자 스트림으로** 훑으며 지운다.
     줄 단위로 처리하면 여러 줄에 걸친 템플릿 리터럴의 내부 중괄호가 코드로 세어져
@@ -556,27 +560,46 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
 
     템플릿 리터럴의 `${...}` 는 코드로 되돌아가 훑는다 — 그 안에 또 템플릿이 오는 형태가
     실제로 쓰이므로(`history.js`·`import-history.js`), 안쪽 백틱을 바깥 리터럴의 종료로
-    읽으면 그 뒤 전체가 어긋난다. 다만 `${}` 안의 문자는 최상위 실행문이 될 수 없으므로
-    줄 내용에는 담지 않고 중괄호 균형만 맞춘다.
+    읽으면 그 뒤 전체가 어긋난다. `${}` 안의 문자는 최상위 실행문이 될 수 없어 줄 내용에는
+    담지 않지만, **정규식/나눗셈 판별용 문맥에는 담는다** — 담지 않으면 `${a / b}` 의 `/`
+    앞이 빈 문자열로 보여 정규식으로 오독되고 그 뒤 깊이가 통째로 어긋난다.
+
+    세 번째 값은 "이 줄이 로드 시점에 실행되는가" 다. 중괄호마다 그것을 연 것이 제어
+    블록(`if`·`try`·`for` …)인지 함수·객체·클래스인지 기록해, 제어 블록만 거쳐 온 줄은
+    깊이가 0 이 아니어도 로드 시점 실행으로 본다.
     """
-    out: list[tuple[int, str]] = []
+    if not src.endswith("\n"):
+        src += "\n"          # 마지막 줄의 시작 깊이가 아니라 **끝난 뒤** 깊이를 보게 한다
+
+    out: list[tuple[int, str, bool]] = []
     depth = 0
     line_start_depth = 0
-    buf: list[str] = []
+    buf: list[str] = []                 # 이 줄의 코드 문자(${} 안은 제외)
+    ctx: list[str] = []                 # 정규식 판별용 문맥(${} 안 포함, 줄을 넘어 이어진다)
+    brace_is_control: list[bool] = []    # 각 중괄호를 연 것이 제어 블록인가
+    line_start_control = True
     stack: list[tuple[str, int]] = []   # ('tpl', 0) 템플릿 텍스트 / ('sub', 진입 깊이) ${} 안
     i = 0
     n = len(src)
 
+    def note(ch: str) -> None:
+        ctx.append(ch)
+        if len(ctx) > 16:
+            del ctx[0]
+
+    def all_control() -> bool:
+        return all(brace_is_control)
+
     def flush():
-        nonlocal line_start_depth
-        out.append((line_start_depth, "".join(buf).strip()))
+        nonlocal line_start_depth, line_start_control
+        out.append((line_start_depth, "".join(buf).strip(), line_start_control))
         buf.clear()
         line_start_depth = depth
+        line_start_control = all_control()
 
     while i < n:
         ch = src[i]
 
-        # --- 템플릿 리터럴의 텍스트 부분 ---
         if stack and stack[-1][0] == "tpl":
             if ch == "\\":
                 i += 2
@@ -591,6 +614,8 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
                 continue
             if ch == "$" and i + 1 < n and src[i + 1] == "{":
                 stack.append(("sub", depth))
+                # `${` 는 식의 시작이다 — 바로 뒤의 `/` 는 나눗셈이 아니라 정규식이다.
+                note("{")
                 i += 2
                 continue
             i += 1
@@ -603,7 +628,6 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
             i += 1
             continue
 
-        # --- 주석 ---
         if ch == "/" and i + 1 < n and src[i + 1] == "/":
             while i < n and src[i] != "\n":
                 i += 1
@@ -616,9 +640,9 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
             i = (end_at + 2) if end_at != -1 else n
             continue
 
-        # --- 문자열·템플릿 리터럴 ---
         if ch == "`":
             stack.append(("tpl", 0))
+            note("`")
             i += 1
             continue
         if ch in "\"'":
@@ -634,11 +658,11 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
                     i += 1
                     break
                 i += 1
+            note(quote)
             continue
 
-        # --- 정규식 리터럴 — 앞의 유효 토큰으로 나눗셈과 구분한다 ---
         if ch == "/":
-            before = "".join(buf).rstrip()
+            before = "".join(ctx).rstrip()
             if (not before or before[-1] in _REGEX_PRECEDERS
                     or before.endswith(_REGEX_KEYWORDS)):
                 i += 1
@@ -655,18 +679,24 @@ def _code_lines(src: str) -> list[tuple[int, str]]:
                         i += 1
                         break
                     i += 1
+                note("/")
                 continue
 
-        # --- 중괄호 ---
         if ch == "{":
+            head = "".join(buf).strip() if not in_subst else ""
+            brace_is_control.append(bool(_CONTROL_BLOCK.match(head)))
             depth += 1
         elif ch == "}":
             if in_subst and depth == stack[-1][1]:
                 stack.pop()                    # ${...} 가 닫혔다 — 템플릿 텍스트로 되돌아간다
+                note("}")
                 i += 1
                 continue
             depth -= 1
+            if brace_is_control:
+                brace_is_control.pop()
 
+        note(ch)
         if not in_subst:
             buf.append(ch)
         i += 1
@@ -696,39 +726,102 @@ def _strip_leading_trivia(src: str) -> str:
 def _is_iife_module(src: str) -> bool:
     """파일 **전체**가 `(function () { ... })();` 한 겹으로 감싸여 있는지.
 
-    파일 어디서든 매치하면(`re.M`) 파일 중간에 있는 내부 IIFE 에도 걸린다. 그러면 base 가
-    1 이 되어 그 파일의 진짜 최상위 실행문이 검사에서 통째로 빠진다 — 게이트가 그 파일을
-    보지 않게 되고, 아무것도 빨강이 나지 않는다(`github.js:106` 이 그 형태다).
+    선두·말미만 보면 `(function(){…})(); run(); (function(){…})();` 같은 샌드위치가
+    통과한다. 그러면 base 가 1 이 되어 가운데의 진짜 최상위 실행문이 통째로 검사에서
+    빠진다. 그래서 중간에 깊이가 0 으로 돌아오는 줄이 있는지도 확인한다.
     """
     body = _strip_leading_trivia(src)
     if not re.match(r"\(function\s*\(\s*\)\s*\{", body):
         return False
-    return body.rstrip().rstrip(";").rstrip().endswith(("})()", "}())"))
+    if not body.rstrip().rstrip(";").rstrip().endswith(("})()", "}())")):
+        return False
+    lines = _code_lines(body)
+    return not any(depth == 0 and stripped for depth, stripped, _ in lines[1:-1])
+
+
+def _strip_deferred_bodies(text: str) -> str:
+    """화살표·function 본문을 지운다 — 그 안의 호출은 로드 시점에 실행되지 않는다.
+
+    `=>` 를 만나면 본문 끝까지 건너뛴다. 중괄호 본문이면 균형이 맞을 때까지, 식 본문이면
+    같은 괄호 깊이의 `,` 나 닫는 괄호까지다. 첫 `=>` 에서 줄 전체를 버리면 그 뒤의 즉시
+    호출까지 사라진다(`{ on: () => 1, init: f() }` 의 `f`).
+    """
+    out = []
+    i = 0
+    n = len(text)
+    depth = 0            # () 와 [] 깊이
+    while i < n:
+        if text.startswith("=>", i) or re.match(r"\bfunction\b", text[i:]):
+            i += 2 if text.startswith("=>", i) else len("function")
+            while i < n and text[i] == " ":
+                i += 1
+            if i < n and text[i] == "{":
+                brace = 0
+                while i < n:
+                    if text[i] == "{":
+                        brace += 1
+                    elif text[i] == "}":
+                        brace -= 1
+                        if brace == 0:
+                            i += 1
+                            break
+                    i += 1
+            else:
+                start_depth = depth
+                while i < n:
+                    if text[i] in "([":
+                        depth += 1
+                    elif text[i] in ")]":
+                        if depth == start_depth:
+                            break
+                        depth -= 1
+                    elif text[i] == "," and depth == start_depth:
+                        break
+                    i += 1
+            continue
+        if text[i] in "([":
+            depth += 1
+        elif text[i] in ")]":
+            depth -= 1
+        out.append(text[i])
+        i += 1
+    return "".join(out)
 
 
 def _load_time_calls_in(stripped: str) -> set[str]:
     """한 줄에서 **로드 시점에 실행되는** 호출 이름.
 
     선언문도 초기화식은 로드 시점에 평가된다 — `const X = helperFromAnotherFile();` 는
-    로드 순서에 의존한다. 다만 화살표·함수 본문 안의 호출은 나중에 실행되므로, 초기화식을
-    `=>` 나 `function` 에서 자른다(`const f = () => bar();` 의 `bar` 는 세지 않는다).
+    로드 순서에 의존한다. 화살표·함수 본문 안의 호출은 나중에 실행되므로 그 부분만 지운다.
+    `class A extends f() {}` 의 `f()` 도 로드 시점 호출이라 `extends` 뒤를 본다.
     """
-    if stripped.startswith(("}", ")", "function", "async function", "class")):
+    if stripped.startswith(("}", ")")):
         return set()
-    if re.match(r"(?:const|let|var)\b", stripped):
+    if stripped.startswith("class"):
+        _, sep, tail = stripped.partition("extends")
+        if not sep:
+            return set()
+        stripped = tail.split("{", 1)[0]
+    elif re.match(r"(?:async\s+)?function\b", stripped):
+        return set()
+    elif re.match(r"(?:const|let|var)\b", stripped):
         _, sep, init = stripped.partition("=")
         if not sep:
             return set()
-        stripped = re.split(r"=>|\bfunction\b", init, maxsplit=1)[0]
-    return set(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", stripped))
+        stripped = init
+    return set(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", _strip_deferred_bodies(stripped)))
 
 
 def _top_level_calls(src: str, name: str = "") -> set[str]:
     """로드 시점에 실행되는 줄에서 호출하는 함수 이름.
 
-    중괄호 깊이가 최상위인 실행문만 본다 — 이벤트 핸들러 안의 호출은 로드 순서와
-    무관하다. IIFE 로 감싼 파일은 래퍼 본문 전체가 로드 시점 실행이므로 깊이 1 을
-    최상위로 본다.
+    깊이가 최상위인 실행문과, **제어 블록만 거쳐 온** 줄을 본다 — 최상위 `if (x) { f(); }`
+    의 `f()` 는 로드 시점에 실행되므로 로드 순서에 의존한다. 함수·객체·클래스 본문 안의
+    호출은 나중에 실행되므로 제외된다. IIFE 로 감싼 파일은 래퍼 본문 전체가 로드 시점
+    실행이므로 깊이 1 을 최상위로 본다.
+
+    알려진 경계: 한 줄에 다 담긴 핸들러(`el.onclick = () => f();`)의 `f` 는 지워지지만,
+    줄 단위로 보므로 여러 줄 핸들러의 본문은 깊이로 걸러진다.
     """
     lines = _code_lines(src)
     base = 1 if _is_iife_module(src) else 0
@@ -740,9 +833,12 @@ def _top_level_calls(src: str, name: str = "") -> set[str]:
         f"이 파일의 로드 시점 호출을 검사하지 못한다")
 
     calls = set()
-    for depth, stripped in lines:
-        if depth == base and stripped:
-            calls.update(_load_time_calls_in(stripped))
+    for depth, stripped, load_time in lines:
+        if not stripped or depth < base:
+            continue
+        if depth != base and not load_time:
+            continue
+        calls.update(_load_time_calls_in(stripped))
     return calls
 
 
@@ -804,7 +900,7 @@ def test_the_load_order_check_can_see_into_every_file(path):
 
     파일마다 최상위 호출을 하나 주입해 게이트가 그것을 보는지 확인한다. 이 확인이 없으면
     추출기가 한 파일을 통째로 못 보게 되어도 아무것도 빨강이 나지 않는다 — `_is_iife_module`
-    이 파일 중간의 내부 IIFE 에 걸려 `github.js` 를 깊이 1 기준으로 읽던 때가 그랬다.
+    파일 중간의 내부 IIFE 에 걸리면 그 파일이 깊이 1 기준으로 읽혀 통째로 빠진다.
     """
     src = path.read_text(encoding="utf-8")
     base_calls = _top_level_calls(src, path.name)
@@ -856,6 +952,14 @@ def test_only_whole_file_wrappers_count_as_iife_modules():
     "const t = `${JSON.stringify({a: 1})}`;\n",                   # ${} 안의 객체 리터럴
     "const t = `\nline {\nline }\n`;\n",  # 여러 줄 템플릿
     r"const r = /a\/b{/;" "\nfoo();\n",           # 정규식 안의 이스케이프된 슬래시
+    "function f(x, y) { return `${Math.round(x / y)}%`; }\n",   # ${} 안의 나눗셈
+    "const pct = `${a / b}%`;\n",
+    "const t = `\n  ${a / b}%\n`;\n",
+    "const t = `${s.replace(/[^0-9]/g, '')}`;\n",   # ${} 안의 정규식
+    "const t = `${`${a / b}`}`;\n",   # 3단 중첩
+    "const t = `${/[a-z]{2}/.test(s)}`;\n",   # ${} 첫 토큰이 정규식
+    r"const t = `${/\{/.test(s)}`;" "\n",   # ${} 첫 토큰이 홀중괄호 정규식
+    "const t = `${x}${/[0-9]{3}/.test(s)}`;\n",
 ])
 def test_the_literal_scanner_keeps_brace_balance(src):
     """유효한 JS 에서 깊이 카운터가 어긋나면 안 된다.
@@ -864,3 +968,79 @@ def test_the_literal_scanner_keeps_brace_balance(src):
     메시지로 스위트 전체를 빨강으로 만든다(거짓 빨강).
     """
     assert _code_lines(src)[-1][0] == 0
+
+
+def test_a_sandwich_of_iifes_is_not_a_whole_file_wrapper():
+    """선두·말미만 보면 샌드위치가 래퍼로 오인된다 — base 가 1 이 되어 가운데의 진짜
+    최상위 실행문이 통째로 검사에서 빠진다."""
+    sandwich = "(function () { const a = 1; })();\nrun();\n(function () { const b = 2; })();\n"
+    assert not _is_iife_module(sandwich)
+
+    src = (_JS_DIR / "utils.js").read_text(encoding="utf-8")
+    wrapped = ("(function () { const _head = 1; })();\n" + src
+               + "\n__probeMarker__();\n(function () { const _tail = 1; })();\n")
+    assert not _is_iife_module(wrapped)
+    assert "__probeMarker__" in _top_level_calls(wrapped, "utils.js")
+
+
+@pytest.mark.parametrize("shape,tail", [
+    ("평문", "\n__probeMarker__();\n"),
+    ("if 블록", "\nif (window.x) {\n  __probeMarker__();\n}\n"),
+    ("else 블록", "\nif (window.x) {\n  noop();\n} else {\n  __probeMarker__();\n}\n"),
+    ("try 블록", "\ntry {\n  __probeMarker__();\n} catch (e) { noop(); }\n"),
+    ("catch 블록", "\ntry {\n  noop();\n} catch (e) {\n  __probeMarker__();\n}\n"),
+    ("for 블록", "\nfor (const x of []) {\n  __probeMarker__();\n}\n"),
+    ("화살표 뒤 즉시 호출", "\nconst h = { on: () => 1, init: __probeMarker__() };\n"),
+    ("class extends", "\nclass A extends __probeMarker__() {}\n"),
+    ("삼항", "\nconst v = cond ? __probeMarker__() : 0;\n"),
+    ("구조분해", "\nconst { a } = __probeMarker__();\n"),
+])
+def test_load_time_calls_are_seen_in_every_shape(shape, tail):
+    """로드 시점에 실행되는 형태는 전부 게이트에 보여야 한다.
+
+    최상위 `if (x) { f(); }` 의 `f()` 는 깊이가 1 이지만 **로드 시점에 실행된다** —
+    깊이만으로 걸러내면 진짜 로드 순서 위반이 통과한다.
+    """
+    src = (_JS_DIR / "utils.js").read_text(encoding="utf-8") + tail
+    assert "__probeMarker__" in _top_level_calls(src, "utils.js"), shape
+
+
+@pytest.mark.parametrize("shape,tail", [
+    ("여러 줄 핸들러", "\ndocument.addEventListener('x', () => {\n  __probeMarker__();\n});\n"),
+    ("함수 선언 본문", "\nfunction later() {\n  __probeMarker__();\n}\n"),
+    ("함수 표현식 본문", "\nconst later = function () {\n  __probeMarker__();\n};\n"),
+    ("화살표 본문", "\nconst later = () => {\n  __probeMarker__();\n};\n"),
+    ("한 줄 화살표", "\nconst later = () => __probeMarker__();\n"),
+])
+def test_deferred_calls_stay_out_of_the_load_order_check(shape, tail):
+    """나중에 실행되는 호출은 로드 순서와 무관하다 — 세면 거짓 빨강이 난다."""
+    src = (_JS_DIR / "utils.js").read_text(encoding="utf-8") + tail
+    assert "__probeMarker__" not in _top_level_calls(src, "utils.js"), shape
+
+
+def test_a_file_without_a_trailing_newline_still_balances():
+    """마지막 항목의 시작 깊이가 아니라 **끝난 뒤** 깊이를 봐야 한다.
+
+    개행 없이 `}` 로 끝나면 그 줄의 시작 깊이는 1 이라, 정상 파일이 "리터럴 처리가
+    깨졌다" 는 원인과 무관한 메시지로 스위트를 빨강으로 만든다.
+    """
+    for path in sorted(_JS_DIR.glob("*.js")):
+        src = path.read_text(encoding="utf-8").rstrip("\n")
+        assert _code_lines(src)[-1][0] == 0, path.name
+
+
+def test_fetch_json_ok_actually_checks_the_response_status(js):
+    """`fetchJsonOk` 안에서 res.ok 를 보는지 못박는다.
+
+    "원시 fetch 를 쓰지 않는다" 만 검사하면 이 한 줄을 지워도 전부 초록이다 — 그러면
+    503(온디맨드 DB 정지)이 빈 배열로 해석돼 '기록이 없습니다' 로 표시된다.
+    """
+    body = _js_function_body(js["utils.js"], "async function fetchJsonOk")
+    assert re.search(r"!\s*res\s*\.\s*ok", body), "res.ok 검사가 없다"
+    assert re.search(r"throw\s+new\s+Error", body), "실패를 예외로 올리지 않는다"
+
+
+def test_error_detail_handles_the_validation_error_shape(js):
+    """FastAPI 의 422 detail 은 **배열**이다 — 그대로 문자열에 넣으면 `[object Object]`."""
+    body = _js_function_body(js["utils.js"], "function errorDetail")
+    assert "Array.isArray" in body, "배열 detail 분기가 없다"

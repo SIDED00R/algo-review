@@ -1,10 +1,11 @@
 import json
 import logging
+import threading
 import time
 from datetime import datetime
 
 from sqlalchemy import distinct, func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from db.connection import session_scope
 from db.models import Review, SolvedHistory, TagStat
@@ -141,13 +142,28 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
         return True
 
 
-def _first_submission_tag_counts(session, platform: str) -> dict:
-    """한 플랫폼의 리뷰에서 **문제당 첫 판정 행**만 세어 태그별 good/poor 를 만든다.
+def _first_judged_rows(rows: list) -> list:
+    """문제당 **첫 판정 행**만 남긴다. 입력은 created_at 오름차순이어야 한다.
 
     기준은 `_bump_tag_stats` 호출부와 같다 — **첫 non-pending 행**이다. 대기 행은
-    판정이 없어 집계 대상이 아니므로 dedup 대상에서도 빼야 한다. 대기 행을 포함해
+    판정이 없어 집계 대상이 아니므로 dedup 대상에서도 뺀다. 대기 행을 포함해
     "created_at 최소 행" 을 첫 제출로 보면, 대기 등록 후 리뷰한 문제는 첫 행이 pending
     이라 문제 전체가 집계에서 빠진다.
+    """
+    seen = set()
+    firsts = []
+    for row in rows:
+        if row.get("efficiency") == PENDING_EFFICIENCY:
+            continue
+        if row["problem_ref"] in seen:
+            continue
+        seen.add(row["problem_ref"])
+        firsts.append(row)
+    return firsts
+
+
+def _first_submission_tag_counts(session, platform: str) -> dict:
+    """한 플랫폼의 리뷰에서 문제당 첫 판정 행만 세어 태그별 good/poor 를 만든다.
 
     platform 은 호출부가 반드시 넘긴다 — 기본값을 두면 다른 플랫폼의 집계에 BOJ 행이
     섞여도 호출부에서 드러나지 않는다.
@@ -157,15 +173,7 @@ def _first_submission_tag_counts(session, platform: str) -> dict:
         .where(Review.platform == platform, Review.efficiency != PENDING_EFFICIENCY)
         .order_by(Review.created_at.asc())
     ).mappings().all()
-
-    seen = set()
-    firsts = []
-    for row in rows:
-        if row["problem_ref"] in seen:
-            continue
-        seen.add(row["problem_ref"])
-        firsts.append(dict(row))
-    return _tally_tag_efficiency(firsts)
+    return _tally_tag_efficiency(_first_judged_rows([dict(r) for r in rows]))
 
 
 # 재계산 주기. 전면 스캔 + 쓰기 트랜잭션이라 매 요청 돌 수는 없고, `_bump_tag_stats` 가
@@ -173,6 +181,9 @@ def _first_submission_tag_counts(session, platform: str) -> dict:
 # 는 사용자가 페이지를 열 때만 부르는 경로라 이 주기의 스캔 비용은 무시할 수 있다.
 _TAG_STATS_RECONCILE_SEC = 60
 _tag_stats_reconciled_at: float | None = None
+# 쿨다운 확인과 갱신 사이를 보호한다 — 없으면 콜드 스타트에 동시 요청 N 개가 전부 전면
+# 스캔 + 전면 재기록을 수행한다(db/connection.py 의 엔진 싱글턴과 같은 이유의 락이다).
+_tag_stats_lock = threading.Lock()
 
 
 def reset_tag_stats_rebuild_flag() -> None:
@@ -196,7 +207,10 @@ def _reconcile_tag_stats() -> None:
     """
     with session_scope(commit=True) as session:
         counts = _first_submission_tag_counts(session, "boj")
-        existing = {row.tag: row for row in session.scalars(select(TagStat)).all()}
+        # 잠금 순서를 결정론적으로 고정한다 — 두 인스턴스가 서로 다른 순서로
+        # 같은 행들을 잠그면 데드락이 난다.
+        existing = {row.tag: row for row in
+                    session.scalars(select(TagStat).order_by(TagStat.tag)).all()}
         for tag, c in counts.items():
             row = existing.pop(tag, None)
             if row is None:
@@ -234,22 +248,36 @@ def get_tag_stats() -> list:
                     select(TagStat).order_by(TagStat.total_count.desc())).all()
             ]
 
+    rows = _read()
     now = time.monotonic()
-    if (_tag_stats_reconciled_at is not None
-            and now - _tag_stats_reconciled_at < _TAG_STATS_RECONCILE_SEC):
-        return _read()
+    # 재계산은 한 번에 하나만 돈다. 이미 도는 중이면 기다리지 않고 지금 값을 돌려준다 —
+    # 표는 어차피 다음 요청에서 맞춰지고, 여기서 블로킹하면 /api/stats 가 스캔만큼 느려진다.
+    if not _tag_stats_lock.acquire(blocking=False):
+        return rows
     try:
-        _reconcile_tag_stats()
-    except IntegrityError:
-        # 두 인스턴스가 같은 태그 행을 동시에 만들면 한쪽이 진다. 다음 주기가 다시 맞춘다.
-        logger.info("tag_stats 재계산 경합 — 다음 주기에 다시 맞춘다")
-    _tag_stats_reconciled_at = now
+        if (_tag_stats_reconciled_at is not None
+                and now - _tag_stats_reconciled_at < _TAG_STATS_RECONCILE_SEC):
+            return rows
+        try:
+            _reconcile_tag_stats()
+        except DBAPIError:
+            # 다른 인스턴스와 같은 행을 동시에 건드리면 PK 충돌·잠금 경합으로 진다.
+            # 재계산은 멱등이라 다음 주기가 다시 맞춘다.
+            logger.info("tag_stats 재계산 경합 — 다음 주기에 다시 맞춘다")
+        _tag_stats_reconciled_at = now
+    finally:
+        _tag_stats_lock.release()
     return _read()
 
 
 def get_total_review_count(platform: str | None = None) -> int:
+    """고유 문제 수. platform 을 주지 않으면 두 플랫폼을 합쳐 센다.
+
+    problem_ref 는 플랫폼별 네임스페이스다(BOJ 는 숫자, CF 는 `4A` 꼴) — 합칠 때는
+    platform 을 함께 distinct 해야 두 플랫폼의 같은 문자열이 하나로 합쳐지지 않는다.
+    """
     with session_scope() as session:
-        stmt = select(func.count(distinct(Review.problem_ref)))
+        stmt = select(func.count(distinct(func.concat(Review.platform, ":", Review.problem_ref))))
         if platform:
             stmt = stmt.where(Review.platform == platform.strip().lower())
         return session.scalar(stmt)
@@ -259,7 +287,7 @@ def _tally_tag_efficiency(rows: list) -> dict:
     """행 목록을 태그별로 순회해 good/poor/total 카운트를 누적한 dict를 반환."""
     counts: dict[str, dict] = {}
     for row in rows:
-        eff = row.get("efficiency", "poor")
+        eff = row["efficiency"]
         if eff == PENDING_EFFICIENCY:
             continue  # 리뷰 대기 행은 good/poor 판정이 없다
         tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or [])
@@ -450,18 +478,24 @@ def get_average_cf_rating() -> float:
 
 
 def get_tag_weakness_data(platform: str) -> list:
+    """추천이 쓰는 태그별 (풀이 수, 마지막 풀이일, poor 비율).
+
+    poor 비율은 `tag_stats` 를 **읽지 않고** reviews 에서 직접 센다. tag_stats 의 재계산을
+    트리거하는 것은 `get_tag_stats()` 뿐이고 그것은 `/api/stats`·`/api/report` 에서만
+    불린다 — 추천만 쓰는 프로세스는 재계산을 한 번도 돌지 않으므로, 여기서 표를 읽으면
+    낡은 값이 인스턴스 수명 내내 유지된다. 그 값은 `recommender._score_tags` 에 가중치
+    0.3 으로 들어가 추천 문제 선정을 바꾼다.
+
+    모집단은 그 플랫폼의 통계 화면과 같다 — BOJ 는 tag_stats 와 같은 "문제당 첫 판정 행",
+    CF 는 get_cf_tag_stats 와 같은 "전 회차".
+    """
     with session_scope() as session:
-        rstmt = select(Review.tags, Review.efficiency, Review.created_at).where(Review.platform == platform)
+        rstmt = (select(Review.problem_ref, Review.tags, Review.efficiency, Review.created_at)
+                 .where(Review.platform == platform)
+                 .order_by(Review.created_at.asc()))   # _first_judged_rows 가 순서를 요구한다
         sstmt = select(SolvedHistory.tags, SolvedHistory.imported_at).where(SolvedHistory.platform == platform)
         review_rows = [dict(r) for r in session.execute(rstmt).mappings().all()]
         solved_rows = [dict(r) for r in session.execute(sstmt).mappings().all()]
-
-        # tag_stats는 BOJ 전용 — boj가 아닌 플랫폼이면 제외한다.
-        if platform != "boj":
-            stat_rows = []
-        else:
-            stat_rows = [dict(r) for r in session.execute(
-                select(TagStat.tag, TagStat.poor_count, TagStat.total_count)).mappings().all()]
 
     tag_data = {}
     for row in review_rows:
@@ -484,24 +518,11 @@ def get_tag_weakness_data(platform: str) -> list:
             if date > tag_data[tag]["last_date"]:
                 tag_data[tag]["last_date"] = date
 
-    poor_map = {}
-    if stat_rows:
-        for s in stat_rows:
-            if s["total_count"] > 0:
-                poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
-    else:
-        # 각 플랫폼의 통계 화면과 **같은 모집단**을 센다 — BOJ 는 tag_stats 와 같은
-        # "문제당 첫 판정 행", CF 는 get_cf_tag_stats 와 같은 "전 회차". 모집단이 갈리면
-        # 같은 데이터로 /api/stats 와 추천의 poor 비율이 달라지고, 그 값이
-        # recommender._score_tags 의 가중치 0.3 으로 들어가 추천 순위를 바꾼다.
-        if platform == "boj":
-            with session_scope() as session:
-                tag_eff = _first_submission_tag_counts(session, platform)
-        else:
-            tag_eff = _tally_tag_efficiency(review_rows)
-        for tag, counts in tag_eff.items():
-            if counts["total_count"] > 0:
-                poor_map[tag] = counts["poor_count"] / counts["total_count"]
+    # 위에서 이미 읽어온 행으로 센다 — 같은 테이블을 다시 스캔하지 않는다.
+    counted = _first_judged_rows(review_rows) if platform == "boj" else review_rows
+    poor_map = {tag: counts["poor_count"] / counts["total_count"]
+                for tag, counts in _tally_tag_efficiency(counted).items()
+                if counts["total_count"] > 0}
 
     return [
         {

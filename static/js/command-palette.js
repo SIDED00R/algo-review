@@ -81,6 +81,9 @@
     try {
       if (!problems) {
         const data = await fetchJsonOk('/api/reviews/grouped', undefined, '기록 조회 실패');
+        // 캐시에 쓰기 **전에** 세대를 확인한다 — 닫는 사이에 도착한 응답이 open() 이 막
+        // 비운 problems 를 다시 채우면, 다음에 열었을 때 묵은 목록이 그대로 보인다.
+        if (token !== _paletteToken) return;
         problems = data.problems || [];
       }
       if (token !== _paletteToken) return;
@@ -197,8 +200,8 @@
   // 자기 Esc 는 "뒤로 한 단계" 의미가 있어 직접 처리한다 — 공통 모듈에는 트랩만 맡긴다.
   registerModal('cmdk', close, { ownsEscape: true, initial: '#cmdk-input' });
 
-  // 표기를 플랫폼에 맞춘다 — 핸들러는 metaKey|ctrlKey 를 다 받는데 UI 는 macOS 글리프만
-  // 보여줬다. 백준·CF 사용자 다수가 Windows 다.
+  // 표기를 플랫폼에 맞춘다 — 핸들러는 metaKey|ctrlKey 를 다 받으므로 UI 도 그래야 한다.
+  // macOS 글리프만 보이면 백준·CF 사용자 다수인 Windows 쪽에 틀린 안내가 된다.
   const kbd = document.getElementById('cmdk-kbd');
   if (kbd) {
     const platform = navigator.userAgentData?.platform || navigator.platform || '';

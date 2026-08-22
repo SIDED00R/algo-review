@@ -26,7 +26,9 @@ def import_from_github(req: GithubImportRequest):
         if status == 404:
             raise HTTPException(status_code=404, detail="저장소를 찾을 수 없습니다. owner/repo 형식과 철자를 확인하세요.")
         if status == 401:
-            raise HTTPException(status_code=401, detail="GitHub 토큰이 유효하지 않습니다.")
+            # 400 이다 — 이 API 자체에는 인증 체계가 없고 WWW-Authenticate 도 없다.
+            # 거절된 것은 요청 본문에 담겨 온 GitHub 토큰이므로 요청자 입력 오류다.
+            raise HTTPException(status_code=400, detail="GitHub 토큰이 유효하지 않습니다.")
         raise HTTPException(status_code=502, detail=f"GitHub API 오류 ({type(e).__name__})") from None
     except ValueError as e:
         # clients.github 가 직접 만든 사용자용 안내다 — 특히 "저장소 트리가 잘렸습니다"

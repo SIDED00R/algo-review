@@ -5,8 +5,8 @@ requests 계열 예외 메시지는 요청 URL 전문을 포함하므로, 그 �
 `detail=f"...: {e}"` 를 타면 **인증 없는 공개 엔드포인트**(/api/import-codeforces)가
 운영자 키와 유효 서명을 익명 요청자에게 반환한다.
 
-raise_for_status() 는 이미 막고 있었지만 `requests.get` 자체가 던지는
-ConnectTimeout·ConnectionError 는 막혀 있지 않았다(urllib3 MaxRetryError 를 감싸며
+raise_for_status() 뿐 아니라 `requests.get` 자체가 던지는 ConnectTimeout·ConnectionError
+도 URL 전문을 메시지에 싣는다(urllib3 MaxRetryError 를 감싸며
 "Max retries exceeded with url: /api/user.status?...&apiKey=..." 를 남긴다).
 """
 import pytest
@@ -66,7 +66,11 @@ def test_signed_request_actually_puts_the_key_in_the_query(monkeypatch):
 
 
 def test_route_does_not_echo_unknown_exception_text(monkeypatch):
-    """라우터의 500 detail 도 예외 원문을 그대로 싣지 않는다(2중 방어)."""
+    """라우터의 detail 도 예외 원문을 그대로 싣지 않는다(2중 방어).
+
+    상태코드는 502 다 — try 블록이 감싸는 것이 전부 CF API 호출이라 요청자가 입력을
+    고쳐도 달라지지 않는다. 형제 라우터의 `upstream_failure` 와 같은 분류다.
+    """
     def _boom(*a, **k):
         raise RuntimeError(f"apiKey={_KEY} leaked through an unexpected path")
 
@@ -78,6 +82,6 @@ def test_route_does_not_echo_unknown_exception_text(monkeypatch):
     r = TestClient(app, raise_server_exceptions=False).post(
         "/api/import-codeforces", json={"handle": "tourist"})
 
-    assert r.status_code == 500
+    assert r.status_code == 502
     assert _KEY not in r.text
-    assert "RuntimeError" in r.json()["detail"]
+    assert "RuntimeError" in r.json()["detail"], "타입명이 없으면 로그에서 원인을 찾을 단서가 없다"
