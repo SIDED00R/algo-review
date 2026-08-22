@@ -100,8 +100,10 @@ echo "== 최상위 선언 충돌 검사 =="
 #
 # 이 grep 검사는 위 합본 파싱보다 약하다(첫 선언자만 본다). 남겨 두는 이유는 두 가지다 —
 # node 가 없어도 돌고, 충돌한 **이름을 짚어 준다**.
-lexical=$(grep -hoE "^(const|let|class)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}"           | awk '{print $NF}' | sort)
-vars=$(grep -hoE "^((async[[:space:]]+)?function|var)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}"         | awk '{print $NF}' | sort -u)
+lexical=$(grep -hoE "^(const|let|class)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}" \
+  | awk '{print $NF}' | sort)
+vars=$(grep -hoE "^((async[[:space:]]+)?function|var)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}" \
+  | awk '{print $NF}' | sort -u)
 
 lex_dupes=$(echo "$lexical" | uniq -d)
 cross=$(comm -12 <(echo "$lexical" | uniq) <(echo "$vars"))

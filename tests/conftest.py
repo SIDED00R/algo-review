@@ -8,7 +8,7 @@ CI 는 dialect 매트릭스로 같은 스위트를 두 방언에 각각 돌린�
 
 in-memory sqlite 는 쓰지 않는다 — alembic 이 별도 커넥션으로 붙으면 스키마가 사라진다.
 """
-import os
+import pathlib
 from datetime import datetime
 
 import pytest
@@ -21,6 +21,7 @@ from db.connection import dispose_engine, session_scope
 # 모델에서 유도한다 — 손으로 적으면 새 테이블을 목록에 넣지 않아도 아무것도 실패하지 않고,
 # postgres 다리에서 그 테이블만 비워지지 않아 테스트 간 조용한 오염이 생긴다.
 TABLES = [t.name for t in db.models.Base.metadata.sorted_tables]
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def _resolved_url():
@@ -71,12 +72,19 @@ def _assert_disposable_target(url):
 
     스위트는 DROP TABLE·전 테이블 DELETE 를 수행한다. 격리가 어긋나면 실DB 가 대상이
     되므로, 조용히 진행하지 않고 즉시 멈춘다.
+
+    sqlite 는 파일명을 **정확히** 본다. `"test" in name` 같은 부분일치는 `latest.db`·
+    `contest.db`·`protest.db` 를 통과시킨다 — 개발자가 `.env` 에
+    `DATABASE_URL=sqlite:///.../contest.db` 를 두면 그 파일이 DROP 대상이 된다.
+    리포 안의 파일도 거부한다 — 임시 디렉터리 밖은 전부 실데이터로 본다.
     """
     backend = url.get_backend_name()
     if backend.startswith("sqlite"):
         database = url.database or ""
-        # tmp_path 가 준 경로여야 한다. 리포의 coding_recommend.db 같은 실파일은 거부.
-        if "pytest" in database or "test" in os.path.basename(database).lower():
+        path = pathlib.Path(database).resolve() if database else None
+        disposable = path is not None and (path.name == "test.db" or "pytest" in path.parts)
+        in_repo = path is not None and path.is_relative_to(_REPO_ROOT)
+        if disposable and not in_repo:
             return
         raise RuntimeError(
             f"테스트가 임시 sqlite 파일이 아닌 DB 를 가리킵니다: {database} — "
@@ -119,9 +127,10 @@ def fresh_db(tmp_path, monkeypatch):
         yield
         _truncate_all()
     else:
-        # .env 가 준 값을 무조건 눌러 격리를 확실히 한다 — DATABASE_URL 이 남아 있으면
-        # DB_PATH 가 무시되고 그 DB 에 붙는다(config.sqlalchemy_url 의 우선순위).
-        monkeypatch.delenv("DATABASE_URL", raising=False)
+        # DATABASE_URL 을 **지우지 않고 덮어쓴다**. pydantic-settings 의 우선순위는
+        # init > OS 환경변수 > dotenv 라, `delenv` 는 OS 환경변수만 지우고 `.env` 의
+        # 값을 그대로 되살린다(그러면 DB_PATH 가 무시되고 그 DB 에 붙는다).
+        monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
         monkeypatch.setenv("DB_TYPE", "sqlite")
         monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
         _assert_disposable_target(_resolved_url())

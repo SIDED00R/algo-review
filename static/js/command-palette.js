@@ -165,6 +165,9 @@
   }
 
   function close() {
+    // 진행 중인 조회를 무효화한다 — 그러지 않으면 닫는 사이에 도착한 응답이 open() 이
+    // 막 비운 problems 를 다시 채워, 다음에 열었을 때 묵은 목록이 그대로 보인다.
+    _paletteToken++;
     overlay.classList.add('hidden');
   }
 

@@ -67,10 +67,19 @@ def _fetch_cf_pool(cf_tag: str) -> list[list[dict]]:
     return bands
 
 
+def _pool_cache_key(platform: str, theme: dict) -> str:
+    return f"themes:{platform}:{theme['id']}"
+
+
+def theme_pool_is_fresh(platform: str, theme: dict) -> bool:
+    """캐시가 신선해 get_theme_problem_pool 이 외부 호출 없이 통과하는지."""
+    return db.cache_get(_pool_cache_key(platform, theme), CACHE_TTL_SEC) is not None
+
+
 def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | None:
     """플랫폼·테마별 문제 풀(밴드 리스트). DB 캐시 우선, 외부 API 실패 시 만료 캐시 폴백.
     풀은 푼 문제 제외 '전' 원본이라 사용자 상태와 무관하게 캐시가 안정적이다."""
-    key = f"themes:{platform}:{theme['id']}"
+    key = _pool_cache_key(platform, theme)
     cached = db.cache_get(key, CACHE_TTL_SEC)
     if cached is not None:
         return cached

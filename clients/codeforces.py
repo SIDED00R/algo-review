@@ -267,9 +267,7 @@ def scrape_cf_problem(problem_ref: str) -> dict:
     contest_id, index = normalize_codeforces_problem_ref(problem_ref)
 
     url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
-    resp = requests.get(url, timeout=10, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    })
+    resp = requests.get(url, timeout=15, headers=CODEFORCES_HEADERS)
     resp.raise_for_status()
 
     tree = etree.fromstring(resp.content, etree.HTMLParser())
@@ -345,19 +343,30 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
         payload = resp.json()
     except ValueError:
         payload = None
-    # CF API 는 실패 시 HTTP 400 + {"status":"FAILED","comment":"..."} 를 준다 —
-    # comment 가 있으면 CF 의 친절한 메시지를 그대로 쓴다(URL 을 포함하지 않는다).
-    if payload and payload.get("comment"):
-        raise ValueError(payload["comment"])
-    if not resp.ok:
-        # 5xx·429 는 CF 쪽 문제다 — 요청자가 입력을 고쳐도 달라지지 않으므로 502 로 간다.
-        # comment 를 준 4xx 는 위에서 이미 처리했다(그건 진짜 입력 오류다).
-        if resp.status_code >= 500 or resp.status_code == 429:
-            raise UpstreamUnavailable(f"Codeforces API 오류 (HTTP {resp.status_code})")
-        raise ValueError(f"Codeforces API 오류 (HTTP {resp.status_code})")
+    if not isinstance(payload, dict):
+        # 점검 페이지·프록시가 배열이나 문자열을 줄 수 있다. dict 가 아니면 아래의
+        # .get 이 AttributeError 로 새어 나가므로 여기서 없는 것으로 취급한다.
+        payload = None
+    status = resp.status_code
+    comment = payload.get("comment") if payload else None
+    if status >= 500 or status in (403, 429):
+        # 상태코드를 comment 보다 먼저 본다 — CF 는 레이트리밋·점검 응답에도 comment 를
+        # 실어 주므로, comment 를 먼저 보면 5xx·429 가 400(입력 오류)으로 보고된다.
+        # 403 은 Cloudflare 가 이 출구 IP 를 막은 것이라 요청자가 고칠 수 있는 게 없다.
+        raise UpstreamUnavailable(f"Codeforces API 오류 (HTTP {status})")
+    if comment:
+        # CF 가 준 메시지를 그대로 쓴다 — 요청 URL 을 담지 않아 서명이 새지 않는다.
+        raise ValueError(comment)
+    if status >= 400:
+        raise ValueError(f"Codeforces API 오류 (HTTP {status})")
     if payload is None or payload.get("status") != "OK":
-        raise ValueError("Codeforces API 오류")
-    return payload["result"]
+        # 2xx + 비-JSON 은 점검 페이지·프록시 응답이다. 요청자가 고칠 수 있는 것이 없다.
+        raise UpstreamUnavailable("Codeforces API 응답을 해석할 수 없습니다.")
+    result = payload.get("result")
+    if result is None:
+        # status 는 OK 인데 result 가 없다 — CF 가 자기 계약을 깬 경우다.
+        raise UpstreamUnavailable("Codeforces API 응답에 result 가 없습니다.")
+    return result
 
 
 def _fetch_cf_problemset() -> tuple[list[dict], dict]:

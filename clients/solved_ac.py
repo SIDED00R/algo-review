@@ -184,13 +184,26 @@ def search_problems_by_tag(tag_key: str, min_tier: int, max_tier: int,
     return results
 
 
-# 성공 조회로 얻은 키만 담는다. 만료가 없는 캐시이므로 실패 폴백을 섞으면 solved.ac 가
-# 잠깐 막힌 사이에 만들어진 틀린 키가 프로세스 수명 동안 남는다. 그 키로 검색하면
-# 200 + 빈 목록이라 ProblemSearchError 도 나지 않아, 추천이 error 없이 비어 버린다.
+# 성공 조회로 얻은 키만 담는다. 만료가 없는 캐시이므로 추측 키를 섞으면 그 키가 프로세스
+# 수명 동안 남는다. 그 키로 검색하면 200 + 빈 목록이라 ProblemSearchError 도 나지 않아,
+# 추천이 error 없이 조용히 비어 버린다.
 _TAG_KEY_CACHE: dict[str, str] = {}
-# 폴백은 짧은 TTL 로 따로 둔다 — solved.ac 가 복구되면 다음 조회가 진짜 키를 받아온다.
-_TAG_KEY_FALLBACK_TTL = 60
-_TAG_KEY_FALLBACK: dict[str, tuple[str, float]] = {}
+
+# 추측 키는 **만료를 달아** 따로 둔다. 만료가 지나면 다음 조회가 진짜 키를 받아온다.
+# 두 가지 실패를 구분한다:
+#   - 조회 자체가 실패(장애·차단): 복구가 언제든 일어나므로 짧게
+#   - 조회는 성공했는데 목록에 없음: 안정적인 사실이므로 길게. 짧게 잡으면 그 태그를
+#     볼 때마다 전체 태그 목록을 다시 내려받는다(취약 태그 순회에서 최악 3회 풀 페치).
+_FALLBACK_TTL_UNREACHABLE = 60
+_FALLBACK_TTL_ABSENT = 3600
+_TAG_KEY_FALLBACK: dict[str, tuple[str, float]] = {}   # key_lower -> (추측 키, 만료 시각)
+
+
+def _remember_guess(key_lower: str, ttl: float) -> str:
+    """이름을 그대로 키로 쓰는 추측값을 만료와 함께 기록하고 돌려준다."""
+    guess = key_lower.replace(" ", "_")
+    _TAG_KEY_FALLBACK[key_lower] = (guess, time.time() + ttl)
+    return guess
 
 
 def get_tag_key_by_name(tag_name: str) -> str:
@@ -198,9 +211,9 @@ def get_tag_key_by_name(tag_name: str) -> str:
     cached = _TAG_KEY_CACHE.get(key_lower)
     if cached is not None:
         return cached
-    stale = _TAG_KEY_FALLBACK.get(key_lower)
-    if stale is not None and time.time() - stale[1] < _TAG_KEY_FALLBACK_TTL:
-        return stale[0]
+    guess = _TAG_KEY_FALLBACK.get(key_lower)
+    if guess is not None and time.time() < guess[1]:
+        return guess[0]
 
     url = f"{SOLVED_AC_BASE}/tag/list"
     try:
@@ -208,32 +221,24 @@ def get_tag_key_by_name(tag_name: str) -> str:
         resp.raise_for_status()
         items = resp.json().get("items", [])
         for item in items:
-            key = item.get("key", "")
-            display_names = item.get("displayNames", [])
-            for d in display_names:
-                # .get 으로 받는다 — KeyError 가 나면 except 가 삼켜 캐시가 절반만
-                # 채워진 상태로 남는다(_extract_tag_names 와 같은 방어 수준).
+            # `or ""` 로 받는다 — JSON 에 `"key": null` 이 오면 .get 은 None 을 주고,
+            # 아래 .lower() 가 AttributeError 를 내 except 가 삼킨다. 그러면 그 뒤 항목이
+            # 통째로 캐시에 들어가지 않아, 응답 안에 있던 태그도 추측 키로 나간다.
+            key = item.get("key") or ""
+            if not key:
+                continue
+            for d in item.get("displayNames", []):
                 name = d.get("name")
                 if name:
                     _TAG_KEY_CACHE[name.lower()] = key
             _TAG_KEY_CACHE[key.lower()] = key
-        result = _TAG_KEY_CACHE.get(tag_name.lower())
+        result = _TAG_KEY_CACHE.get(key_lower)
         if result:
             return result
-        # 조회는 성공했는데 목록에 그 태그가 없다 — 다시 받아도 결과가 같으므로
-        # 성공 캐시에 폴백을 넣어 재수신을 끊는다.
-        missing = key_lower.replace(" ", "_")
-        _TAG_KEY_CACHE[key_lower] = missing
-        return missing
+        return _remember_guess(key_lower, _FALLBACK_TTL_ABSENT)
     except Exception as e:
         logger.warning("solved.ac 태그 목록 조회 실패 (%s): %s", tag_name, e)
-    # 폴백도 캐시한다 — 캐시하지 않으면 목록에 없는 태그가 호출마다 전체 태그 목록을
-    # 다시 내려받는다(취약 태그 순회에서 최악 3회 풀 페치).
-    # 단 **성공 캐시와 섞지 않는다**. 섞으면 일시 장애 중 만든 틀린 키가 프로세스 수명
-    # 동안 남아, 복구된 뒤에도 그 태그의 추천이 조용히 비어 버린다.
-    fallback = key_lower.replace(" ", "_")
-    _TAG_KEY_FALLBACK[key_lower] = (fallback, time.time())
-    return fallback
+    return _remember_guess(key_lower, _FALLBACK_TTL_UNREACHABLE)
 
 
 class BojCrawlError(Exception):

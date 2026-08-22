@@ -20,8 +20,8 @@ const reviewBtn = document.getElementById('review-btn');
 reviewBtn.dataset.label = '분석 시작';
 reviewBtn.dataset.loadingLabel = '분석 중...';
 
-// '자동 감지' 는 실패할 수 있다 — detectLanguage 는 드롭다운에 있는 언어 중에도
-// PyPy3·TypeScript·Swift·Ruby 패턴이 없어 '' 를 돌려준다. 서버는 빈 언어를 400 으로
+// '자동 감지' 는 실패할 수 있다 — 어느 패턴에도 맞지 않는 코드와 드롭다운의 PyPy3 는
+// detectLanguage 가 '' 를 돌려준다. 서버는 빈 언어를 400 으로
 // 막는데(확장자가 .txt 로 떨어지면 재리뷰가 파일명을 재현하지 못해 영구 거부한다),
 // 그 메시지가 "언어를 선택해주세요" 라 방금 '자동 감지' 를 고른 사용자에게는 말이 안 된다.
 // 왕복 전에 정확한 이유로 안내한다.

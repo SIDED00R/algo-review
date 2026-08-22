@@ -181,6 +181,10 @@ function addCustomCase() {
 
 function removeCustomCase(id) {
   document.getElementById(`pm-custom-${id}`)?.remove();
+  // 삭제 버튼이 포커스를 가진 채 사라진다. 노드 제거는 focusout 을 발화시키지 않아
+  // modal-a11y 의 감시가 잡지 못하므로 여기서 직접 회수한다 — 그러지 않으면 포커스가
+  // <body> 로 떨어져 이 모달의 Esc·Tab 트랩이 함께 죽는다(둘 다 root 의 리스너다).
+  recoverModalFocus(document.getElementById('problem-modal'));
 }
 
 function getCustomCases() {

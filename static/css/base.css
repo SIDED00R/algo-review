@@ -27,8 +27,9 @@ a { color: inherit; }
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   /* weight 를 못박는다 — 지정하지 않으면 상속받는다. .summary-value(600) 안에 놓이는
-     CF 평균 레이팅(stats.js)이 실제로 그랬고, JetBrains Mono 는 400/500 만 로드하므로
-     브라우저가 합성 볼드를 그린다. 로드한 두 굵기 중 굵은 쪽으로 고정한다. */
+     CF 평균 레이팅(stats.js)처럼 굵은 컨테이너 안에 들어가면 600 을 상속하는데,
+     JetBrains Mono 는 400/500 만 로드하므로 브라우저가 합성 볼드를 그린다.
+     로드한 두 굵기 중 굵은 쪽으로 고정한다. */
   font-weight: 500;
 }
 

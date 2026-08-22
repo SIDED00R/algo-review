@@ -54,13 +54,18 @@ def require_platform(value: str) -> str:
 
 
 def require_language(language: str) -> str:
-    """제출 언어를 강제한다. 세 엔드포인트(/api/review, /api/review/pending,
-    /api/push-review)가 공유하는 하류 제약이라 규칙을 한 곳에 둔다.
+    """제출 언어를 강제한다. 사용자가 폼에서 언어를 고르는 세 엔드포인트
+    (/api/review, /api/review/pending, /api/push-review)가 이 규칙을 공유한다.
 
     언어를 모르면 get_file_extension 이 `.txt` 를 주고, 저장소에 `1000.txt` 로 커밋된
     풀이는 rereview 가 "저장된 언어 정보가 없어 파일명을 재현할 수 없습니다" 로 **영구
     거부**한다. 프론트의 "자동 감지" 는 detectLanguage 가 미인식 코드에 '' 를 반환하므로
     빈 값이 실제로 도달한다.
+
+    `/api/review-imported` 는 일부러 부르지 않는다. 그 경로의 language 는 가져오기 원본
+    (파일 확장자·solved.ac 표)에서 오므로 요청자가 고칠 수단이 없다 — 400 으로 막으면
+    리뷰 자체가 불가능해진다. 대신 rereview 가 그 행을 안내 메시지로 degrade 시키고,
+    "지난 제출 불러오기" 가 코드에서 언어를 재추론해 복구 경로를 준다.
     """
     value = (language or "").strip()
     if not value:
@@ -250,8 +255,8 @@ def build_readme(problem_ref: str, title: str,
                  tier_name: str, tags: list, language: str, url: str,
                  description: str = "", input_desc: str = "", output_desc: str = "",
                  review: dict | None = None, submitted_at: str = "") -> str:
-    # 호출자가 입력/출력을 따로 주지 않았고 본문에 마커가 있으면 되쪼갠다 — 재푸시가
-    # 저장된 본문 하나만 넘겨 세 섹션이 한 덩어리로 뭉치던 문제.
+    # 호출자가 입력/출력을 따로 주지 않았고 본문에 마커가 있으면 되쪼갠다 — 재푸시는
+    # 저장된 본문 하나만 넘기므로, 되쪼개지 않으면 세 섹션이 한 덩어리로 뭉친다.
     if description and not (input_desc or output_desc):
         description, input_desc, output_desc = split_statement_markers(description)
     date_str = _submitted_at_str(submitted_at)

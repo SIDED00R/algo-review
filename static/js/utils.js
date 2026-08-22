@@ -193,19 +193,21 @@ function makeRowActivatable(el, onActivate) {
 // 판정 결과는 tests/test_language_detection.py 가 언어별 관용 코드로 고정한다.
 const _LANG_PATTERNS = [
   // 1) 한 언어에만 나타나는 선언·호출 형태
-  ['Kotlin', /\bfun\s+\w+\s*\(|\breadLine\(\)!!|\bval\s+\w+\s*=|\bvar\s+\w+\s*:\s*\w+\s*=/],
+  ['Kotlin', /\bfun\s+\w+\s*\(|\breadLine\(\)!!|\bval\s+\w+\s*=/],
   ['Rust', /\bfn\s+main\s*\(|\blet\s+mut\b|\buse\s+std::/],
   ['Go', /\bpackage\s+main\b|\bfmt\.(?:Print|Scan|Sprint|Fprint)/],
   ['C#', /\busing\s+System\b|\bConsole\s*\.\s*(?:Write|Read)/],
   ['Java', /\bpublic\s+class\b|\bSystem\s*\.\s*out\b|\bBufferedReader\b|\bScanner\b|\bimport\s+java\./],
   ['Swift', /\bimport\s+Foundation\b|\breadLine\(\)!(?!!)|\bfunc\s+\w+\s*\([^)]*\)\s*(?:->|\{)/],
-  ['Ruby', /\bputs\b|\bgets\b|\.to_i\b|^\s*end\s*$/m],
   // 2) C 계열 — C++ 고유 마커가 있으면 C++, 없으면 C
   ['GNU C++17', /\bstd::|\bcout\b|\bcin\b|\busing\s+namespace\s+std\b|\bvector\s*<|\bendl\b/],
   ['C', /#include\b|\bprintf\s*\(|\bscanf\s*\(/],
-  // 3) TypeScript 는 JavaScript 의 상위집합이라 타입 표기로만 구분된다
+  // 3) Ruby 는 C 뒤에 둔다. `puts(…)`·`gets(…)` 는 C 표준 함수이기도 하므로 여기서는
+  //    괄호를 쓰지 않는 Ruby 관용형(`puts x`, `gets.chomp`)과 Ruby 고유 메서드만 본다.
+  ['Ruby', /\bputs\s+[^(\s]|\bgets\s*\.|\.to_i\b|\.to_s\b|^\s*end\s*$/m],
+  // 4) TypeScript 는 JavaScript 의 상위집합이라 타입 표기로만 구분된다
   ['TypeScript', /\binterface\s+\w+\s*\{|:\s*(?:string|number|boolean|void|any)\b|\bas\s+(?:string|number)\b/],
-  // 4) 여러 언어가 공유하는 마커
+  // 5) 여러 언어가 공유하는 마커
   ['JavaScript', /\bconsole\s*\.\s*log\b|\brequire\s*\(|\bdocument\s*\./],
   ['Python 3', /\bdef\s+\w+\s*\(|\bprint\s*\(|\binput\s*\(|\brange\s*\(|\bimport\s+\w/],
 ];
