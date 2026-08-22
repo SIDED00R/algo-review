@@ -1,5 +1,7 @@
 import time
 import asyncio
+import requests
+
 import clients as api_client
 from fastapi import APIRouter, HTTPException
 from routes.helpers import upstream_failure
@@ -28,7 +30,7 @@ def _cache_get(ref_key: str) -> dict | None:
 
 def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
     # 이미 있는 키를 갱신할 때는 항목 수가 늘지 않는다 — 그때도 축출하면
-    # 번역 재시도(60초 TTL 만료 후)마다 무관한 문제 하나가 캐시에서 밀려났다.
+    # 번역 재시도(60초 TTL 만료 후)마다 무관한 문제 하나가 캐시에서 밀려난다.
     if ref_key not in _PROBLEM_CACHE and len(_PROBLEM_CACHE) >= _PROBLEM_CACHE_MAX:
         _PROBLEM_CACHE.pop(next(iter(_PROBLEM_CACHE)))
     _PROBLEM_CACHE[ref_key] = {
@@ -52,6 +54,11 @@ async def get_cf_problem(problem_ref: str):
         raw = await asyncio.to_thread(api_client.scrape_cf_problem, problem_ref)
     except ValueError:
         raise HTTPException(400, "잘못된 문제 번호 형식 (예: 4A, 1234B)")
+    except requests.HTTPError as e:
+        # 형식은 맞지만 없는 문제다 — 502 는 절대 성공하지 않을 재시도를 유도한다.
+        if e.response is not None and e.response.status_code == 404:
+            raise HTTPException(404, f"Codeforces 에 없는 문제입니다: {ref_key}") from None
+        raise upstream_failure("CF 페이지 로딩 실패", e)
     except Exception as e:
         raise upstream_failure("CF 페이지 로딩 실패", e)
 

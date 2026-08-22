@@ -44,8 +44,10 @@ if command -v node > /dev/null 2>&1; then
   #  전부 `;` 또는 `}` 로 끝나 해당 없다.)
   # 확장자가 `.js` 여야 한다 — Node 22 는 확장자로 모듈 타입을 판정하고, mktemp 의
   # 무확장자 파일에는 ERR_UNKNOWN_FILE_EXTENSION 을 던진다(게이트 자체가 실패한다).
-  # package.json 이 없으므로 `.js` 는 CommonJS 스크립트로 파싱된다 — 브라우저의
-  # <script> 와 같은 조건이다.
+  # package.json 이 없으므로 `.js` 는 CommonJS 로 파싱된다. 브라우저의 classic script 와
+  # **완전히 같지는 않다** — CJS 는 모듈 래퍼 함수 안이라 최상위 `return` 과 전역
+  # 프로퍼티 섀도잉(`const location = …`)을 통과시킨다. 이름 충돌 검사가 목적이므로
+  # 그 차이는 감수한다.
   tmpdir=$(mktemp -d) || { echo "  임시 디렉터리를 만들 수 없습니다"; exit 1; }
   combined="$tmpdir/_all.js"
   # 파일마다 개행을 덧붙인다 — 마지막 줄이 주석이면 다음 파일 첫 줄이 삼켜진다.
@@ -121,11 +123,17 @@ fi
 echo "== $HTML_FILE 로드 누락 검사 =="
 # 자산이 조용히 고아가 되는 경로를 막는다 — 구문 검사는 통과하지만 페이지에 실리지 않는다.
 # CSS 도 함께 본다: 로드 순서가 곧 캐스케이드 순서라 하나가 빠지면 화면이 통째로 바뀐다.
+# nullglob 때문에 경로가 틀리면 목록이 통째로 사라져 "전부 참조됨" 이 찍힌다 — 먼저 센다.
+css_files=("$CSS_DIR"/*.css)
+if [ ${#css_files[@]} -eq 0 ]; then
+  echo "  검사할 CSS 가 없습니다 — 경로가 맞습니까? ($CSS_DIR)"
+  exit 1
+fi
 missing=""
-for f in "${files[@]}" "$CSS_DIR"/*.css; do
+for f in "${files[@]}" "${css_files[@]}"; do
   name=$(basename "$f")
   dir=$(basename "$(dirname "$f")")
-  if ! grep -q "$dir/$name?v=" "$HTML_FILE"; then
+  if ! grep -qF "$dir/$name?v=" "$HTML_FILE"; then
     missing="$missing$dir/$name
 "
   fi

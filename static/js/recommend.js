@@ -55,11 +55,14 @@ function renderRecommend(container, data) {
       </div>
   `;
 
+  // 플랫폼 판정은 응답의 platform 필드 하나로 한다 — URL 부분문자열로 따로 판정하면
+  // 같은 질의가 두 술어에서 다른 결과를 준다.
+  const isCF = data.platform === 'codeforces';
+
   for (const rec of data.recommendations) {
     html += `<div class="rec-tag-title">${escapeHtml(rec.tag)}</div><div class="rec-problems">`;
     for (const p of rec.problems) {
       const ptc = tierClass(p.tier);
-      const isCF = p.url && p.url.includes('codeforces');
       if (isCF) {
         html += `
           <div class="rec-problem-card is-clickable"

@@ -45,8 +45,7 @@ def require_platform(value: str) -> str:
     """플랫폼 문자열을 검증해 400 으로 바꾼다.
 
     validate_platform 은 pydantic 검증용이라 ValueError 를 던진다 — 라우터에서 그대로
-    쓰면 500 이 된다. 네 라우터가 같은 try/except 를 복제하고 있었고, 그중 solved.py 는
-    아예 검증하지 않았다.
+    쓰면 500 이 된다. 라우터마다 따로 처리하면 같은 값이 엔드포인트마다 다르게 처리된다.
     """
     try:
         return validate_platform(value)
@@ -166,9 +165,9 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
             # 실패로 본다(수집기가 실패를 어떻게 표현하든 결과가 같아야 한다).
             #
             # 다만 무조건 막으면 안 된다 — 지킬 문서가 없는데 502 를 내면 최초 등록이
-            # 이유 없이 차단된다. acmicpc.net 종료로 BOJ 수집이 상시 실패하므로 실제로
-            # BOJ 의 "GitHub에 올리기" 가 전부 502 였고, 메시지("잠시 후 다시 시도")는
-            # 절대 성공하지 않는 재시도를 유도했다.
+            # 이유 없이 차단된다. BOJ 는 acmicpc.net 종료로 수집이 상시 실패하므로,
+            # 구분하지 않으면 "GitHub에 올리기" 가 전부 502 가 되고 메시지("잠시 후 다시
+            # 시도")가 절대 성공하지 않는 재시도를 유도한다.
             if require_sections and _readme_exists(repo, token, folder):
                 raise HTTPException(
                     status_code=502,
@@ -187,7 +186,9 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
         {"path": f"{folder}/{problem_ref}{ext}", "content": code},
     ], msg)
     if not ok:
-        raise HTTPException(status_code=500, detail="GitHub push에 실패했습니다.")
+        # push_files_to_github 는 네트워크 오류·401·404·422 를 전부 False 로 삼킨다 —
+        # 대다수가 GitHub 쪽 장애·거절이므로 상류 실패로 본다.
+        raise HTTPException(status_code=502, detail="GitHub push에 실패했습니다.")
     return folder
 
 

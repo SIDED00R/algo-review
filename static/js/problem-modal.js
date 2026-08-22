@@ -297,7 +297,7 @@ async function runSamples() {
 function proceedToReview() {
   if (!_currentProblem) return;
   // fillReviewForm 진입점 넷이 같은 규약을 따른다 — 여기만 확인을 건너뛰어
-  // 메인 에디터에 작성 중이던 코드가 무경고로 날아갔다.
+  // 메인 에디터에 작성 중이던 코드가 무경고로 날아간다.
   if (!confirmEditorOverwrite()) return;
   closeProblemModal();
   fillReviewForm({

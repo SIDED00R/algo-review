@@ -166,11 +166,11 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 
    위·아래 선을 스스로 갖고 앞에 행이 있으면 위 선을 뺀다. 상단선을
    `.row:first-child` 로 줬는데, #history-list 의 첫 자식은 항상 .toolbar 라
-   리뷰 기록 탭에서는 영원히 매칭되지 않았다.
+   리뷰 기록 탭에서는 영원히 매칭되지 않는다.
 
    **인접(+)이 아니라 일반 형제(~)를 쓴다.** 가져오기 목록은 행마다 코드 보기 패널 div 를
    형제로 끼워 넣는데, `+` 는 DOM 구조 기준이라 display:none 형제도 인접을 끊는다 —
-   그 탭에서만 구분선이 2px 로 겹쳤다. `~` 는 중간 노드와 무관하게 매칭된다. */
+   그 탭에서만 구분선이 2px 로 겹친다. `~` 는 중간 노드와 무관하게 매칭된다. */
 .row {
   display: flex; align-items: center; gap: var(--s-4);
   padding: var(--s-3) var(--s-2);
@@ -227,7 +227,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 }
 
 /* ═══ 배지 ═══
-   .tier-* / .cf-* / .eff-* 는 데이터 색 변수만 참조한다. 예전처럼 다크 기준
+   .tier-* / .cf-* / .eff-* 는 데이터 색 변수만 참조한다. 다크 기준
    rgba 를 박고 라이트에서 color 만 덮는 방식이 아니다. */
 .tier-badge {
   display: inline-block;

@@ -3,7 +3,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-# TIER_NAMES 의 정본은 constants.py 다 — DB 레이어가 이 모듈을 import 하던 역의존을 없앴다.
+# TIER_NAMES 의 정본은 constants.py 다 — 여기 두면 DB 레이어가 이 모듈을 import 하게 된다.
 from clients.utils import ProblemSearchError
 from constants import TIER_NAMES
 
@@ -85,7 +85,7 @@ def get_problem_info(problem_id: int) -> dict:
 
 
 def _fetch_boj_sections(problem_id: int) -> dict:
-    """BOJ 문제 페이지에서 설명/입력/출력 섹션을 가져온다. 요소가 없으면 None, 실패 시 예외 전파."""
+    """BOJ 문제 페이지의 세 섹션을 담은 dict. 페이지에 없는 섹션은 값이 None 이다. 요청 실패는 예외 전파."""
     url = f"https://www.acmicpc.net/problem/{problem_id}"
     resp = requests.get(url, headers=HEADERS, timeout=10)
     resp.raise_for_status()
@@ -220,6 +220,11 @@ def get_tag_key_by_name(tag_name: str) -> str:
         result = _TAG_KEY_CACHE.get(tag_name.lower())
         if result:
             return result
+        # 조회는 성공했는데 목록에 그 태그가 없다 — 다시 받아도 결과가 같으므로
+        # 성공 캐시에 폴백을 넣어 재수신을 끊는다.
+        missing = key_lower.replace(" ", "_")
+        _TAG_KEY_CACHE[key_lower] = missing
+        return missing
     except Exception as e:
         logger.warning("solved.ac 태그 목록 조회 실패 (%s): %s", tag_name, e)
     # 폴백도 캐시한다 — 캐시하지 않으면 목록에 없는 태그가 호출마다 전체 태그 목록을

@@ -158,13 +158,16 @@ def test_pasted_statement_wins_over_the_viewer_cache(js):
 
 
 def test_markdown_rendering_falls_back_when_the_cdn_is_blocked(js):
-    """CDN 이 막히면 서버가 이미 저장·과금한 리뷰 결과가 화면에서 사라졌다."""
+    """CDN 이 막히면 서버가 이미 저장·과금한 리뷰 결과가 화면에서 사라진다."""
     assert re.search(r"function\s+renderMarkdown\s*\(", js["utils.js"])
     assert re.search(r"typeof\s+marked\s*===\s*['\"]undefined['\"]", js["utils.js"])
     # 렌더 지점은 전부 헬퍼를 거쳐야 한다 — 직접 호출이 남아 있으면 그 경로만 가드가 없다.
-    for name in ("history.js", "report.js", "review.js"):
-        assert "marked.parse" not in js[name], f"{name} 이 marked 를 직접 부른다"
-        assert "DOMPurify.sanitize" not in js[name], f"{name} 이 DOMPurify 를 직접 부른다"
+    # 목록을 고정하면 그 밖의 파일이 직접 불러도 통과한다.
+    for name, src in js.items():
+        if name == "utils.js":
+            continue          # 헬퍼 정의 자체가 여기 있다
+        assert "marked.parse" not in src, f"{name} 이 marked 를 직접 부른다"
+        assert "DOMPurify.sanitize" not in src, f"{name} 이 DOMPurify 를 직접 부른다"
 
 
 def test_outage_is_not_reported_as_empty_data(js):
@@ -172,7 +175,8 @@ def test_outage_is_not_reported_as_empty_data(js):
     # 전 파일에서 원시 fetch 를 막고, utils.js 안의 fetchJsonOk 정의 한 곳만 예외로 둔다.
     for name, src in js.items():
         for line_no, line in enumerate(src.split("\n"), 1):
-            if not re.search(r"(?<![.\w])fetch\s*\(", line):
+            # `window.fetch(` 도 원시 호출이다 — 룩비하인드로 `.` 만 걸러내면 통과한다.
+            if not re.search(r"(?<![.\w])fetch\s*\(|\bwindow\s*\.\s*fetch\s*\(", line):
                 continue
             assert name == "utils.js", (
                 f"{name}:{line_no} 이 원시 fetch 를 쓴다 — fetchJsonOk 를 써야 한다")
@@ -215,7 +219,7 @@ _HTML = Path(__file__).resolve().parent.parent / "static" / "index.html"
 
 def _strip_css_comments(src):
     """규칙을 찾는 검사는 주석을 봐서는 안 된다 — 결함을 설명하는 주석에 그 결함의
-    코드 형태가 그대로 적혀 있어 거짓 빨강이 난다(실제로 두 번 걸렸다)."""
+    코드 형태가 그대로 적혀 있어 거짓 빨강이 난다."""
     return re.sub(r"/\*.*?\*/", "", src, flags=re.S)
 
 
@@ -303,9 +307,9 @@ def test_row_hairlines_do_not_depend_on_dom_structure(css):
     """목록 행의 구분선이 컨테이너 구조에 의존하면 안 된다.
 
     두 번 틀렸다. ① `.row:first-child` — #history-list 의 첫 자식은 항상 .toolbar 라
-    리뷰 기록 탭에서 매칭되지 않았다. ② `.row + .row` — 가져오기 목록은 행마다 코드 보기
+    리뷰 기록 탭에서 매칭되지 않는다. ② `.row + .row` — 가져오기 목록은 행마다 코드 보기
     패널 div 를 형제로 끼워 넣고, 인접(+)은 DOM 구조 기준이라 display:none 형제도
-    인접을 끊어 그 탭에서만 구분선이 2px 로 겹쳤다.
+    인접을 끊어 그 탭에서만 구분선이 2px 로 겹친다.
 
     일반 형제(~)는 중간 노드와 무관하게 매칭된다.
     """
@@ -532,23 +536,133 @@ def _global_function_owners() -> dict[str, str]:
     return owners
 
 
-def _top_level_calls(src: str) -> set[str]:
+def _code_lines(src: str) -> list[tuple[int, str]]:
+    """(그 줄 시작 시점의 중괄호 깊이, 리터럴·주석을 지운 줄) 목록.
+
+    문자열·템플릿 리터럴·정규식·주석은 **파일 전체를 문자 스트림으로** 훑으며 지운다.
+    줄 단위로 처리하면 여러 줄에 걸친 템플릿 리터럴의 내부 중괄호가
+    코드로 세어져 깊이 카운터가 고착되고, 그 뒤 파일 전체가 검사에서 조용히 빠진다.
+
+    템플릿 리터럴 안의 `${...}` 는 코드지만 여기서는 로드 시점 **호출문**만 찾으므로
+    통째로 버린다 — 문자열 안에서 최상위 실행문이 시작될 수는 없다.
+    """
+    out = []
+    depth = 0
+    line_start_depth = 0
+    buf = []
+    i = 0
+    n = len(src)
+
+    def _flush():
+        out.append((line_start_depth, "".join(buf).strip()))
+        buf.clear()
+
+    while i < n:
+        ch = src[i]
+
+        if ch == "\n":
+            _flush()
+            line_start_depth = depth
+            i += 1
+            continue
+
+        # 주석
+        if ch == "/" and i + 1 < n and src[i + 1] == "/":
+            while i < n and src[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and src[i + 1] == "*":
+            end_at = src.find("*/", i + 2)
+            block = src[i:(end_at + 2) if end_at != -1 else n]
+            for _ in range(block.count("\n")):
+                _flush()
+                line_start_depth = depth
+            i = (end_at + 2) if end_at != -1 else n
+            continue
+
+        # 문자열·템플릿 리터럴
+        if ch in "\"'`":
+            quote = ch
+            i += 1
+            while i < n:
+                if src[i] == "\\":
+                    i += 2
+                    continue
+                if src[i] == "\n" and quote != "`":
+                    break                      # 미종료 문자열 — 줄에서 끊는다
+                if src[i] == "\n":
+                    _flush()
+                    line_start_depth = depth
+                    i += 1
+                    continue
+                if src[i] == quote:
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # 정규식 리터럴 — 앞의 유효 토큰으로 나눗셈과 구분한다
+        if ch == "/":
+            before = "".join(buf).rstrip()
+            looks_regex = (not before or before[-1] in "(,=:[!&|?{};+-*%~^"
+                           or before.endswith(("return", "typeof")))
+            if looks_regex:
+                i += 1
+                in_class = False
+                while i < n and src[i] != "\n":
+                    if src[i] == "\\":
+                        i += 2
+                        continue
+                    if src[i] == "[":
+                        in_class = True
+                    elif src[i] == "]":
+                        in_class = False
+                    elif src[i] == "/" and not in_class:
+                        i += 1
+                        break
+                    i += 1
+                continue
+
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        buf.append(ch)
+        i += 1
+
+    _flush()
+    return out
+
+
+def _is_iife_module(src: str) -> bool:
+    """파일 전체가 `(function () { ... })();` 한 겹으로 감싸여 있는지."""
+    return bool(re.search(r"^\(function\s*\(\s*\)\s*\{", src, re.M))
+
+
+def _top_level_calls(src: str, name: str = "") -> set[str]:
     """로드 시점에 실행되는 줄에서 호출하는 함수 이름.
 
-    중괄호 깊이 0 이면서 선언·주석이 아닌 줄만 본다. 이벤트 핸들러 안의 호출은 로드
-    순서와 무관하므로 제외된다.
+    중괄호 깊이가 최상위인 실행문만 본다 — 이벤트 핸들러 안의 호출은 로드 순서와
+    무관하다. IIFE 로 감싼 파일은 래퍼 본문 전체가 로드 시점 실행이므로 깊이 1 을
+    최상위로 본다.
     """
-    depth = 0
+    lines = _code_lines(src)
+    base = 1 if _is_iife_module(src) else 0
+    # 마지막 항목의 시작 깊이 = 스트림을 다 훑은 뒤의 깊이. 0 이 아니면 리터럴·주석
+    # 처리가 어딘가에서 깨져 그 지점 이후를 검사하지 못한다.
+    final_depth = lines[-1][0]
+    assert final_depth == 0, (
+        f"{name or 'JS'}: 중괄호 균형이 {final_depth} 로 끝났다 — 리터럴 처리가 깨져 "
+        f"이 파일의 로드 시점 호출을 검사하지 못한다")
+
     calls = set()
-    for line in src.split("\n"):
-        stripped = line.strip()
-        executable = (depth == 0 and line and not line[0].isspace()
-                      and not stripped.startswith(("//", "/*", "*", "}", ")",
-                                                   "function", "async function",
-                                                   "const", "let", "var", "class")))
-        if executable:
-            calls.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", stripped))
-        depth += line.count("{") - line.count("}")
+    for depth, stripped in lines:
+        if depth != base or not stripped:
+            continue
+        if stripped.startswith(("}", ")", "function", "async function",
+                                "const", "let", "var", "class")):
+            continue
+        calls.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", stripped))
     return calls
 
 
@@ -568,7 +682,7 @@ def test_script_load_order_satisfies_load_time_dependencies(html):
     violations = []
     for path in sorted(_JS_DIR.glob("*.js")):
         consumer = path.name
-        for name in _top_level_calls(path.read_text(encoding="utf-8")):
+        for name in _top_level_calls(path.read_text(encoding="utf-8"), consumer):
             provider = owners.get(name)
             if not provider or provider == consumer:
                 continue
@@ -581,14 +695,24 @@ def test_script_load_order_satisfies_load_time_dependencies(html):
     assert not violations, "스크립트 로드 순서:\n  " + "\n  ".join(violations)
 
 
-def test_the_load_order_check_sees_a_real_dependency(html):
-    """위 검사가 빈 집합을 훑고 통과하지 않는지 — 실제 의존이 한 건 이상 잡혀야 한다."""
+def test_the_load_order_check_sees_every_known_dependency(html):
+    """검사가 실제로 무엇을 보고 있는지 못박는다.
+
+    "빈 집합이 아니다" 만 확인하면 추출기가 일부 파일을 놓쳐도 통과한다 — 알려진 의존을
+    이름으로 고정해 두면 그 파일이 사각지대가 되는 순간 빨강이 난다.
+    IIFE 로 감싼 모듈(command-palette)은 래퍼 한 겹을 벗겨야 보인다.
+    """
     owners = _global_function_owners()
     assert owners.get("registerModal") == "modal-a11y.js"
-    cross = [
+    cross = {
         (p.name, name)
         for p in sorted(_JS_DIR.glob("*.js"))
-        for name in _top_level_calls(p.read_text(encoding="utf-8"))
+        for name in _top_level_calls(p.read_text(encoding="utf-8"), p.name)
         if owners.get(name) and owners[name] != p.name
-    ]
-    assert cross, "로드 시점 크로스파일 호출을 하나도 찾지 못했다 — 검사가 헛돈다"
+    }
+    expected = {
+        ("history.js", "registerModal"),
+        ("problem-modal.js", "registerModal"),
+        ("command-palette.js", "registerModal"),
+    }
+    assert expected <= cross, f"검사가 놓친 의존: {sorted(expected - cross)}"

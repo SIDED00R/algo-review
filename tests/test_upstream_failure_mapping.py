@@ -142,3 +142,33 @@ def test_review_imported_does_not_echo_the_provider_body(monkeypatch, minimal_ap
 
     assert r.status_code == 502
     assert "sk-SECRET123" not in r.text
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 429])
+def test_codeforces_server_side_failures_are_upstream(monkeypatch, status):
+    """HTTP 응답을 받았어도 5xx·429 는 CF 쪽 문제다 — 요청자가 입력을 고쳐도 달라지지 않는다."""
+    class _Resp:
+        status_code = status
+        ok = False
+
+        def json(self):
+            raise ValueError("not json")
+
+    monkeypatch.setattr(codeforces.requests, "get", lambda *a, **k: _Resp())
+    with pytest.raises(UpstreamUnavailable):
+        codeforces._codeforces_api_request("problemset.problems")
+
+
+def test_codeforces_client_side_failure_stays_a_value_error(monkeypatch):
+    """comment 없는 4xx 는 요청 문제로 본다 — 400 이 맞다."""
+    class _Resp:
+        status_code = 400
+        ok = False
+
+        def json(self):
+            return {"status": "FAILED"}
+
+    monkeypatch.setattr(codeforces.requests, "get", lambda *a, **k: _Resp())
+    with pytest.raises(ValueError) as caught:
+        codeforces._codeforces_api_request("problemset.problems")
+    assert not isinstance(caught.value, UpstreamUnavailable)

@@ -21,6 +21,14 @@
     if (target) target.focus();
   }
 
+  /** 포커스가 <body> 로 떨어졌으면 모달 안으로 되돌린다. 다른 요소로 옮겨 갔으면 둔다.
+   *  innerHTML 교체처럼 focusout 이 발화하지 않는 경로에서 직접 부른다. */
+  function recoverFocus(root) {
+    if (!root || root.classList.contains('hidden')) return;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    (focusables(root)[0] || root).focus();
+  }
+
   /** 모달이 닫힐 때 — 열기 전 위치로 되돌린다. */
   function onClose(root) {
     const prev = restore.get(root);
@@ -67,8 +75,11 @@
 
     // 포커스가 **아무 데도 가지 않은** 경우에만 모달 안으로 되돌린다.
     // 이 모달의 keydown 리스너는 root 에 걸려 있으므로, 포커스가 <body> 에 있으면
-    // Esc 도 Tab 트랩도 이 모달에 도달하지 않는다. 포커스를 가진 요소가 disabled 되거나
-    // (setLoading) DOM 에서 사라지면 브라우저가 포커스를 <body> 로 옮긴다.
+    // Esc 도 Tab 트랩도 이 모달에 도달하지 않는다.
+    //
+    // 이 리스너가 덮는 것은 **포커스를 가진 요소가 disabled 되는 경우**다(setLoading).
+    // 그 요소가 DOM 에서 제거되는 경우에는 focusout 이 발화하지 않으므로 여기서 잡지
+    // 못한다 — 목록을 innerHTML 로 교체하는 쪽이 재렌더 직후 recoverFocus 를 부른다.
     //
     // 다른 요소로 이동한 포커스는 건드리지 않는다. 위에 다른 모달이 열려 자기 입력에
     // 포커스를 주면, 두 모달이 서로 회수하며 microtask 루프에 빠져 탭이 정지한다.
@@ -76,11 +87,7 @@
       if (root.classList.contains('hidden')) return;
       if (e.relatedTarget) return;   // 갈 곳이 있는 이동이다
       // focusout 시점에는 새 포커스가 아직 확정되지 않는다 — 마이크로태스크로 미룬다.
-      queueMicrotask(() => {
-        if (root.classList.contains('hidden')) return;
-        if (document.activeElement && document.activeElement !== document.body) return;
-        (focusables(root)[0] || root).focus();
-      });
+      queueMicrotask(() => recoverFocus(root));
     });
 
     // 열림/닫힘은 .hidden 토글로 표현된다 — 그 변화를 감시해 포커스를 다룬다.
@@ -95,4 +102,5 @@
   }
 
   window.registerModal = registerModal;
+  window.recoverModalFocus = recoverFocus;
 })();

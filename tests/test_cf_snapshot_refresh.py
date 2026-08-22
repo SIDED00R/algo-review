@@ -86,7 +86,7 @@ def test_cooldown_blocks_a_second_refresh(monkeypatch):
 
 
 def test_concurrent_misses_download_only_once(monkeypatch):
-    """lru_cache 는 동시 호출을 합치지 못한다 — 스레드풀에서 각자 수 MB 를 내려받았다."""
+    """동시 miss 를 하나로 합친다 — 합치지 않으면 스레드풀의 요청들이 각자 수 MB 를 내려받는다."""
     calls = {"n": 0}
     started = threading.Barrier(4)
 

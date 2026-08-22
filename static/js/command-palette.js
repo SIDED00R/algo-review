@@ -44,14 +44,9 @@
       b.addEventListener('click', () => run(Number(b.dataset.idx)));
     });
     listEl.querySelector('.cmdk-item.active')?.scrollIntoView({ block: 'nearest' });
-    // 목록을 통째로 교체하므로 항목 버튼에 있던 포커스가 <body> 로 떨어진다.
-    // keydown 리스너가 overlay 에 걸려 있어 그 상태로는 ↑↓·Enter·Esc 가 무반응이 된다.
-    // 포커스가 실제로 사라진 경우에만 되돌린다 — 다른 요소로 옮겨간 포커스를 뺏으면
-    // modal-a11y 가 기억하는 "열기 전 포커스" 가 #cmdk-input 자신이 되어 복원이 깨진다.
-    if (!overlay.classList.contains('hidden')
-        && (!document.activeElement || document.activeElement === document.body)) {
-      input.focus();
-    }
+    // 목록을 통째로 교체하므로 항목 버튼에 있던 포커스가 <body> 로 떨어진다. 노드 제거는
+    // focusout 을 발화시키지 않아 modal-a11y 의 감시가 잡지 못하므로 여기서 직접 부른다.
+    recoverModalFocus(overlay);
   }
 
   function rootRows(query) {

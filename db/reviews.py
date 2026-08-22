@@ -137,14 +137,16 @@ def update_pending_review(platform: str, problem_ref: str, result: dict) -> bool
 
 
 def _first_submission_tag_counts(session) -> dict:
-    """BOJ 리뷰에서 **문제당 첫 제출**만 세어 태그별 good/poor 를 만든다.
+    """BOJ 리뷰에서 **문제당 첫 판정 행**만 세어 태그별 good/poor 를 만든다.
 
-    `_bump_tag_stats` 와 같은 기준이다 — 다른 기준으로 복원하면 두 경로가 뒤집힐 때
-    숫자가 튄다. `created_at` 오름차순으로 훑어 (platform, problem_ref) 첫 행만 쓴다.
+    기준은 `_bump_tag_stats` 호출부와 같다 — **첫 non-pending 행**이다. 대기 행은
+    판정이 없어 집계 대상이 아니므로 dedup 대상에서도 빼야 한다. 대기 행을 포함해
+    "created_at 최소 행" 을 첫 제출로 보면, 대기 등록 후 리뷰한 문제는 첫 행이 pending
+    이라 문제 전체가 집계에서 빠진다.
     """
     rows = session.execute(
         select(Review.problem_ref, Review.tags, Review.efficiency)
-        .where(Review.platform == "boj")
+        .where(Review.platform == "boj", Review.efficiency != PENDING_EFFICIENCY)
         .order_by(Review.created_at.asc())
     ).mappings().all()
 
@@ -158,6 +160,17 @@ def _first_submission_tag_counts(session) -> dict:
     return _tally_tag_efficiency(firsts)
 
 
+# 복원을 이미 시도했는지 기록한다. 복원 결과가 0행이면(BOJ 리뷰가 없다) 표가 계속 비어
+# 있어, 플래그가 없으면 `/api/stats` 호출마다 reviews 전체 스캔 + 쓰기 트랜잭션이 열린다.
+_tag_stats_rebuild_tried = False
+
+
+def reset_tag_stats_rebuild_flag() -> None:
+    """프로세스 로컬 복원 플래그를 되돌린다. 테스트에서 DB 를 갈아끼울 때 쓴다."""
+    global _tag_stats_rebuild_tried
+    _tag_stats_rebuild_tried = False
+
+
 def _rebuild_tag_stats() -> None:
     """비어 있는 tag_stats 를 reviews 에서 **한 번** 복원한다.
 
@@ -166,13 +179,16 @@ def _rebuild_tag_stats() -> None:
     `_bump_tag_stats` 가 행 1개를 만들고, 다음 조회부터 폴백을 건너뛰어 `math: 120` 이
     `math: 1` 로 붕괴한다. 상태를 수렴시켜 스위치 자체를 없앤다.
     """
+    global _tag_stats_rebuild_tried
     with session_scope(commit=True) as session:
         if session.scalar(select(func.count()).select_from(TagStat)):
+            _tag_stats_rebuild_tried = True
             return   # 다른 인스턴스가 먼저 채웠다
         for tag, counts in _first_submission_tag_counts(session).items():
             session.add(TagStat(tag=tag, good_count=counts["good_count"],
                                 poor_count=counts["poor_count"],
                                 total_count=counts["total_count"]))
+    _tag_stats_rebuild_tried = True
 
 
 def get_tag_stats() -> list:
@@ -197,7 +213,7 @@ def get_tag_stats() -> list:
             ]
 
     rows = _read()
-    if rows:
+    if rows or _tag_stats_rebuild_tried:
         return rows
     try:
         _rebuild_tag_stats()
@@ -450,12 +466,13 @@ def get_tag_weakness_data(platform: str) -> list:
             if s["total_count"] > 0:
                 poor_map[s["tag"]] = s["poor_count"] / s["total_count"]
     else:
-        tag_eff = _tally_tag_efficiency(review_rows)
+        # tag_stats 와 **같은 모집단**(문제당 첫 판정 행)을 쓴다. 전 회차를 세면 같은
+        # 데이터인데 tag_stats 유무에 따라 poor_ratio 가 달라지고, 그 값이
+        # recommender._score_tags 의 가중치 0.3 으로 들어가 추천 결과를 바꾼다.
+        with session_scope() as session:
+            tag_eff = _first_submission_tag_counts(session)
         for tag, counts in tag_eff.items():
             if counts["total_count"] > 0:
-                # tag_stats 경로와 같은 식으로 쓴다 — _tally_tag_efficiency 가 pending 을
-                # 건너뛰어 good + poor == total 이므로 수학적으로 동치지만, 읽는 사람이
-                # 그 동치성을 매번 증명해야 하는 부채를 없앤다.
                 poor_map[tag] = counts["poor_count"] / counts["total_count"]
 
     return [

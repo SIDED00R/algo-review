@@ -350,6 +350,10 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
     if payload and payload.get("comment"):
         raise ValueError(payload["comment"])
     if not resp.ok:
+        # 5xx·429 는 CF 쪽 문제다 — 요청자가 입력을 고쳐도 달라지지 않으므로 502 로 간다.
+        # comment 를 준 4xx 는 위에서 이미 처리했다(그건 진짜 입력 오류다).
+        if resp.status_code >= 500 or resp.status_code == 429:
+            raise UpstreamUnavailable(f"Codeforces API 오류 (HTTP {resp.status_code})")
         raise ValueError(f"Codeforces API 오류 (HTTP {resp.status_code})")
     if payload is None or payload.get("status") != "OK":
         raise ValueError("Codeforces API 오류")
