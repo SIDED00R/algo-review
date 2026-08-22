@@ -29,16 +29,12 @@ def _resolved_url():
     return make_url(str(Settings().sqlalchemy_url))
 
 
-# **해석된 URL** 에서 방언을 판정한다. os.environ["DB_TYPE"] 을 보면 안 된다 —
+# 해석된 URL 에서 방언을 판정한다. os.environ["DB_TYPE"] 을 보면 안 된다 —
 # config.sqlalchemy_url 은 DATABASE_URL 을 최우선으로 쓰고 그 값은 .env 에서도 온다.
-# 그러면 IS_POSTGRES=False 로 sqlite 분기(DB_PATH 격리)를 타면서 실제로는 그 DB 에 붙어,
-# test_migrations 의 DROP TABLE 이 실DB 로 나간다.
 IS_POSTGRES = _resolved_url().get_backend_name().startswith("postgresql")
 
-# IS_DEMO 는 모듈 import 시점에 한 번 결정된다 — 환경에 DEMO_MODE=true 가 있으면
-# 비-데모를 전제한 테스트들이 조기 반환에 걸려 원인 불명으로 깨진다(배포 워크플로가
-# 데모 서비스에 그 값을 넣으므로 로컬 .env 로 흘러들어올 수 있다).
-# 전제를 코드에 못박고, 데모 동작을 검증하는 테스트는 각자 True 로 되돌린다.
+# IS_DEMO 는 모듈 import 시점에 한 번 결정된다 — 환경의 DEMO_MODE=true 가 비-데모를
+# 전제한 테스트를 깨뜨린다. 전제를 코드에 못박고, 데모 테스트는 각자 True 로 되돌린다.
 _DEMO_AWARE_MODULES = [
     # server 도 넣는다 — client 픽스처가 lifespan 을 실제로 태우므로, 빠뜨리면
     # DEMO_MODE=true 환경에서 demo_seed.seed() 가 테스트 DB 에 행을 심고 마이그레이션이

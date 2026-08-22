@@ -46,10 +46,8 @@ function showChartMessage(text) {
   emptyEl.classList.remove('hidden');
 }
 
-// 세대 토큰 — problem-modal.js 와 같은 규약. 없으면 탭을 연속으로 열 때 호출 A·B 가
-// 둘 다 진입 시점에 tierChartInstance === null 을 보고 destroy 를 건너뛴 뒤, 뒤늦은
-// new Chart 가 같은 canvas 에서 "Canvas is already in use" 를 던진다. 그 예외는
-// 아래 catch 가 showChartMessage 로 넘겨 **Chart.js 영문 메시지가 안내문 자리에** 뜬다.
+// 세대 토큰 — 없으면 연속 호출 둘이 destroy 를 건너뛴 뒤 같은 canvas 에서
+// "Canvas is already in use" 가 난다.
 let _chartToken = 0;
 
 async function loadTierChart() {
@@ -226,9 +224,7 @@ function recolorTierChart() {
   chart.update('none');
 }
 
-// editor.js 와 같은 방식으로 테마 변경을 감시해 축·그리드·범례 색을 갱신한다.
-// 색만 갱신한다 — loadTierChart() 를 다시 부르면 색을 바꾸려고 /api/tier-history 를
-// 재요청하고(editor.js 는 setOption 만 한다), 통계 탭이 비활성일 때는 0×0 canvas 에
-// 차트를 재생성한다.
+// 테마 변경을 감시해 축·그리드·범례 **색만** 갱신한다 — loadTierChart() 를 다시 부르면
+// /api/tier-history 를 재요청하고, 탭이 비활성일 때 0×0 canvas 에 차트를 재생성한다.
 new MutationObserver(recolorTierChart)
   .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

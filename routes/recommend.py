@@ -54,9 +54,8 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         return {"avg_tier": avg_tier, "tier_name": tier_name, "tier_range": tier_range,
                 "weak_tags": [], "recommendations": [], "platform": platform, "error": ""}
 
-    # 검색 실패를 빈 추천으로 내려보내면 프론트가 "아직 추천 데이터가 없습니다. 먼저 코드
-    # 리뷰를 몇 개 진행해보세요." 로 **사용자를 탓한다** — 평균 티어와 취약 태그가 같은
-    # 응답에 채워져 있는데도. themes 응답이 이미 쓰는 error 필드 계약을 그대로 따른다. (#113)
+    # 검색 실패를 빈 추천으로 내려보내면 프론트가 '먼저 코드 리뷰를 진행해보세요' 로 안내한다 —
+    # themes 응답이 쓰는 error 필드 계약을 그대로 따른다.
     error = ""
     try:
         # 위에서 구한 평균 난이도를 넘긴다 — 넘기지 않으면 recommender 가 같은 요청 안에서

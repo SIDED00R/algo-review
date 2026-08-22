@@ -20,10 +20,7 @@ def test_readme_pending_review_shows_waiting_notice():
 
 
 def test_readme_uses_original_submitted_at_when_given():
-    # 재업로드는 원래 제출 시각을 유지해야 앱 기록의 회차 날짜와 어긋나지 않는다.
-    # tz 가 없는 값은 UTC 로 간주해 KST(+9)로 변환한다 — db.save_review 가 컨테이너 로컬
-    # 시각(Cloud Run 은 UTC)을 tz 없이 저장하므로, 변환하지 않으면 최초 push(KST)와
-    # 재푸시(UTC)의 '제출 일자'가 9시간 어긋난다.
+    # 재업로드는 원래 제출 시각을 유지한다. tz 가 없는 값은 UTC 로 간주해 KST(+9)로 바꾼다.
     out = build_readme("1000", "A+B", "Bronze V", ["구현"], "Python 3",
                        "https://boj.kr/1000", submitted_at="2026-08-01T09:30:00")
     assert "2026년 8월 1일 18:30:00" in out

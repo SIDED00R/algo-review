@@ -1,13 +1,11 @@
 // 지난 제출을 편집 가능한 상태로 리뷰 폼에 채운다.
-// 진입점 넷이 이 파일의 fillReviewForm 을 쓴다 — 메인 탭 버튼, 리뷰 기록 모달,
-// ⌘K 팔레트, 문제 뷰어의 '코드 리뷰 진행'.
+// 진입점 넷이 fillReviewForm 을 쓴다 — 메인 탭 버튼, 리뷰 기록 모달, ⌘K 팔레트, 문제 뷰어.
 
 const loadSubmissionBtn = document.getElementById('load-submission-btn');
 const loadSubmissionMsg = document.getElementById('load-submission-msg');
 
-// DB 의 language 는 자유 문자열이다 — import 경로가 CF/BOJ 원문을 그대로 저장하므로
-// "GNU G++17 7.3.0", "Python 3.8.10", "PyPy 3-64" 같은 값이 들어온다.
-// select 에 없는 값을 대입하면 조용히 실패해 selectedIndex 가 -1(빈 select)이 된다.
+// DB 의 language 는 자유 문자열이다("GNU G++17 7.3.0", "PyPy 3-64" 등).
+// select 에 없는 값을 대입하면 조용히 실패해 selectedIndex 가 -1 이 된다.
 function submissionLanguageOption(language, code) {
   const sel = document.getElementById('code-language');
   if (language && [...sel.options].some(o => o.value === language)) return language;

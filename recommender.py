@@ -25,9 +25,8 @@ def _score_tags(tag_data: list) -> list:
     max_count = max(d["solve_count"] for d in tag_data) or 1
 
     for d in tag_data:
-        # parse_stored 로 aware 로 맞춘다 — naive 로 빼면 저장 형식이 바뀌는 순간
-        # TypeError 가 나고, 아래 except 가 그것을 삼켜 **모든 태그의 days_since 가
-        # 365 로 평탄해진다**(최신성 점수가 통째로 무의미해지는데 아무도 모른다).
+        # parse_stored 로 aware 로 맞춘다 — naive 로 빼면 TypeError 가 나고 아래 except 가
+        # 그것을 삼켜 모든 태그의 days_since 가 365 로 평탄해진다.
         try:
             # 미래 시각(시계 되돌림·수동 편집)은 0 으로 깎는다 — 음수를 그대로 두면
             # recency 점수가 **음수**가 되어 그 태그가 강점처럼 순위 밑으로 밀린다.
@@ -130,10 +129,8 @@ def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = No
     exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
 
     recommendations = []
-    # CF 는 BOJ 와 달리 태그별 실패 격리를 **하지 않는다**. search_cf_problems_by_tag 의
-    # 유일한 실패 조건은 프로세스 전역 스냅샷 1개의 실패라 태그와 무관하고, 격리하면
-    # 같은 수 MB 다운로드를 태그·밴드 수만큼(최대 6회 × timeout 30s) 직렬 반복한다.
-    # BOJ 는 태그마다 별도 HTTP 호출이라 격리가 의미를 갖는다.
+    # CF 는 태그별 실패 격리를 하지 않는다 — 실패 조건이 프로세스 전역 스냅샷 하나라
+    # 태그와 무관하고, 격리하면 같은 수 MB 다운로드를 태그·밴드 수만큼 직렬 반복한다.
     for tag in weak_tags:
         same_problems = search_cf_problems_by_tag(tag, cf_same_min, cf_same_max, exclude_refs)[:SAME_PER_TAG]
         hard_problems = search_cf_problems_by_tag(tag, cf_hard_min, cf_hard_max, exclude_refs)[:HARD_PER_TAG]

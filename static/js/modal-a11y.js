@@ -25,10 +25,8 @@
    *  innerHTML 교체처럼 focusout 이 발화하지 않는 경로에서 직접 부른다. */
   function recoverFocus(root) {
     if (!root || root.classList.contains('hidden')) return;
-    // onOpen 이 아직 돌지 않았으면(장부가 비어 있다) 아무것도 하지 않는다. .hidden 제거는
-    // 동기지만 MutationObserver 는 마이크로태스크라, 그 사이에 포커스를 모달 안으로 옮기면
-    // onOpen 이 "열기 전 포커스" 로 모달 안의 요소를 기억한다. 그러면 닫을 때 숨겨진
-    // 요소에 focus() 를 걸어 무효가 되고 포커스가 <body> 로 떨어진다.
+    // onOpen 전이면(장부가 비어 있다) 아무것도 하지 않는다 — MutationObserver 가
+    // 마이크로태스크라, 그 사이 포커스를 옮기면 onOpen 이 모달 안의 요소를 기억한다.
     if (!restore.has(root)) return;
     if (document.activeElement && document.activeElement !== document.body) return;
     (focusables(root)[0] || root).focus();
@@ -52,9 +50,8 @@
   function registerModal(id, close, opts = {}) {
     const root = document.getElementById(id);
     if (!root) return;
-    // 마지막 수단으로 포커스를 받을 수 있어야 한다 — tabindex 가 없으면 root.focus() 가
-    // 조용히 무효라서, 안에 포커스 가능한 요소가 하나도 없을 때 회수에 실패한다
-    // (진행 중 버튼이 disabled 되면 `button:not([disabled])` 에서 빠져 실제로 그렇게 된다).
+    // tabindex 가 없으면 root.focus() 가 조용히 무효다 — 안에 포커스 가능한 요소가
+    // 하나도 없을 때 회수에 실패한다.
     root.tabIndex = -1;
 
     root.addEventListener('keydown', e => {
@@ -78,16 +75,10 @@
       }
     });
 
-    // 포커스가 **아무 데도 가지 않은** 경우에만 모달 안으로 되돌린다.
-    // 이 모달의 keydown 리스너는 root 에 걸려 있으므로, 포커스가 <body> 에 있으면
-    // Esc 도 Tab 트랩도 이 모달에 도달하지 않는다.
-    //
-    // 이 리스너가 덮는 것은 **포커스를 가진 요소가 disabled 되는 경우**다(setLoading).
-    // 그 요소가 DOM 에서 제거되는 경우에는 focusout 이 발화하지 않으므로 여기서 잡지
-    // 못한다 — 목록을 innerHTML 로 교체하는 쪽이 재렌더 직후 recoverFocus 를 부른다.
-    //
-    // 다른 요소로 이동한 포커스는 건드리지 않는다. 위에 다른 모달이 열려 자기 입력에
-    // 포커스를 주면, 두 모달이 서로 회수하며 microtask 루프에 빠져 탭이 정지한다.
+    // 포커스가 아무 데도 가지 않은 경우에만 모달 안으로 되돌린다. Esc·Tab 트랩 리스너가
+    // root 에 걸려 있어 포커스가 <body> 에 있으면 이 모달에 도달하지 않는다.
+    // 노드가 DOM 에서 제거되는 경우는 focusout 이 없어 잡지 못한다 — 목록을 innerHTML 로
+    // 교체하는 쪽이 재렌더 직후 recoverFocus 를 부른다.
     root.addEventListener('focusout', e => {
       if (root.classList.contains('hidden')) return;
       if (e.relatedTarget) return;   // 갈 곳이 있는 이동이다

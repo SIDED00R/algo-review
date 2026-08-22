@@ -3,13 +3,10 @@ historyBtn.dataset.label = '기록 불러오기';
 historyBtn.dataset.loadingLabel = '불러오는 중...';
 historyBtn.addEventListener('click', loadHistory);
 
-// 세대 토큰 — "버튼이 disabled 라 단일 호출" 이 성립하지 않는다. 호출처가 넷이고
-// (버튼 · activateTab('history') · 재리뷰 성공 후 · 필터 입력) 그중 탭 전환은 버튼
-// 상태와 무관하다. 없으면 늦게 끝난 A 가 finally 로 버튼을 되살리고, 이어서 B 의
-// renderHistoryControls 가 그 사이 사용자가 입력한 검색어·필터를 지운다.
+// 세대 토큰 — 호출처가 넷이고(버튼 · activateTab · 재리뷰 성공 후 · 필터 입력)
+// 그중 탭 전환은 버튼 상태와 무관하다.
 let _historyToken = 0;
-// 현재 페이지·전체 개수. 목록은 서버가 걸러 주므로 클라이언트가 들고 있지 않는다 —
-// 전 행을 받아 클라이언트에서 거르면 응답이 리뷰 수에 비례해 자란다(1만 행에서 1.41MB).
+// 현재 페이지·전체 개수. 목록은 서버가 걸러 주므로 클라이언트가 들고 있지 않는다.
 let _historyPage = 1;
 let _historyTotal = 0;
 const HISTORY_PER_PAGE = 20;
@@ -88,8 +85,7 @@ function renderHistoryControls(container) {
   pager.className = 'pager';
   container.appendChild(pager);
 
-  // 필터가 바뀌면 첫 페이지부터 다시 받는다. 입력마다 서버를 치지 않도록 묶는다 —
-  // 목록을 서버가 거르므로 이 요청이 유일한 갱신 경로다.
+  // 필터가 바뀌면 첫 페이지부터 다시 받는다. 입력마다 서버를 치지 않도록 묶는다.
   const reload = debounce(() => { _historyPage = 1; loadHistory({ keepControls: true }); });
   ['h-search', 'h-tier', 'h-eff', 'h-sort'].forEach(id => {
     document.getElementById(id).addEventListener('input', reload);
@@ -103,8 +99,7 @@ function renderProblemList(container, problems, hasAny = true) {
   if (!problems || problems.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'alert alert-info';
-    // 기록이 없는 것과 필터에 걸린 것을 구분한다 — 같은 문구를 쓰면 검색어를 지우면
-    // 된다는 것을 알 수 없다(가져오기 탭은 이미 구분한다).
+    // 기록 없음과 검색 결과 없음을 구분한다.
     empty.textContent = hasAny
       ? '검색 결과가 없습니다. 검색어나 필터를 확인해주세요.'
       : '아직 리뷰 기록이 없습니다.';
@@ -292,9 +287,8 @@ async function runRereview(e) {
       alert(`${data.detail || 'GitHub 갱신에 실패했습니다.'}\n\n` +
             "최신 회차의 'GitHub 문서 다시 올리기' 버튼으로 업로드만 재시도할 수 있습니다 (리뷰는 다시 돌리지 않습니다).");
     }
-    // 이 재리뷰를 시작한 그 모달이 아직 그대로일 때만 재렌더한다. 재리뷰는 10~20초라
-    // 그 사이 사용자가 닫거나(openReviewModal 은 hidden 을 무조건 벗기므로 닫은 모달이
-    // 다시 튀어 오른다) **다른 문제를 열 수 있다**(그 모달이 이 문제로 덮인다).
+    // 이 재리뷰를 시작한 모달이 그대로일 때만 재렌더한다 — 재리뷰는 10~20초라 그 사이
+    // 사용자가 닫거나 다른 문제를 열 수 있다.
     if (myToken === _modalToken
         && !document.getElementById('review-modal').classList.contains('hidden')) {
       await openReviewModal(platform, problemRef);

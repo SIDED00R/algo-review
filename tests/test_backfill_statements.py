@@ -295,10 +295,8 @@ def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
         {"type": "blob", "path": "백준/Gold/9999. 제목/README.md/x"},
         {"type": "blob", "path": "백준/Gold/9998. 제목/sub/README.md"},
         {"type": "blob", "path": "백준/README.md"},
-        # BOJ 루트가 아닌 것은 제외. 번호 파싱이 **성공하는** 폴더명을 써야 루트 필터를
-        # 실제로 검증한다 — `4A. Watermelon` 은 번호 경계 규칙에 먼저 걸려(4 뒤에 A)
-        # 루트 필터만이 이유가 되는 입력이다 — 번호 경계에 먼저 걸리면 그 필터를 지워도
-        # 결과가 같아 거짓 초록이 된다.
+        # BOJ 루트가 아닌 것은 제외. 번호 파싱이 성공하는 폴더명을 써야 루트 필터만이 이유가
+        # 된다 — 번호 경계에 먼저 걸리면 그 필터를 지워도 결과가 같아 거짓 초록이 된다.
         {"type": "blob", "path": "Codeforces/Div2/777. Watermelon/README.md"},
         # blob 이 아닌 항목은 제외
         {"type": "tree", "path": "백준/Gold/8888. 제목/README.md"},
@@ -335,8 +333,7 @@ def test_truncated_tree_raises_instead_of_returning_partial_results(monkeypatch)
 
 # ── main() 의 저장 가드 ──
 #
-# is_scrape_failure 와 set_problem_statement 만 검사하면 main() 안의 길이 검사
-# (MIN_STATEMENT_LEN)를 0 으로 바꿔도 통과한다. 여기서는 main() 을 직접 태운다.
+# 하위 함수만 검사하면 main() 의 길이 검사(MIN_STATEMENT_LEN)를 0 으로 바꿔도 통과한다.
 
 def _run_main(monkeypatch, statement, apply=False):
     """main() 을 BOJ 한 건에 대해 돌린다. 수집 결과만 주입한다."""

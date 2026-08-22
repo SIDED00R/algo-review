@@ -1,15 +1,7 @@
 """기존 리뷰 기록의 problem_statement 를 백필한다.
 
-`problem_statement` 는 나중에 추가된 컬럼이라 그 전 기록은 비어 있다. 남아 있는 소스에서
-되살린다.
-
-| 대상 | 소스 | 비고 |
-|------|------|------|
-| BOJ  | GitHub 저장소 README | acmicpc.net 이 종료돼 재수집이 불가하다. push 했던 문제만 복구된다 |
-| CF   | codeforces.com 재수집 | 동작한다 |
-
-사용자가 직접 붙여 넣었던 원문은 저장된 적이 없어 복구할 수 없다. 여기서 채우는 값은
-"그 시절 스크래핑이 만들었을 본문"이다.
+소스: BOJ 는 GitHub 저장소 README(acmicpc.net 종료로 재수집 불가 — push 한 문제만),
+CF 는 codeforces.com 재수집.
 
 기본은 dry-run 이다. `--apply` 를 줘야 DB 에 쓴다.
 
@@ -147,9 +139,8 @@ def main() -> int:
     args = parser.parse_args()
 
     mode = "APPLY" if args.apply else "DRY-RUN"
-    # 접속 대상을 가장 먼저 찍는다 — config 의 env_file 은 CWD 상대 경로라, 리포 루트가 아닌
-    # 곳에서 돌리면 조용히 로컬 SQLite 로 붙는다. 그 DB 가 비어 있으면 "대상 0건" + exit 0
-    # 이 되어 실패가 성공처럼 보이고, 쿼리가 터져도 어디에 붙었는지 알 수 없다.
+    # 접속 대상을 가장 먼저 찍는다 — config 의 env_file 은 CWD 상대 경로라, 리포 루트가
+    # 아닌 곳에서 돌리면 조용히 로컬 SQLite 로 붙는다.
     print("[" + mode + "] " + db_target_label())
 
     problems = db.get_problems_missing_statement(args.platform)

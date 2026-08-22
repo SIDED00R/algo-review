@@ -1,9 +1,5 @@
-// ⌘K 팔레트 — 탭 이동과 '지난 제출 불러오기' 를 한 곳에서 한다.
-// 메인 탭의 불러오기 버튼은 지금 입력된 문제의 최신 회차만 집어 온다. 문제 번호를
-// 기억하지 못하거나 과거 회차를 고르려면 이 경로를 쓴다.
-//
-// 내부 이름이 많아 IIFE 로 감싼다 — 스크립트가 전역 렉시컬 스코프를 공유해서
-// 최상위 const 이름이 겹치면 전체 스크립트가 SyntaxError 로 죽는다(editor.js 와 같은 이유).
+// ⌘K 팔레트 — 탭 이동과 '지난 제출 불러오기'.
+// 내부 이름이 많아 IIFE 로 감싼다(최상위 const 이름이 겹치면 전체 스크립트가 죽는다).
 (function () {
   const TABS = [
     ['review', '코드 리뷰'], ['recommend', '문제 추천'], ['themes', '테마별 문제'],
@@ -19,12 +15,11 @@
 
   let mode = 'root';        // root | problems | ledger
   let rows = [];            // 실행 가능한 항목만 [{label, meta, run}]
-  // 실행할 수 없는 안내 한 줄(불러오는 중 · 결과 없음 · 오류 · 초과 건수). rows 에 섞으면
-  // ↑↓ 가 그 줄에 멈추고 Enter 가 아무 일도 하지 않는 죽은 항목이 된다.
+  // 실행할 수 없는 안내 한 줄. rows 에 섞으면 ↑↓ 가 멈추는 죽은 항목이 된다.
   let notice = '';
   let cursor = 0;
-  // 검색은 서버가 한다 — 전 목록을 받아 클라이언트에서 거르면 팔레트를 열 때마다
-  // 리뷰 수에 비례한 응답을 받고(1만 행에서 1.41MB) 정작 40건만 보여준다.
+  // 검색은 서버가 한다 — 전 목록을 받아 거르면 팔레트를 열 때마다 리뷰 수에 비례한
+  // 응답을 받고 정작 40건만 쓴다.
 
   function isOpen() { return !overlay.classList.contains('hidden'); }
 
@@ -55,8 +50,7 @@
       b.addEventListener('click', () => run(Number(b.dataset.idx)));
     });
     listEl.querySelector('.cmdk-item.active')?.scrollIntoView({ block: 'nearest' });
-    // 목록을 통째로 교체하므로 항목 버튼에 있던 포커스가 <body> 로 떨어진다. 노드 제거는
-    // focusout 을 발화시키지 않아 modal-a11y 의 감시가 잡지 못하므로 여기서 직접 부른다.
+    // 목록 교체로 포커스가 <body> 로 떨어진다. 노드 제거는 focusout 이 없어 직접 부른다.
     recoverModalFocus(overlay);
   }
 
@@ -180,14 +174,12 @@
     input.value = '';
     input.placeholder = '무엇을 할까요?';
     refresh();
-    // 포커스 이동·복원은 modal-a11y 에 맡긴다(아래 registerModal 의 initial).
-    // 여기서 직접 input.focus() 를 하면 공통 모듈이 "열기 전 포커스" 로 #cmdk-input
-    // 자신을 기억해, 닫을 때 숨겨진 입력으로 되돌리려 하는 장부가 하나 더 생긴다.
+    // 포커스 이동·복원은 modal-a11y 에 맡긴다(registerModal 의 initial).
+    // 직접 input.focus() 하면 공통 모듈이 '열기 전 포커스' 로 자기 자신을 기억한다.
   }
 
   function close() {
-    // 진행 중인 조회를 무효화한다 — 그러지 않으면 닫는 사이에 도착한 응답이 다시 연
-    // 팔레트에 렌더된다(다른 검색어의 결과가 보인다).
+    // 진행 중인 조회를 무효화한다 — 닫는 사이 도착한 응답이 다시 연 팔레트에 렌더된다.
     _paletteToken++;
     overlay.classList.add('hidden');
   }
@@ -204,8 +196,7 @@
   overlay.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); cursor++; render(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); cursor--; render(); }
-    // 버튼에서 올라온 Enter 는 그 버튼의 기본 활성화에 맡긴다 — 여기서 취소하면
-    // 포커스한 항목 대신 cursor 항목이 실행되고, 닫기 버튼은 Enter 로 눌리지 않는다.
+    // 버튼에서 올라온 Enter 는 기본 활성화에 맡긴다 — 취소하면 cursor 항목이 대신 실행된다.
     else if (e.key === 'Enter' && e.target === input) { e.preventDefault(); run(cursor); }
     else if (e.key === 'Escape') { e.preventDefault(); if (!back()) close(); }
     else if (e.key === 'Backspace' && !input.value) { if (back()) e.preventDefault(); }
@@ -218,8 +209,7 @@
   // 자기 Esc 는 "뒤로 한 단계" 의미가 있어 직접 처리한다 — 공통 모듈에는 트랩만 맡긴다.
   registerModal('cmdk', close, { ownsEscape: true, initial: '#cmdk-input' });
 
-  // 표기를 플랫폼에 맞춘다 — 핸들러는 metaKey|ctrlKey 를 다 받으므로 UI 도 그래야 한다.
-  // macOS 글리프만 보이면 백준·CF 사용자 다수인 Windows 쪽에 틀린 안내가 된다.
+  // 핸들러가 metaKey|ctrlKey 를 다 받으므로 표기도 플랫폼에 맞춘다.
   const kbd = document.getElementById('cmdk-kbd');
   if (kbd) {
     const platform = navigator.userAgentData?.platform || navigator.platform || '';

@@ -8,9 +8,8 @@ on:
   pull_request:
   workflow_dispatch:
 
-# main 에 연속 머지되면 두 배포가 경쟁해 나중 커밋이 먼저 끝날 수 있다 — 직렬화한다.
-# 그런데 그룹이 ref 단위라 PR 에도 적용된다. PR 은 배포하지 않으므로 구 실행을 붙잡을
-# 이유가 없다 — 붙잡으면 연속 push 때 직렬 대기로 CI 분만 쓴다.
+# main 에 연속 머지되면 두 배포가 경쟁하므로 직렬화한다. 그룹이 ref 단위라 PR 에도
+# 적용되는데, PR 은 배포하지 않으므로 구 실행을 붙잡지 않는다.
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -33,10 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # 핀은 requirements-dev.txt 하나가 정본이다 — 여기에 버전을 복제하면
-      # requirements-dev 만 올렸을 때 CI 가 조용히 구버전으로 린트한다.
-      # 파일을 통째로 설치하면 -r requirements.txt 까지 딸려와 린트 잡이 느려지므로
-      # 핀 한 줄만 뽑아 쓴다.
+      # 핀은 requirements-dev.txt 하나가 정본이다. 파일을 통째로 설치하면 -r requirements.txt
+      # 까지 딸려오므로 핀 한 줄만 뽑아 쓴다.
       - run: pip install "$(grep -E '^ruff==' requirements-dev.txt)"
       - run: ruff check .
 
@@ -48,9 +45,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # 빌드 스텝이 없어 JS 는 브라우저에서만 파싱된다 — 구문 오류가 배포로 나간다.
-      # 검사 내용은 scripts/check_js.sh 에 둔다(로컬에서도 같은 검사를 돌릴 수 있고,
-      # 한 줄 인라인으로 두면 `node --check` 에 glob 을 넘겨 첫 파일만 검사되는 함정에 빠진다).
+      # 빌드 스텝이 없어 JS 는 브라우저에서만 파싱된다. 검사 내용은 scripts/check_js.sh 에 둔다.
       - name: JS 정적 검사
         run: bash scripts/check_js.sh
 
@@ -157,10 +152,8 @@ jobs:
           id_token_include_email: true
 
       - name: Smoke check ${{ matrix.service }}
-        # 배포가 성공해도 서비스가 기능적으로 죽어 있을 수 있다 — server.py 는 DB 연결
-        # 실패를 warning 한 줄로 넘기고 기동을 계속하고, /health 는 DB 가 죽어도 200 을
-        # 준다(둘 다 온디맨드 DB 를 위한 의도된 설계다). 그래서 리비전은 Ready 가 되고
-        # 워크플로는 초록인데 사용자만 503 을 본다. /health 의 db 필드로 그것을 가른다.
+        # 배포가 성공해도 서비스가 기능적으로 죽어 있을 수 있다 — server.py 는 DB 연결 실패를
+        # warning 으로 넘기고 /health 는 DB 가 죽어도 200 을 준다. db 필드로 그것을 가른다.
         env:
           URL: ${{ steps.url.outputs.url }}
           ID_TOKEN: ${{ steps.idtoken.outputs.id_token }}

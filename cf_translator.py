@@ -9,7 +9,7 @@ _TEMPERATURE = settings.openai_temperature
 _API_TIMEOUT = settings.openai_timeout
 
 # 번역 입력 상한. 출력만 제한하는 _MAX_TOKENS 와 달리 **입력** 토큰 비용을 막는다.
-# CF 본문 한 섹션이 이 길이를 넘는 경우는 거의 없다(실측 상위 문제도 6천 자 안쪽).
+# CF 본문 한 섹션이 이 길이를 넘는 경우는 거의 없다.
 MAX_TRANSLATE_LENGTH = 20_000
 
 _INDEX_MARKER_RE = re.compile(r'⟦img:(\d+)⟧')

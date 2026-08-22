@@ -9,9 +9,8 @@ from openai import OpenAI
 
 from config import settings
 
-# openai SDK 기본값은 read 600s·재시도 2회 — 제공자가 멎으면 워커 스레드가 수십 분 잡힌다.
-# timeout 만 줄이면 실효 상한이 3×timeout + 백오프가 되므로 재시도 횟수도 함께 못박는다.
-# 둘 다 설정으로 노출한다 — 한쪽만 환경변수면 운영에서 조절할 수 있는 축이 반쪽이다.
+# openai SDK 기본값은 read 600s·재시도 2회 — 제공자가 멎으면 워커가 수십 분 잡힌다.
+# 실효 상한이 3×timeout + 백오프라 재시도 횟수도 함께 못박고, 둘 다 설정으로 노출한다.
 _API_TIMEOUT = settings.openai_timeout
 _MAX_RETRIES = settings.openai_max_retries
 

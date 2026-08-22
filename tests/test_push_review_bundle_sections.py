@@ -96,10 +96,8 @@ def test_stored_description_skips_scraping(monkeypatch, _label, kw, fetcher, _fa
 
 # ── 지킬 문서가 없으면 막지 않는다 ──
 #
-# 가드를 "수집 실패면 무조건 502" 로 두면 최초 등록이 이유 없이 차단된다. acmicpc.net
-# 종료로 BOJ 수집이 상시 실패하므로, BOJ 의 "GitHub에 올리기"(POST /api/push-review)가
-# 전부 502 가 되고 메시지("잠시 후 다시 시도")는 절대 성공하지 않는 재시도를 유도한다.
-# 같은 최초 등록 상황인 pending 경로(require_sections=False)와도 결과가 어긋난다.
+# "수집 실패면 무조건 502" 로 두면 최초 등록이 이유 없이 차단된다. pending 경로
+# (require_sections=False)와도 결과가 어긋난다.
 
 def _patch_missing_sections(monkeypatch, fetcher, readme_exists):
     monkeypatch.setattr(helpers.api_client, fetcher, lambda *a, **k: None)

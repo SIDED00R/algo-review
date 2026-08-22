@@ -74,9 +74,8 @@ async def get_cf_problem(problem_ref: str):
         if not text:
             return "", True
         if len(text) > MAX_TRANSLATE_LENGTH:
-            # 유료 호출이다. 인증도 요율 제한도 없는 엔드포인트라 상한이 없으면 긴 본문의
-            # 문제를 순회하는 것만으로 과금이 늘어난다. 원문을 그대로 보여준다 —
-            # 번역 실패와 같은 처리라 화면은 "원문" 배지가 붙은 상태가 된다.
+            # 유료 호출이다 — 상한이 없으면 긴 본문을 순회하는 것만으로 과금이 늘어난다.
+            # 상한을 넘으면 원문을 그대로 보여준다(번역 실패와 같은 처리).
             return text, False
         try:
             translated = await asyncio.to_thread(translate_cf_text, text, title)

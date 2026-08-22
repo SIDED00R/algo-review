@@ -31,9 +31,8 @@ ghImportBtn.addEventListener('click', async () => {
         기존 기록 전체 삭제 후 다시 가져오기
       </button>`;
     document.getElementById('gh-reimport-btn').addEventListener('click', async () => {
-      // 삭제 범위를 정확히 알린다 — DELETE /api/solved-history 는 플랫폼 구분 없이
-      // 전 행을 지우는데 재수입은 GitHub 저장소 경로뿐이라, BOJ·Codeforces 로 직접
-      // 가져온 기록은 복구 경로 없이 사라진다.
+      // DELETE /api/solved-history 는 플랫폼 구분 없이 전 행을 지운다 — 재수입은 GitHub
+      // 저장소 경로뿐이라 직접 가져온 기록은 복구 경로가 없다.
       if (!confirm('가져온 기록을 전부 삭제하고 GitHub 저장소에서 다시 가져옵니다. ' +
                    'BOJ·Codeforces 에서 직접 가져온 기록도 함께 삭제되며, ' +
                    '그쪽은 다시 가져오기를 따로 실행해야 합니다. 계속할까요?')) return;

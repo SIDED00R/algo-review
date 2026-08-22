@@ -29,15 +29,11 @@ def safe_env() -> dict:
 
 
 def _run_python(code: str, stdin: str, timeout: int) -> dict:
-    # UTF-8·무버퍼는 **커맨드라인 플래그**로 준다. -I 는 -E 를 포함해 모든 PYTHON* 환경변수를
-    # 무시하므로 PYTHONIOENCODING/PYTHONUTF8 로는 적용되지 않는다 — 플래그가 없으면
-    # 비-ASCII 를 출력하는 제출 코드가 Windows 에서 UnicodeEncodeError 로 죽는다.
+    # UTF-8·무버퍼는 커맨드라인 플래그로 준다 — -I 가 모든 PYTHON* 환경변수를 무시한다.
     env = safe_env()
     try:
-        # 작업 디렉터리를 격리한다. cwd 를 지정하지 않으면 서버의 CWD 를 상속해
-        # sys.path[0] 가 리포 루트가 되고, 제출 코드가 `import config` 로 .env 를 읽을 수
-        # 있다(config 의 env_file 은 CWD 상대 경로다). -I 는 환경변수·사용자 site 기반
-        # import 까지 끊는다. 환경변수 필터만으로는 이 경로를 막지 못한다.
+        # 작업 디렉터리를 격리한다 — cwd 를 지정하지 않으면 sys.path[0] 가 리포 루트가 되어
+        # 제출 코드가 `import config` 로 .env 를 읽는다. -I 는 환경변수·사용자 site import 를 끊는다.
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [sys.executable, "-I", "-X", "utf8=1", "-u", "-c", code],
@@ -106,14 +102,8 @@ def execute_code(req: ExecuteRequest):
     # 데모는 공개 배포라 임의 코드 실행을 열어둘 수 없다(import 계열은 이미 차단돼 있다).
     if IS_DEMO:
         demo_block("코드 실행은 데모 버전에서 지원되지 않습니다.")
-    # 운영도 공개 배포다(allUsers).
-    # 자식 프로세스는 앱과 같은 uid·같은 네트워크 네임스페이스에서 돌기 때문에,
-    # 환경변수 필터·cwd 격리·-I 를 다 걸어도 두 경로가 남는다:
-    #   ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 액세스 토큰
-    #   ② /proc/1/environ → 앱 프로세스의 환경변수 전체(같은 uid 면 읽힌다)
-    # 둘 다 컨테이너 안에서는 막을 수 없다(네트워크 차단은 NET_ADMIN 이 필요하다).
-    # 그래서 기본 비활성이고, 켜려면 실행 전용 신뢰 경계를 먼저 만들어야 한다
-    # (권한 0 서비스 계정 + 시크릿 미주입 + egress 제한).
+    # 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버
+    # (egress)와 /proc/1/environ 경로가 남는다. 컨테이너 안에서는 막을 수 없다.
     if not settings.execute_enabled:
         raise HTTPException(
             status_code=403,

@@ -16,15 +16,11 @@ _LIST_FIELDS = ("strengths", "weaknesses")
 def normalize_review_result(result: dict) -> dict:
     """LLM 응답을 저장 가능한 형태로 정규화한다(생산자 한 곳에서 끝낸다).
 
-    `.get(key, default)` 는 **키가 있고 값이 None** 이면 default 를 적용하지 않는다.
-    LLM 이 `"complexity": null` 을 주면 그 None 이 NOT NULL 컬럼으로 흘러가 저장이
-    IntegrityError 로 죽고, 이미 과금된 응답과 tag_stats 첫 집계가 롤백으로 함께 사라진다.
-    저장 경로가 둘이라(save_review / update_pending_review) 소비처마다 막으면 한쪽이
-    빠진다. 그래서 생산자인 여기 한 곳에서 끝낸다.
+    `.get(key, default)` 는 키가 있고 값이 None 이면 default 를 적용하지 않는다 —
+    그 None 이 NOT NULL 컬럼으로 흘러가 IntegrityError 가 된다.
 
-    리스트 필드는 실패 양상이 다르다. `json.dumps(None)` 은 예외 없이 문자열 `"null"` 을
-    만들어 NOT NULL 컬럼을 **조용히** 통과하고, 읽을 때 `json.loads("null")` → None 이
-    되어 API 가 `"strengths": null` 을 내보낸다.
+    리스트 필드는 실패 양상이 다르다. `json.dumps(None)` 은 문자열 `"null"` 을 만들어
+    NOT NULL 을 조용히 통과하고, 읽을 때 None 이 되어 API 가 null 을 내보낸다.
     """
     if result.get("efficiency") not in ("good", "ok", "poor"):
         result["efficiency"] = "ok"
@@ -112,9 +108,8 @@ efficiency 기준:
     try:
         result = json.loads(raw)
     except json.JSONDecodeError as e:
-        # JSONDecodeError 는 ValueError 의 서브클래스라, 감싸지 않으면 라우터의
-        # "analyzer 가 직접 만든 사용자용 안내" 분기를 그대로 타고 나간다 —
-        # 사용자는 "Expecting value: line 1 column 1 (char 0)" 를 502 와 함께 본다.
+        # JSONDecodeError 는 ValueError 의 서브클래스라, 감싸지 않으면 라우터의 '사용자용 안내'
+        # 분기를 그대로 타고 파싱 오류 원문이 502 와 함께 나간다.
         raise ValueError("AI 응답을 JSON 으로 해석하지 못했습니다. "
                          "모델 설정(OPENAI_MODEL)을 확인해주세요.") from e
 
@@ -175,8 +170,7 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
 
     text = choice_text(response)
     if not text.strip():
-        # 빈 문자열을 그대로 돌려주면 프론트가 내용 없는 리포트 카드를 그리고, 사용자는
-        # 오류 안내도 재시도 유도도 받지 못한다. 리포트는 캐시가 없어 매번 재생성되므로
-        # 과금만 반복된다(analyze_code 와 같은 가드다).
+        # 빈 문자열을 돌려주면 프론트가 내용 없는 카드를 그리고 오류 안내도 없다.
+        # 리포트는 캐시가 없어 매번 재생성되므로 과금만 반복된다.
         raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
     return text

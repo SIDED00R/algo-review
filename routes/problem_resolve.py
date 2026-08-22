@@ -65,26 +65,22 @@ def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str
     if cached and not is_unresolved_problem_info(cached, problem_id):
         return _as_boj(cached)
 
-    # 캐시가 없거나 자리표시다 — solved.ac 를 다시 시도한다. 자리표시를 캐시로 인정하면
-    # 일시 장애 중 만들어진 메타가 프로세스가 아니라 **DB 수명 동안** 고착되고,
-    # 태그 통계·평균 티어·추천이 그 문제를 통째로 빠뜨린다.
+    # 캐시가 없거나 자리표시면 solved.ac 를 다시 시도한다 — 자리표시를 캐시로 인정하면
+    # 일시 장애 중 만들어진 메타가 DB 수명 동안 고착된다.
     try:
         info = api_client.get_problem_info(problem_id)
     except Exception:
         return _as_boj(cached or _unresolved_problem_info(problem_id))
 
     if cached:
-        # 자리표시로 저장돼 있던 과거 행들을 실제 메타로 되살린다. 제목·티어·태그는 제출이
-        # 아니라 **문제**의 속성이라 갱신이 맞다. 이걸 하지 않으면 집계 기준인 "첫 판정 행"
-        # 이 자리표시로 남아, 새 리뷰를 아무리 해도 통계가 회복되지 않는다.
+        # 자리표시로 저장된 과거 행을 실제 메타로 되살린다 — 집계 기준인 '첫 판정 행' 이
+        # 자리표시로 남으면 새 리뷰를 아무리 해도 통계가 회복되지 않는다.
         db.refresh_unresolved_problem_metadata(problem_id, info)
     return _as_boj(info)
 
 
-# 본문 수집 함수들은 예외를 던지지 않고 실패 문자열을 반환한다. 그걸 그대로 LLM 에 넘기면
-# 프롬프트의 문제 설명 자리에 에러 메시지가 박힌다. BOJ 는 acmicpc.net 종료로 수집이 상시
-# 실패하므로 이 판별이 없으면 매 리뷰가 그 상태가 된다. 빈 본문을 주는 편이 낫다
-# (analyzer 가 제목·티어·태그·코드로 분석한다).
+# 본문 수집 함수는 예외 대신 실패 문자열을 반환한다 — 그대로 LLM 에 넘기면 프롬프트의
+# 문제 설명 자리에 에러 메시지가 박힌다. 빈 본문을 주는 편이 낫다.
 _SCRAPE_FAILURE_PREFIXES = (
     "크롤링 실패",
     "문제 설명을 가져올 수 없습니다",

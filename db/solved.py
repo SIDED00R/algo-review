@@ -114,13 +114,8 @@ def get_solved_history(q: str = "", platform: str = "", tier_min: int | None = N
                        page: int = 1, per_page: int = DEFAULT_PAGE_SIZE) -> dict:
     """가져온 기록 **한 페이지**. `{"problems": [...], "total": N}`.
 
-    필터·정렬·페이지를 SQL 에서 한다. 전 행을 보내면 화면이 20건만 그리는데도 응답이
-    행 수에 비례해 자란다(실측: 5천 행에서 1.07MB).
-
-    난이도 그룹의 정의는 프론트에 한 벌만 둔다 — 호출부가 tier_min/tier_max 로 풀어서
-    보낸다(`get_problems_grouped` 과 같은 규약).
-
-    `code` 는 목록에 싣지 않는다 — 있는지 여부만 `has_code` 로 준다.
+    필터·정렬·페이지를 SQL 에서 한다. 난이도 그룹 정의는 프론트 한 곳뿐이고 호출부가
+    tier_min/tier_max 로 풀어서 보낸다. `code` 는 싣지 않고 `has_code` 만 준다.
     """
     page, per_page = paging_bounds(page, per_page)
     has_code = case((SolvedHistory.code != "", 1), else_=0).label("has_code")
@@ -174,10 +169,8 @@ def get_solved_cf_refs() -> set:
 
 def get_solved_problem_ids() -> set:
     with session_scope() as session:
-        # BOJ 전용이다 — 호출처 4곳이 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
-        # 지금은 CF 행의 problem_id 가 0 이라 우연히 맞지만, demo_seed 처럼 실제 값이
-        # 들어가면 그 번호의 BOJ 문제가 조용히 제외된다.
-        # 형제 함수 get_solved_cf_refs 는 이미 플랫폼을 명시한다.
+        # BOJ 전용이다 — 호출처 넷이 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
+        # CF 행의 problem_id 에 실제 값이 들어가면 그 번호의 BOJ 문제가 조용히 제외된다.
         ids = set(session.scalars(
             select(Review.problem_id).where(Review.platform == "boj").distinct()).all())
         ids |= set(session.scalars(
