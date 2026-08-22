@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Algo Review</title>
+  <!-- 인라인 SVG 다 — 자산 파일을 늘리지 않아 버전 쿼리 규칙과 무관하다. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13' font-family='monospace'%3E%3C/text%3E%3C/svg%3E" />
 
   <!-- 테마를 페인트 전에 확정한다 — theme.js 는 </body> 직전에 로드되므로
        거기서 처리하면 라이트 모드 사용자가 매 로드마다 다크 화면을 한 프레임 본다. -->
@@ -41,8 +43,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-  <!-- marked 는 버전을 고정한다. 무고정 URL 은 jsDelivr 가 최신 메이저를 주므로
-       같은 버전으로 핀해 동작을 바꾸지 않는다. -->
+  <!-- 버전을 고정한다. jsDelivr 의 무고정 URL 은 최신 메이저를 주므로 배포와 무관하게
+       동작이 바뀔 수 있다. -->
   <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -172,7 +174,7 @@
       <div class="field-head">
         <span class="label">풀이 코드</span>
         <button type="button" id="load-submission-btn" class="btn-ghost">지난 제출 불러오기</button>
-        <span id="load-submission-msg" class="hint"></span>
+        <span id="load-submission-msg" class="hint" aria-live="polite"></span>
       </div>
       <div id="code-input" class="cm-wrap"></div>
 
@@ -448,7 +450,7 @@
           <div id="pm-code" class="pm-code"></div>
           <div class="pm-run-row">
             <button id="pm-run-btn" class="btn-primary btn-sm">예제 실행</button>
-            <button id="pm-review-btn" class="btn-primary btn-sm btn-review hidden">코드 리뷰 진행</button>
+            <button id="pm-review-btn" class="btn-primary btn-sm btn-review">코드 리뷰 진행</button>
           </div>
           <div id="pm-test-results" aria-live="polite"></div>
           <div class="pm-custom-section">

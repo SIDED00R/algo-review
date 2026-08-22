@@ -25,6 +25,11 @@ reviewBtn.dataset.loadingLabel = '분석 중...';
 // 막는데(확장자가 .txt 로 떨어지면 재리뷰가 파일명을 재현하지 못해 영구 거부한다),
 // 그 메시지가 "언어를 선택해주세요" 라 방금 '자동 감지' 를 고른 사용자에게는 말이 안 된다.
 // 왕복 전에 정확한 이유로 안내한다.
+// 분석 이후 코드·언어가 바뀐 채로 올릴 때의 확인 문구.
+const CODE_CHANGED_CONFIRM =
+  '분석 이후 코드나 언어가 바뀌었습니다.\n' +
+  'README 에는 분석 당시 코드에 대한 리뷰가 들어갑니다 — 지금 코드로 그대로 올릴까요?\n\n' +
+  "취소하고 '분석 시작' 을 다시 누르면 둘이 맞습니다.";
 const LANGUAGE_UNKNOWN_MSG = '코드에서 언어를 알아내지 못했습니다. 언어를 직접 선택해주세요.';
 
 // 코드 에디터 + 언어 선택 값 — 리뷰 요청과 GitHub push 가 함께 쓴다.
@@ -181,10 +186,18 @@ function renderReview(container, d) {
     </div>
   `;
 
+  // 이 리뷰가 대상으로 삼은 코드·언어. 올릴 때 지금 값과 비교한다.
+  const reviewed = currentCodeAndLanguage();
+
   document.getElementById('push-github-btn').addEventListener('click', async () => {
     const btn = document.getElementById('push-github-btn');
     const msg = document.getElementById('push-github-msg');
     const { code, language } = currentCodeAndLanguage();
+    // README 의 리뷰는 **분석 당시 코드**에 대한 것이다. 지금 코드를 그대로 올리면 저장소
+    // 안에서 코드와 리뷰가 어긋나고, 언어까지 바뀌었으면 확장자가 달라져 다음 재업로드가
+    // 옛 확장자 파일을 하나 더 만든다(옛 파일은 지워지지 않는다).
+    const changed = code !== reviewed.code || language !== reviewed.language;
+    if (changed && !confirm(CODE_CHANGED_CONFIRM)) return;
     setLoading(btn, true);
     msg.textContent = '';
     msg.className = 'action-msg';

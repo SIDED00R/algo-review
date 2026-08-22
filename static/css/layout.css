@@ -119,7 +119,9 @@ main { padding: var(--s-6) var(--s-5) var(--s-8); }
 .row-dim { color: var(--fg-dim); }
 @media (max-width: 640px) {
   .row { flex-wrap: wrap; gap: var(--s-2); }
-  .row-side { width: 100%; }
+  /* 줄바꿈을 허용한다 — nowrap 인 채로 폭을 100% 주면 긴 배지(`Codeforces 1000`)가
+     날짜를 밀어내 잘리고, 그만큼 페이지에 가로 스크롤이 생긴다. */
+  .row-side { width: 100%; flex-wrap: wrap; white-space: normal; }
 }
 
 /* ═══ 모바일 ═══ */

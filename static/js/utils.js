@@ -22,9 +22,12 @@ function tierInGroup(tier, key, platform) {
 /** 난이도 필터 <option> 목록. 리뷰 기록 탭과 가져온 기록 탭이 같은 목록을 쓴다 —
  *  두 벌로 두면 한쪽에만 그룹이 추가돼 같은 필터가 다르게 동작한다. */
 function tierFilterOptionsHtml() {
+  // 라벨에 적용 범위를 밝힌다 — 난이도 그룹은 BOJ 티어 체계라 CF 행은 어느 그룹에도
+  // 속하지 않는다(tierInGroup 이 platform 으로 걸러낸다). 그 사실을 적지 않으면
+  // 난이도를 고르는 순간 CF 기록이 통째로 사라지고 이유를 알 수 없다.
   return ['<option value="">전체 난이도</option>']
     .concat(Object.keys(TIER_GROUPS).map(
-      key => `<option value="${key}">${TIER_GROUP_LABELS[key]}</option>`))
+      key => `<option value="${key}">${TIER_GROUP_LABELS[key]} (백준)</option>`))
     .join('');
 }
 

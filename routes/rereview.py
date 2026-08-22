@@ -32,8 +32,7 @@ def _run_review(platform: str, review: dict) -> dict:
     # 종료로 스크래핑이 죽어 빈 본문이 되므로, 넘기지 않으면 백필한 본문과 사용자가 붙여 넣은
     # 원문이 LLM 프롬프트에서 버려진다. 아래 _repush_bundle 도 같은 값을 쓴다.
     statement = resolve_statement(platform, problem_info, review.get("problem_statement"))
-    # 재리뷰 대상에는 /api/review-imported 로 들어온 행도 있다 — 그 코드는 요청 본문
-    # 검증을 거치지 않았으므로 여기서 상한을 확인한다.
+    # 상한 도입 이전에 저장된 행이 있을 수 있다 — 저장 시점 검증만 믿지 않고 여기서도 본다.
     require_reviewable_code(review["code"])
     try:
         return analyzer.analyze_code(problem_info, statement, review["code"])

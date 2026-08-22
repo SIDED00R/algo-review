@@ -3,6 +3,10 @@
 // 클로저의 allProblems 를 잡고, 이후 삭제가 화면에 남은 다른 클로저에 반영되지 않는다.
 let _importToken = 0;
 
+// 진행 중인 AI 리뷰의 `platform-ref` 집합. 진행 중 상태를 버튼 노드에만 두면 검색·정렬·
+// 페이지 이동이 목록을 innerHTML 로 교체할 때 사라져, 같은 문제에 유료 호출이 두 번 나간다.
+const _reviewing = new Set();
+
 async function loadImportedHistory() {
   const list = document.getElementById('import-history-list');
   if (!list) return;
@@ -22,6 +26,7 @@ async function loadImportedHistory() {
     return;
   }
   const allProblems = data.problems;
+  const myToken = token;   // 이 클로저가 그린 목록의 세대
   list.innerHTML = `
     <div class="card">
       <div class="toolbar">
@@ -131,7 +136,7 @@ async function loadImportedHistory() {
       const platformBadge = (p.platform || 'boj') === 'codeforces' ? 'Codeforces' : 'BOJ';
       const actionBtns = p.has_code
         ? `<button class="btn-sm btn-code btn-view-code" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}" data-box-key="${escapeHtml(cardKey)}">코드 보기</button>
-           <button class="btn-sm btn-ai btn-review-imported" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}">AI 리뷰</button>`
+           <button class="btn-sm btn-ai btn-review-imported" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}"${_reviewing.has(`${p.platform || 'boj'}-${p.problem_ref || p.problem_id}`) ? ' disabled' : ''}>AI 리뷰</button>`
         : `<span class="hint">코드 없음</span>`;
       return `
         <div class="row row-static">
@@ -204,6 +209,9 @@ async function loadImportedHistory() {
   async function requestImportedReview(btn) {
     const platform = btn.dataset.platform;
     const problemRef = btn.dataset.problemRef;
+    const key = `${platform}-${problemRef}`;
+    if (_reviewing.has(key)) return;
+    _reviewing.add(key);
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
 
@@ -212,14 +220,18 @@ async function loadImportedHistory() {
         `/api/review-imported/${encodeURIComponent(platform)}/${encodeURIComponent(problemRef)}`,
         { method: 'POST' }, 'AI 리뷰 실패');
     } catch (e) {
-      btn.textContent = 'AI 리뷰';
-      btn.disabled = false;
+      _reviewing.delete(key);
+      if (myToken === _importToken) renderImportCards(getFiltered());
       alert('오류: ' + e.message);
       return;
     }
+    _reviewing.delete(key);
+
+    // 이 목록이 아직 화면에 있는 목록일 때만 손댄다. 늦게 끝난 호출이 자기 클로저의
+    // allProblems 를 다시 그리면 그 사이 새로 불러온 목록이 옛 스냅샷으로 되돌아간다.
+    if (myToken !== _importToken) return;
 
     // 서버가 지운 행을 목록 데이터에서도 뺀다. 그 뒤 재렌더로 개수·페이지가 함께 맞는다.
-    const key = `${platform}-${problemRef}`;
     const idx = allProblems.findIndex(p => `${p.platform || 'boj'}-${p.problem_ref || p.problem_id}` === key);
     if (idx !== -1) allProblems.splice(idx, 1);
 

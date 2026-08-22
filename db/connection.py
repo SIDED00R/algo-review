@@ -1,7 +1,7 @@
 """SQLAlchemy 엔진·세션 관리.
 
 - 엔진은 지연(lazy) 싱글턴이다 — import 시점에 연결하지 않으므로 온디맨드 DB 가 정지 상태여도
-  앱 기동을 막지 않는다(#67).
+  앱 기동을 막지 않는다.
 - pool_pre_ping 으로 Cloud SQL 온디맨드 재시작 후의 stale 커넥션을 자동 복구한다.
 """
 import threading

@@ -105,7 +105,7 @@ app.include_router(themes.router)
 @app.get("/health")
 def health():
     # 경로는 /health — Cloud Run GFE 가 정확히 /healthz 를 가로채 컨테이너까지 오지 않는다.
-    # 상태코드는 항상 200 — Cloud Run 프로브가 온디맨드 DB 정지에 묶이면 안 된다(#67).
+    # 상태코드는 항상 200 — Cloud Run 프로브가 온디맨드 DB 정지에 묶이면 안 된다.
     # db 필드는 best-effort 진단용.
     db_status = "unavailable"
     try:

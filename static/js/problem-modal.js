@@ -64,10 +64,11 @@ async function openProblemModal(ref, title, tierName) {
   // 진행 중인 예제 실행을 무효화하고 버튼을 되돌린다.
   _runToken++;
   resetRunButton();
-  const _rb = document.getElementById('pm-review-btn');
-  _rb.classList.add('hidden');
-  _rb.textContent = '코드 리뷰 진행';
-  _rb.title = '';
+  // 숨기지 않는다 — 운영 기본값(EXECUTE_ENABLED=false)에서는 예제 실행이 항상 403 이라,
+  // 실행 뒤에만 나타나게 하면 리뷰로 넘어가려면 반드시 실패 결과를 먼저 봐야 한다.
+  const pmReviewBtnReset = document.getElementById('pm-review-btn');
+  pmReviewBtnReset.textContent = '코드 리뷰 진행';
+  pmReviewBtnReset.title = '';
   window.setEditorValue('pm-code', '');
 
   try {
@@ -141,7 +142,8 @@ async function openProblemModal(ref, title, tierName) {
     }
   } catch (e) {
     // 성공 경로와 같은 가드가 필요하다 — 없으면 A 를 닫고 B 를 연 뒤 A 의 요청이
-    // 실패했을 때 B 의 스피너 자리에 A 의 오류가 그려진다(형제 모듈 5곳은 전부 있다).
+    // 실패했을 때 B 의 스피너 자리에 A 의 오류가 그려진다(세대 토큰을 쓰는 형제 모듈은
+    // 전부 catch 에도 같은 가드를 둔다).
     if (_currentProblem?.ref !== ref) return;
     document.getElementById('pm-loading').innerHTML =
       `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -223,7 +225,11 @@ async function runSamples() {
   btn.disabled = true;
   btn.textContent = '실행 중...';
   resultsEl.innerHTML = '';
-  document.getElementById('pm-review-btn').classList.add('hidden');
+  // 숨기지 않는다 — 운영 기본값(EXECUTE_ENABLED=false)에서는 실행이 항상 403 이라,
+  // 실행 뒤에만 나타나게 하면 리뷰로 넘어가려면 반드시 실패 결과를 먼저 봐야 한다.
+  const pmReviewBtn = document.getElementById('pm-review-btn');
+  pmReviewBtn.textContent = '코드 리뷰 진행';
+  pmReviewBtn.title = '';
 
   let allPassed = true;
   // 이 실행이 아직 유효한지 판단하는 세대 토큰. 실행 중(케이스당 최대 5초) 모달을 닫고
@@ -285,7 +291,6 @@ async function runSamples() {
   }
 
   const reviewBtn = document.getElementById('pm-review-btn');
-  reviewBtn.classList.remove('hidden');
   if (allPassed) {
     reviewBtn.textContent = '코드 리뷰 진행';
     reviewBtn.title = '';
