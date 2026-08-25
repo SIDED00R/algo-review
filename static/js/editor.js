@@ -81,6 +81,9 @@
       extraKeys: {
         'Ctrl-/': 'toggleComment',
         'Cmd-/': 'toggleComment',
+        // indentWithTabs 는 스마트 인덴트에만 쓰인다 — 기본 Tab 바인딩은 리터럴 탭을 넣는다.
+        'Tab': cm => (cm.somethingSelected() ? cm.indentSelection('add') : cm.execCommand('insertSoftTab')),
+        'Shift-Tab': cm => cm.indentSelection('subtract'),
         // cm._hintFn을 참조해 언어 변경 후에도 올바른 목록 사용
         'Ctrl-Space': cm => CodeMirror.showHint(cm, cm._hintFn, { completeSingle: false }),
       },
