@@ -58,14 +58,20 @@ def _spawn(cmd: list[str], cwd: str) -> subprocess.Popen:
     )
 
 
-def _kill_tree(proc: subprocess.Popen) -> None:
-    """자식이 이미 끝났어도 호출한다 — 손자가 남아 파이프를 붙잡고 있을 수 있다."""
-    if os.name == "posix":
+def _kill_tree(proc: subprocess.Popen, pgid: int | None) -> None:
+    """자식이 이미 끝났어도 호출한다 — 손자가 남아 파이프를 붙잡고 있을 수 있다.
+
+    pgid 를 인자로 받는 이유: `wait()` 로 자식이 회수된 뒤에는 `os.getpgid(proc.pid)` 가
+    ProcessLookupError 를 던져 손자를 죽일 수 없다. 그룹에 멤버가 남아 있는 한 커널은 그
+    번호를 다른 프로세스에 재사용하지 않으므로, 처음에 확보한 값을 그대로 쓴다.
+    """
+    if pgid is not None:
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            os.killpg(pgid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
             pass
         return
+    # 윈도우(로컬 개발)에는 프로세스 그룹 종료가 없다 — 직접 자식만 죽는다.
     try:
         proc.kill()
     except OSError:
@@ -116,6 +122,9 @@ def _decode(buf: bytearray) -> str:
 def _execute(cmd: list[str], stdin: bytes, timeout: int, cwd: str) -> dict:
     """출력 상한·프로세스 그룹 종료를 건 실행. 시간 초과면 exit_code -1."""
     proc = _spawn(cmd, cwd)
+    # start_new_session 이라 자식이 그룹 리더이고 그룹 id 는 자식의 pid 와 같다.
+    # 회수 전에 확보해 둔다 — 회수 뒤에는 pid 로 그룹을 되찾을 수 없다.
+    pgid = proc.pid if os.name == "posix" else None
     out, err = bytearray(), bytearray()
     workers = [
         threading.Thread(target=_pump, args=(proc.stdout, out), daemon=True),
@@ -130,7 +139,7 @@ def _execute(cmd: list[str], stdin: bytes, timeout: int, cwd: str) -> dict:
     except subprocess.TimeoutExpired:
         timed_out = True
     # 그룹을 먼저 죽여야 파이프가 닫히고 pump 스레드가 끝난다.
-    _kill_tree(proc)
+    _kill_tree(proc, pgid)
     exit_code = proc.wait()
     for worker in workers:
         worker.join(timeout=1)
