@@ -210,7 +210,11 @@ jobs:
     needs: [deploy]
     # 서비스별 스모크는 각자 살아 있는 것만 본다 — 앱이 실행 서비스를 실제로 호출하는지는
     # 여기서만 드러난다. 이 결함(#142)이 배포를 통과한 이유가 그것이다.
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    #
+    # deploy 잡의 결론을 보지 않는다(!cancelled). 온디맨드 Cloud SQL 이 정지 중이면 앱
+    # 스모크가 db:ok 를 받지 못해 deploy 가 빨강이 되는데, 실행 경로는 DB 를 쓰지 않으므로
+    # 그때도 확인해야 한다(#144). 배포 자체의 실패는 deploy 잡이 그대로 빨강으로 남는다.
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
