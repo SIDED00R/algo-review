@@ -60,6 +60,17 @@
 
   window.cmEditors = {};
 
+  const INDENT_WIDTH = 4;
+
+  // 들여쓰기 단위는 탭 1칸이다. 파이썬은 한 블록에 탭과 스페이스가 섞이면 TabError 로 거부한다.
+  function tabifyIndent(code) {
+    return code.replace(/^[ \t]+/gm, ws => {
+      let col = 0;
+      for (const ch of ws) col = ch === '\t' ? col + INDENT_WIDTH - (col % INDENT_WIDTH) : col + 1;
+      return '\t'.repeat(Math.floor(col / INDENT_WIDTH)) + ' '.repeat(col % INDENT_WIDTH);
+    });
+  }
+
   function isDark() { return document.documentElement.getAttribute('data-theme') !== 'light'; }
 
   function createEditor(id, mode) {
@@ -73,16 +84,15 @@
       lineNumbers: true,
       autoCloseBrackets: true,
       matchBrackets: true,
-      indentUnit: 4,
-      tabSize: 4,
-      indentWithTabs: false,
+      indentUnit: INDENT_WIDTH,
+      tabSize: INDENT_WIDTH,
+      indentWithTabs: true,
       lineWrapping: false,
       styleActiveLine: true,
       extraKeys: {
         'Ctrl-/': 'toggleComment',
         'Cmd-/': 'toggleComment',
-        // indentWithTabs 는 스마트 인덴트에만 쓰인다 — 기본 Tab 바인딩은 리터럴 탭을 넣는다.
-        'Tab': cm => (cm.somethingSelected() ? cm.indentSelection('add') : cm.execCommand('insertSoftTab')),
+        // 기본 Shift-Tab 은 indentAuto(줄 재정렬)다 — 내어쓰기로 바꾼다.
         'Shift-Tab': cm => cm.indentSelection('subtract'),
         // cm._hintFn을 참조해 언어 변경 후에도 올바른 목록 사용
         'Ctrl-Space': cm => CodeMirror.showHint(cm, cm._hintFn, { completeSingle: false }),
@@ -90,6 +100,12 @@
     });
 
     cm._hintFn = makeHintFn(MODE_WORDS[mode || 'python'] || []);
+
+    cm.on('beforeChange', (editor, change) => {
+      if (change.origin === 'paste') {
+        change.update(change.from, change.to, tabifyIndent(change.text.join('\n')).split('\n'));
+      }
+    });
 
     cm.on('inputRead', (editor, change) => {
       if (!editor.state.completionActive && /\w/.test(change.text[0])) {
@@ -105,7 +121,7 @@
   window.setEditorValue = (id, value) => {
     const cm = window.cmEditors[id];
     if (!cm) return;
-    cm.setValue(value ?? '');
+    cm.setValue(tabifyIndent(value ?? ''));
     setTimeout(() => cm.refresh(), 0);
   };
   window.switchEditorLang = (id, mode) => {
