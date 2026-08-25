@@ -44,6 +44,13 @@
 │  warmup.py — server.py lifespan 기동 시 백그라운드 태스크로 실행     │
 │  themes.py: 신선하지 않은 플랫폼×테마만 골라 문제 풀 캐시 예열      │
 └───────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  executor/ — 별도 Cloud Run 서비스 (algo-executor)                 │
+│  routes/execute.py 가 ID 토큰을 붙여 POST /run 으로 위임한다        │
+│  main.py: HTTP 경계 · runner.py: 자식 프로세스 실행 + 자원 상한     │
+│  앱 코드·DB·시크릿 없음 / 권한 0 SA / 외부 통신 차단                │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -73,6 +80,16 @@
 |------|----------|
 | `demo_mode.py` | 데모 모드 플래그(`IS_DEMO`)와 라우터가 반환하는 mock 응답 데이터 |
 | `demo_seed.py` | 데모 서버 기동 시 SQLite 샘플 데이터 시딩 |
+
+### 실행 전용 서비스 (`executor/`)
+앱과 **다른 Cloud Run 서비스**로 배포한다(`--source executor`). 앱 모듈을 import 하지 않는다 —
+이미지에 앱 코드가 들어가지 않기 때문이다. 로컬 개발에서는 `routes/execute.py` 가 `runner` 를
+직접 import 해 같은 구현을 쓴다.
+
+| 파일 | 단일 책임 |
+|------|----------|
+| `executor/main.py` | HTTP 경계(`POST /run`, `GET /health`)와 요청 상한 재검증 — 호출자를 믿지 않는다 |
+| `executor/runner.py` | 자식 프로세스 실행(Python/C++)과 자원 상한(출력·stdin·시간·프로세스 그룹 종료) |
 
 ### DB 레이어 (`db/`)
 SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 접속 URL 만 다르고
@@ -110,7 +127,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
-| `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
+| `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. 앱 안에서 직접 실행하는 경로는 로컬 개발 전용이다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
 | `routes/history.py` | `GET /api/reviews/grouped`, `GET /api/reviews/problem/{platform}/{ref}` | 리뷰 기록 조회 |

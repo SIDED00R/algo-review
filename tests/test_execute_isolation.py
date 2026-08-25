@@ -71,7 +71,8 @@ def test_normal_code_still_runs():
 # ── 엔드포인트 게이트 ──
 #
 # 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버와
-# /proc/1/environ 경로가 남는다. 그래서 엔드포인트 자체를 기본 비활성으로 둔다.
+# /proc/1/environ 경로가 남는다. 그래서 앱 안에서 직접 실행하는 경로는 기본 비활성이고
+# 로컬 개발에서만 켠다(운영은 실행 서비스로 위임한다 — test_execute_delegation.py).
 
 _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
 

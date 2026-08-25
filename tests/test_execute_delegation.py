@@ -6,8 +6,6 @@
 """
 import pytest
 import requests
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from routes import execute as execute_route
 
@@ -25,10 +23,9 @@ class _Response:
         return self._payload
 
 
-def _client():
-    app = FastAPI()
-    app.include_router(execute_route.router)
-    return TestClient(app)
+@pytest.fixture
+def client(minimal_app):
+    return minimal_app(execute_route.router)
 
 
 @pytest.fixture
@@ -41,7 +38,7 @@ def delegating(monkeypatch):
     monkeypatch.setattr(execute_route, "_identity_token", lambda audience: f"tok:{audience}")
 
 
-def test_request_goes_to_the_executor_with_an_identity_token(monkeypatch, delegating):
+def test_request_goes_to_the_executor_with_an_identity_token(monkeypatch, delegating, client):
     sent = {}
 
     def fake_post(url, json=None, headers=None, timeout=None):
@@ -50,7 +47,7 @@ def test_request_goes_to_the_executor_with_an_identity_token(monkeypatch, delega
 
     monkeypatch.setattr(execute_route.requests, "post", fake_post)
 
-    resp = _client().post("/api/execute", json=_REQ)
+    resp = client.post("/api/execute", json=_REQ)
 
     assert resp.status_code == 200
     assert resp.json() == {"stdout": "1\n", "stderr": "", "exit_code": 0, "time_ms": 12}
@@ -61,7 +58,7 @@ def test_request_goes_to_the_executor_with_an_identity_token(monkeypatch, delega
                             "stdin": "", "timeout_sec": 5}
 
 
-def test_trailing_slash_in_the_configured_url_does_not_double_up(monkeypatch, delegating):
+def test_trailing_slash_in_the_configured_url_does_not_double_up(monkeypatch, delegating, client):
     monkeypatch.setattr(execute_route.settings, "executor_url", _URL + "/")
     sent = {}
 
@@ -70,39 +67,39 @@ def test_trailing_slash_in_the_configured_url_does_not_double_up(monkeypatch, de
         return _Response(200, {"stdout": "", "stderr": "", "exit_code": 0, "time_ms": 1})
 
     monkeypatch.setattr(execute_route.requests, "post", fake_post)
-    _client().post("/api/execute", json=_REQ)
+    client.post("/api/execute", json=_REQ)
 
     assert sent["url"] == f"{_URL}/run"
 
 
-def test_unsupported_language_stays_a_400(monkeypatch, delegating):
+def test_unsupported_language_stays_a_400(monkeypatch, delegating, client):
     monkeypatch.setattr(execute_route.requests, "post",
                         lambda *a, **k: _Response(400, {"detail": "지원하지 않는 언어: Rust"}))
 
-    resp = _client().post("/api/execute", json={**_REQ, "language": "Rust"})
+    resp = client.post("/api/execute", json={**_REQ, "language": "Rust"})
 
     assert resp.status_code == 400
     assert "Rust" in resp.json()["detail"]
 
 
-def test_executor_failure_becomes_502(monkeypatch, delegating):
+def test_executor_failure_becomes_502(monkeypatch, delegating, client):
     monkeypatch.setattr(execute_route.requests, "post",
                         lambda *a, **k: _Response(500, text="boom"))
 
-    resp = _client().post("/api/execute", json=_REQ)
+    resp = client.post("/api/execute", json=_REQ)
 
     assert resp.status_code == 502
     # 실행 서비스의 응답 본문을 그대로 내보내지 않는다.
     assert "boom" not in resp.json()["detail"]
 
 
-def test_unreachable_executor_becomes_502(monkeypatch, delegating):
+def test_unreachable_executor_becomes_502(monkeypatch, delegating, client):
     def fake_post(*a, **k):
         raise requests.ConnectionError(f"failed to connect to {_URL} with Bearer tok")
 
     monkeypatch.setattr(execute_route.requests, "post", fake_post)
 
-    resp = _client().post("/api/execute", json=_REQ)
+    resp = client.post("/api/execute", json=_REQ)
 
     assert resp.status_code == 502
     # 예외 원문에는 URL·토큰이 실린다 — 응답에 새면 안 된다.
@@ -110,20 +107,19 @@ def test_unreachable_executor_becomes_502(monkeypatch, delegating):
     assert _URL not in resp.json()["detail"]
 
 
-def test_demo_blocks_before_delegating(monkeypatch, delegating):
+def test_demo_blocks_before_delegating(monkeypatch, delegating, client):
     monkeypatch.setattr(execute_route, "IS_DEMO", True)
     monkeypatch.setattr(execute_route.requests, "post",
                         lambda *a, **k: pytest.fail("데모에서 실행 서비스를 부르면 안 된다"))
 
-    assert _client().post("/api/execute", json=_REQ).status_code == 403
+    assert client.post("/api/execute", json=_REQ).status_code == 403
 
 
-def test_repeated_calls_from_one_ip_are_throttled(monkeypatch, delegating):
+def test_repeated_calls_from_one_ip_are_throttled(monkeypatch, delegating, client):
     """인증이 없는 엔드포인트라 한 IP 가 실행 서비스를 독점하지 못하게 막는다."""
     monkeypatch.setattr(execute_route.requests, "post",
                         lambda *a, **k: _Response(200, {"stdout": "", "stderr": "",
                                                         "exit_code": 0, "time_ms": 1}))
-    client = _client()
 
     for _ in range(execute_route._RATE_LIMIT_PER_MINUTE):
         assert client.post("/api/execute", json=_REQ).status_code == 200
@@ -131,12 +127,11 @@ def test_repeated_calls_from_one_ip_are_throttled(monkeypatch, delegating):
     assert client.post("/api/execute", json=_REQ).status_code == 429
 
 
-def test_throttling_counts_the_forwarded_client_not_the_proxy(monkeypatch, delegating):
+def test_throttling_counts_the_forwarded_client_not_the_proxy(monkeypatch, delegating, client):
     """Cloud Run 뒤에서는 request.client 가 GFE 다 — 그걸 세면 전 사용자가 한 버킷이 된다."""
     monkeypatch.setattr(execute_route.requests, "post",
                         lambda *a, **k: _Response(200, {"stdout": "", "stderr": "",
                                                         "exit_code": 0, "time_ms": 1}))
-    client = _client()
     noisy = {"x-forwarded-for": "203.0.113.7, 130.211.0.1"}
 
     for _ in range(execute_route._RATE_LIMIT_PER_MINUTE):

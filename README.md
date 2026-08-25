@@ -133,7 +133,7 @@ CI(`.github/workflows/deploy.yml`)는 PR·push 마다 lint + test(SQLite/Postgre
 
 ### 자동 배포 (CI/CD)
 
-`main` 브랜치에 머지되면 GitHub Actions(`.github/workflows/deploy.yml`)가 Cloud Run 두 서비스(`algo-review`, `algo-review-demo`)에 자동 배포합니다. 아래 명령들은 수동 배포가 필요할 때 사용합니다.
+`main` 브랜치에 머지되면 GitHub Actions(`.github/workflows/deploy.yml`)가 Cloud Run 세 서비스(`algo-review`, `algo-review-demo`, `algo-executor`)에 자동 배포합니다. 아래 명령들은 수동 배포가 필요할 때 사용합니다.
 
 ### Cloud Run (SQLite)
 
@@ -188,6 +188,29 @@ gcloud run deploy algo-review-demo \
 - 시딩된 샘플 데이터로 통계·히스토리 표시
 - SQLite 사용 (Cloud SQL 불필요)
 
+### 실행 전용 서비스 배포
+
+'예제 실행'은 앱이 아니라 격리된 실행 서비스가 담당합니다(이유는 `ARCHITECTURE.md` 보안 조치 1·11번).
+
+```bash
+gcloud run deploy algo-executor   --source executor   --region asia-northeast3   --no-allow-unauthenticated   --service-account algo-executor-run@PROJECT.iam.gserviceaccount.com   --network executor-net --subnet executor-subnet --vpc-egress all-traffic   --clear-env-vars --memory 512Mi --cpu 1 --concurrency 1 --max-instances 5
+```
+
+1회 구성(서비스 계정·VPC·권한)은 다음과 같습니다. **실행 SA 에는 어떤 IAM 역할도 부여하지 않습니다** —
+제출 코드가 메타데이터 서버에서 토큰을 받아도 할 수 있는 일이 없어야 하기 때문입니다.
+
+```bash
+gcloud iam service-accounts create algo-executor-run
+gcloud compute networks create executor-net --subnet-mode custom
+gcloud compute networks subnets create executor-subnet --network executor-net   --range 10.100.0.0/26 --region asia-northeast3
+# 배포 SA 가 서브넷을 쓸 수 있어야 한다
+gcloud compute networks subnets add-iam-policy-binding executor-subnet --region asia-northeast3   --member serviceAccount:DEPLOYER@PROJECT.iam.gserviceaccount.com --role roles/compute.networkUser
+# 앱만 실행 서비스를 부를 수 있다
+gcloud run services add-iam-policy-binding algo-executor --region asia-northeast3   --member serviceAccount:APP_RUNTIME_SA --role roles/run.invoker
+# 앱에 실행 서비스 주소를 알려준다
+gcloud run services update algo-review --region asia-northeast3   --update-env-vars EXECUTOR_URL=https://algo-executor-....run.app
+```
+
 ## 프로젝트 구조
 
 ```
@@ -208,7 +231,7 @@ gcloud run deploy algo-review-demo \
 ├── .env.example            # 환경변수 템플릿
 ├── Dockerfile              # Cloud Run 컨테이너 이미지 (uvicorn, 8080 포트)
 ├── .dockerignore
-├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo)
+├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo + executor)
 ├── LICENSE                 # MIT
 ├── assets/                 # 데모 GIF (미사용)
 │
@@ -219,6 +242,7 @@ gcloud run deploy algo-review-demo \
 ├── migrations/             # Alembic (env.py + versions/)
 │
 ├── routes/                 # FastAPI 라우터 (도메인별 분리) — 엔드포인트 목록은 ARCHITECTURE.md 참조
+├── executor/               # 실행 전용 서비스 (별도 Cloud Run) — 앱 코드·시크릿 없음
 │
 ├── tests/                  # pytest (DB 계층·라우트·마이그레이션·CF 본문 파싱)
 │
