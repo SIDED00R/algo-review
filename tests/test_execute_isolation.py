@@ -10,12 +10,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from executor.runner import run_code, safe_env
 from routes import execute as execute_route
-from routes.execute import _run_python, safe_env
+
+
+def _py(code, stdin="", timeout=5):
+    """실행기의 공개 진입점으로 파이썬을 돌린다 — 언어 분기까지 함께 태운다."""
+    return run_code("Python 3", code, stdin, timeout)
 
 
 def test_submitted_code_cannot_import_project_modules():
-    r = _run_python("import config; print('LEAK')", "", 5)
+    r = _py("import config; print('LEAK')", "", 5)
 
     assert r["exit_code"] != 0
     assert "LEAK" not in r["stdout"]
@@ -23,7 +28,7 @@ def test_submitted_code_cannot_import_project_modules():
 
 
 def test_submitted_code_does_not_run_in_the_repo_directory():
-    r = _run_python("import os; print(os.getcwd())", "", 5)
+    r = _py("import os; print(os.getcwd())", "", 5)
 
     assert r["exit_code"] == 0
     assert os.path.abspath(r["stdout"].strip()) != os.path.abspath(os.getcwd())
@@ -41,7 +46,7 @@ def test_secret_environment_variables_do_not_reach_the_subprocess(monkeypatch, k
     monkeypatch.setenv(key, "sentinel-must-not-leak")
 
     assert key not in safe_env()   # 필터 자체
-    r = _run_python(f"import os; print(os.environ.get({key!r}, ''))", "", 5)
+    r = _py(f"import os; print(os.environ.get({key!r}, ''))", "", 5)
 
     assert r["exit_code"] == 0
     assert "sentinel-must-not-leak" not in r["stdout"]
@@ -56,7 +61,7 @@ def test_safe_keys_do_reach_the_subprocess(monkeypatch):
 
 def test_normal_code_still_runs():
     """격리가 정상 실행을 막지 않아야 한다 — 표준 라이브러리는 쓸 수 있다."""
-    r = _run_python("import sys, math, collections\nprint(math.gcd(12, 18), input())",
+    r = _py("import sys, math, collections\nprint(math.gcd(12, 18), input())",
                     "hello", 5)
 
     assert r["exit_code"] == 0
@@ -66,7 +71,8 @@ def test_normal_code_still_runs():
 # ── 엔드포인트 게이트 ──
 #
 # 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버와
-# /proc/1/environ 경로가 남는다. 그래서 엔드포인트 자체를 기본 비활성으로 둔다.
+# /proc/1/environ 경로가 남는다. 그래서 앱 안에서 직접 실행하는 경로는 기본 비활성이고
+# 로컬 개발에서만 켠다(운영은 실행 서비스로 위임한다 — test_execute_delegation.py).
 
 _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
 
@@ -84,7 +90,7 @@ def _client():
 
 def test_endpoint_is_disabled_by_default(monkeypatch):
     monkeypatch.setattr(execute_route.settings, "execute_enabled", False)
-    monkeypatch.setattr(execute_route, "_run_python",
+    monkeypatch.setattr(execute_route, "run_code",
                         lambda *a, **k: pytest.fail("게이트가 닫혀 있으면 실행하면 안 된다"))
 
     resp = _client().post("/api/execute", json=_REQ)
@@ -106,7 +112,7 @@ def test_demo_mode_blocks_even_when_enabled(monkeypatch):
     """데모 가드가 게이트보다 먼저다 — 데모에 EXECUTE_ENABLED 가 켜져도 막힌다."""
     monkeypatch.setattr(execute_route, "IS_DEMO", True)
     monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
-    monkeypatch.setattr(execute_route, "_run_python",
+    monkeypatch.setattr(execute_route, "run_code",
                         lambda *a, **k: pytest.fail("데모에서 실행하면 안 된다"))
 
     assert _client().post("/api/execute", json=_REQ).status_code == 403
@@ -119,21 +125,21 @@ def test_demo_mode_blocks_even_when_enabled(monkeypatch):
 
 @pytest.mark.parametrize("text", ["안녕하세요", "你好世界", "Привет", "😀🎉", "café"])
 def test_non_ascii_output_survives(text):
-    r = _run_python(f"print({text!r})", "", 8)
+    r = _py(f"print({text!r})", "", 8)
 
     assert r["exit_code"] == 0, r["stderr"]
     assert text in r["stdout"]
 
 
 def test_child_stdout_is_utf8():
-    r = _run_python("import sys; print(sys.stdout.encoding)", "", 8)
+    r = _py("import sys; print(sys.stdout.encoding)", "", 8)
 
     assert r["exit_code"] == 0
     assert r["stdout"].strip().lower().replace("-", "") == "utf8"
 
 
 def test_non_ascii_stdin_is_readable():
-    r = _run_python("print(input()[::-1])", "가나다", 8)
+    r = _py("print(input()[::-1])", "가나다", 8)
 
     assert r["exit_code"] == 0
     assert r["stdout"].strip() == "다나가"
@@ -141,7 +147,7 @@ def test_non_ascii_stdin_is_readable():
 
 def test_output_is_unbuffered_enough_to_survive_a_crash():
     """-u 가 없으면 버퍼에 남은 출력이 비정상 종료에 유실된다."""
-    r = _run_python("import sys; print('before'); sys.exit(3)", "", 8)
+    r = _py("import sys; print('before'); sys.exit(3)", "", 8)
 
     assert r["exit_code"] == 3
     assert "before" in r["stdout"]

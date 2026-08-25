@@ -1,120 +1,127 @@
-import os
-import subprocess
-import sys
-import tempfile
+"""'예제 실행' 엔드포인트.
+
+실행 자체는 하지 않고 격리된 실행 전용 서비스(`EXECUTOR_URL`)로 위임한다. 앱 프로세스
+옆에서 임의 코드를 돌리면 자식이 앱과 같은 uid·같은 네트워크 네임스페이스에 있어
+메타데이터 서버(→ SA 토큰)와 `/proc/1/environ`(→ 앱 환경변수 전체)에 도달한다.
+
+로컬 개발은 실행 서비스를 띄우지 않아도 되도록 `EXECUTE_ENABLED=true` 인프로세스 경로를
+남겨둔다. 둘 다 없으면 403 이다.
+"""
+import logging
+import threading
 import time
 
-from fastapi import APIRouter, HTTPException
+import requests
+from fastapi import APIRouter, HTTPException, Request
 
 from config import settings
 from demo_mode import IS_DEMO, demo_block
+from executor.runner import UnsupportedLanguage, run_code
 from routes.models import ExecuteRequest
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
 
-# 코드 실행 subprocess에는 최소한의 환경변수만 전달해 민감한 서버 설정이 새지 않도록 한다.
-_SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
-_COMPILE_TIMEOUT = settings.compile_timeout
+_METADATA_IDENTITY_URL = (
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
+)
+# ID 토큰 수명은 1시간이다. 만료 판정을 JWT 파싱에 맡기지 않고 넉넉히 짧게 잡아 재발급한다.
+_TOKEN_TTL_SEC = 1800
+_token_lock = threading.Lock()
+# (audience, 토큰, 만료 시각). audience 를 함께 들고 있어야 설정이 바뀌었을 때 옛 대상의
+# 토큰을 새 대상에 보내지 않는다 — 그 경우 실행 서비스가 401 을 준다.
+_cached_token: tuple[str, str, float] | None = None
+
+# 이 엔드포인트에는 사용자 인증이 없다 — 남용을 IP 단위로만 막을 수 있다.
+# 실행 서비스의 max-instances 가 비용 상한이고, 이쪽은 한 명이 그 상한을 독점하지
+# 못하게 하는 몫이다.
+_RATE_LIMIT_PER_MINUTE = 30
+_rate_lock = threading.Lock()
+_recent_calls: dict[str, list[float]] = {}
 
 
-def safe_env() -> dict:
-    """subprocess 에 넘길 환경변수. **호출 시점에** os.environ 을 필터한다.
-
-    import 시점 상수로 두면 테스트가 센티넬 키를 심어도 이미 만들어진 dict 에 반영되지
-    않아 이 필터를 실효 검증할 수 없다.
-    """
-    return {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
-# preexec_fn은 멀티스레드 서버(FastAPI threadpool)에서 fork 후 exec 전 deadlock 위험이 있어 사용하지 않는다.
-# 메모리·프로세스 제한은 Cloud Run 서비스 설정(컨테이너 메모리 상한)과 timeout에 위임한다.
+def _client_ip(request: Request) -> str:
+    # Cloud Run 은 GFE 를 거치므로 request.client 는 프록시 주소다. 원 IP 는 XFF 의 첫 항목.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
-def _run_python(code: str, stdin: str, timeout: int) -> dict:
-    # UTF-8·무버퍼는 커맨드라인 플래그로 준다 — -I 가 모든 PYTHON* 환경변수를 무시한다.
-    env = safe_env()
+def _enforce_rate_limit(ip: str) -> None:
+    now = time.time()
+    cutoff = now - 60
+    with _rate_lock:
+        # 조용해진 IP 는 지운다 — 지우지 않으면 dict 가 요청한 IP 수만큼 계속 자란다.
+        for key in [k for k, hits in _recent_calls.items() if not hits or hits[-1] <= cutoff]:
+            del _recent_calls[key]
+        hits = [t for t in _recent_calls.get(ip, []) if t > cutoff]
+        if len(hits) >= _RATE_LIMIT_PER_MINUTE:
+            raise HTTPException(status_code=429,
+                                detail="실행 요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.")
+        hits.append(now)
+        _recent_calls[ip] = hits
+
+
+def _identity_token(audience: str) -> str:
+    """실행 서비스 호출용 ID 토큰. Cloud Run 메타데이터 서버에서 받는다."""
+    global _cached_token
+    now = time.time()
+    with _token_lock:
+        if _cached_token and _cached_token[0] == audience and _cached_token[2] > now:
+            return _cached_token[1]
+    response = requests.get(_METADATA_IDENTITY_URL,
+                            params={"audience": audience, "format": "full"},
+                            headers={"Metadata-Flavor": "Google"}, timeout=5)
+    response.raise_for_status()
+    token = response.text.strip()
+    with _token_lock:
+        _cached_token = (audience, token, now + _TOKEN_TTL_SEC)
+    return token
+
+
+def _delegate(base_url: str, req: ExecuteRequest) -> dict:
+    payload = {"code": req.code, "language": req.language,
+               "stdin": req.stdin, "timeout_sec": req.timeout_sec}
     try:
-        # 작업 디렉터리를 격리한다 — cwd 를 지정하지 않으면 sys.path[0] 가 리포 루트가 되어
-        # 제출 코드가 `import config` 로 .env 를 읽는다. -I 는 환경변수·사용자 site import 를 끊는다.
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = subprocess.run(
-                [sys.executable, "-I", "-X", "utf8=1", "-u", "-c", code],
-                input=stdin,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                env=env,
-                cwd=tmpdir,
-            )
-            return {"stdout": result.stdout, "stderr": result.stderr,
-                    "exit_code": result.returncode}
-    except subprocess.TimeoutExpired:
-        return {"stdout": "", "stderr": f"[시간 초과 - {timeout}초]", "exit_code": -1}
-    except FileNotFoundError:
-        return {"stdout": "", "stderr": "[Python 실행 환경을 찾을 수 없습니다]", "exit_code": -1}
-
-
-def _run_cpp(code: str, stdin: str, timeout: int) -> dict:
-    with tempfile.TemporaryDirectory() as tmpdir:
-        src = os.path.join(tmpdir, "sol.cpp")
-        exe = os.path.join(tmpdir, "sol.exe" if os.name == "nt" else "sol")
-        with open(src, "w", encoding="utf-8") as file:
-            file.write(code)
-        try:
-            compile_result = subprocess.run(
-                ["g++", "-O2", "-std=c++17", "-o", exe, src],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=_COMPILE_TIMEOUT,
-                env=safe_env(),
-                cwd=tmpdir,   # 실행 단계와 같은 이유 — 서버 CWD 를 상속하지 않는다
-            )
-        except FileNotFoundError:
-            return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
-        except subprocess.TimeoutExpired:
-            # 컴파일도 실행과 같이 시간 초과를 잡는다. 잡지 않으면 과도한 템플릿 재귀 등으로
-            # 컴파일이 길어질 때 예외가 라우터를 탈출해 원인 불명 500 이 된다.
-            return {"stdout": "", "stderr": f"[컴파일 시간 초과 - {_COMPILE_TIMEOUT}초]",
-                    "exit_code": -1}
-        if compile_result.returncode != 0:
-            return {"stdout": "", "stderr": compile_result.stderr, "exit_code": compile_result.returncode}
-        try:
-            run_result = subprocess.run(
-                [exe],
-                input=stdin,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                env=safe_env(),
-                cwd=tmpdir,   # 서버 CWD 를 상속하지 않는다 — 파이썬 경로와 같은 이유
-            )
-            return {"stdout": run_result.stdout, "stderr": run_result.stderr, "exit_code": run_result.returncode}
-        except subprocess.TimeoutExpired:
-            return {"stdout": "", "stderr": f"[시간 초과 - {timeout}초]", "exit_code": -1}
+        token = _identity_token(base_url)
+        response = requests.post(f"{base_url}/run", json=payload,
+                                 headers={"Authorization": f"Bearer {token}"},
+                                 # 실행 자체의 상한(10초)에 컴파일·콜드스타트 몫을 더한다.
+                                 timeout=req.timeout_sec + 60)
+    except requests.RequestException as e:
+        # 예외 원문에는 요청 URL 과 토큰 헤더가 실릴 수 있다 — 타입만 로그로 보낸다.
+        logger.warning("실행 서비스 호출 실패: %s", type(e).__name__)
+        raise HTTPException(status_code=502,
+                            detail="코드 실행 서비스에 연결할 수 없습니다.") from None
+    if response.status_code == 400:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 언어: {req.language}")
+    if response.status_code != 200:
+        logger.warning("실행 서비스가 %s 응답: %s", response.status_code, response.text[:200])
+        raise HTTPException(status_code=502, detail="코드 실행 서비스가 오류를 반환했습니다.")
+    try:
+        return response.json()
+    except ValueError:
+        # 200 인데 본문이 JSON 이 아니면 앞단(프록시·GFE)이 응답을 갈아치운 것이다.
+        logger.warning("실행 서비스가 JSON 이 아닌 200 을 줬다: %s", response.text[:200])
+        raise HTTPException(status_code=502,
+                            detail="코드 실행 서비스가 오류를 반환했습니다.") from None
 
 
 @router.post("/api/execute")
-def execute_code(req: ExecuteRequest):
-    # 데모는 공개 배포라 임의 코드 실행을 열어둘 수 없다(import 계열은 이미 차단돼 있다).
+def execute_code(req: ExecuteRequest, request: Request):
+    # 데모는 mock 데이터만 다룬다 — 실행 서비스도 붙이지 않는다.
     if IS_DEMO:
         demo_block("코드 실행은 데모 버전에서 지원되지 않습니다.")
-    # 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버
-    # (egress)와 /proc/1/environ 경로가 남는다. 컨테이너 안에서는 막을 수 없다.
-    if not settings.execute_enabled:
-        raise HTTPException(
-            status_code=403,
-            detail="코드 실행이 비활성화되어 있습니다. 로컬에서 EXECUTE_ENABLED=true 로 실행해주세요.")
-    start = time.time()
-    lang = req.language.lower()
-    if "python" in lang or "pypy" in lang:
-        result = _run_python(req.code, req.stdin, req.timeout_sec)
-    elif "c++" in lang or "cpp" in lang or "gnu" in lang:
-        result = _run_cpp(req.code, req.stdin, req.timeout_sec)
-    else:
-        raise HTTPException(status_code=400, detail=f"지원하지 않는 언어: {req.language}")
-    result["time_ms"] = int((time.time() - start) * 1000)
-    return result
+    _enforce_rate_limit(_client_ip(request))
+    if settings.executor_url:
+        return _delegate(settings.executor_url.rstrip("/"), req)
+    if settings.execute_enabled:
+        try:
+            return run_code(req.language, req.code, req.stdin, req.timeout_sec,
+                            compile_timeout=settings.compile_timeout)
+        except UnsupportedLanguage as e:
+            raise HTTPException(status_code=400, detail=str(e)) from None
+    raise HTTPException(
+        status_code=403,
+        detail="코드 실행이 비활성화되어 있습니다. 로컬에서 EXECUTE_ENABLED=true 로 실행해주세요.")

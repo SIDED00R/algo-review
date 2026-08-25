@@ -63,6 +63,20 @@ def not_demo(monkeypatch):
             monkeypatch.setattr(module, "IS_DEMO", False)
 
 
+@pytest.fixture(autouse=True)
+def isolated_execute_route(monkeypatch):
+    """실행 위임 설정과 레이트리밋 상태를 테스트마다 초기화한다.
+
+    - `EXECUTOR_URL` 이 개발자 `.env` 에 있으면 테스트가 실제 실행 서비스를 호출한다.
+      위임 경로를 보는 테스트는 스스로 URL 을 넣는다.
+    - 레이트리밋 카운터는 프로세스 전역이고 TestClient 는 모두 같은 IP 라, 초기화하지
+      않으면 스위트 뒷부분의 /api/execute 테스트가 429 로 떨어진다.
+    """
+    from routes import execute as execute_route
+    monkeypatch.setattr(execute_route.settings, "executor_url", None)
+    monkeypatch.setattr(execute_route, "_recent_calls", {})
+
+
 def _assert_disposable_target(url):
     """이 DB 를 마이그레이션하고 지워도 되는지 확인한다.
 

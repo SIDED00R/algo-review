@@ -44,6 +44,13 @@
 │  warmup.py — server.py lifespan 기동 시 백그라운드 태스크로 실행     │
 │  themes.py: 신선하지 않은 플랫폼×테마만 골라 문제 풀 캐시 예열      │
 └───────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  executor/ — 별도 Cloud Run 서비스 (algo-executor)                 │
+│  routes/execute.py 가 ID 토큰을 붙여 POST /run 으로 위임한다        │
+│  main.py: HTTP 경계 · runner.py: 자식 프로세스 실행 + 자원 상한     │
+│  앱 코드·DB·시크릿 없음 / 권한 0 SA / 외부 통신 차단                │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -73,6 +80,16 @@
 |------|----------|
 | `demo_mode.py` | 데모 모드 플래그(`IS_DEMO`)와 라우터가 반환하는 mock 응답 데이터 |
 | `demo_seed.py` | 데모 서버 기동 시 SQLite 샘플 데이터 시딩 |
+
+### 실행 전용 서비스 (`executor/`)
+앱과 **다른 Cloud Run 서비스**로 배포한다(`--source executor`). 앱 모듈을 import 하지 않는다 —
+이미지에 앱 코드가 들어가지 않기 때문이다. 로컬 개발에서는 `routes/execute.py` 가 `runner` 를
+직접 import 해 같은 구현을 쓴다.
+
+| 파일 | 단일 책임 |
+|------|----------|
+| `executor/main.py` | HTTP 경계(`POST /run`, `GET /health`)와 요청 상한 재검증 — 호출자를 믿지 않는다 |
+| `executor/runner.py` | 자식 프로세스 실행(Python/C++)과 자원 상한(출력·stdin·시간·프로세스 그룹 종료) |
 
 ### DB 레이어 (`db/`)
 SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 접속 URL 만 다르고
@@ -110,7 +127,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
-| `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행 |
+| `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. 앱 안에서 직접 실행하는 경로는 로컬 개발 전용이다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
 | `routes/history.py` | `GET /api/reviews/grouped`, `GET /api/reviews/problem/{platform}/{ref}` | 리뷰 기록 조회 |
@@ -213,16 +230,19 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | # | 위치 | 조치 내용 |
 |---|------|----------|
-| 1 | `routes/execute.py` | 임의 코드 실행은 **기본 비활성**(`EXECUTE_ENABLED`)이다. 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 돌기 때문에, `_SAFE_ENV_KEYS` 필터·`cwd` 격리·`-I` 를 다 걸어도 다음 둘은 남는다 — ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 토큰, ② `/proc/1/environ` → 앱 환경변수 전체(`USER` 가 `CMD` 앞이라 uvicorn 도 같은 uid 로 뜬다). 둘 다 컨테이너 안에선 막을 수 없다(네트워크 차단은 `NET_ADMIN` 필수). 켜려면 실행 전용 신뢰 경계가 선행되어야 한다(권한 0 서비스 계정 + 시크릿 미주입 + egress 제한). `tests/test_execute_isolation.py` 가 게이트와 격리를 함께 고정 |
+| 1 | `routes/execute.py` · `executor/` | 임의 코드 실행을 **앱 밖으로 분리**했다. 앱은 실행하지 않고 `EXECUTOR_URL` 로 위임한다. 앱 프로세스 안에서 돌리면 `_SAFE_ENV_KEYS` 필터·`cwd` 격리·`-I` 를 다 걸어도 ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 토큰, ② `/proc/1/environ` → 앱 환경변수 전체(`USER` 가 `CMD` 앞이라 uvicorn 도 같은 uid 로 뜬다)가 남고, 둘 다 컨테이너 안에선 막을 수 없다(네트워크 차단은 `NET_ADMIN` 필수). 그래서 신뢰 경계를 밖에 세웠다 — 아래 11번. `EXECUTE_ENABLED` 는 실행 서비스를 띄우지 않는 **로컬 개발 전용**으로 남는다. `tests/test_execute_isolation.py`(게이트·격리) 와 `tests/test_execute_delegation.py`(위임 배선) 가 함께 고정 |
 | 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
 | 5 | `server.py` | 전역 예외 핸들러 — DB 연결 실패(`OperationalError`)는 503 + 안내, 그 외 미처리 예외는 500 generic(내부 상세 비노출) + traceback 로깅 |
 | 6 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
-| 7 | `.github/workflows/deploy.yml` | 접근 정책을 **코드가 정본**으로 갖는다 — 운영은 `--no-allow-unauthenticated`, 데모만 `--allow-unauthenticated`. 명시하지 않으면 배포가 기존 IAM 을 "보존" 하므로, 콘솔에서 공개로 바뀐 상태가 배포로 되돌아가지 않는다 |
+| 7 | `.github/workflows/deploy.yml` | 접근 정책을 **코드가 정본**으로 갖는다 — 앱·데모는 `--allow-unauthenticated`(공개 운영 결정, #138), 실행 서비스만 `--no-allow-unauthenticated`. 명시하지 않으면 배포가 기존 IAM 을 "보존" 하므로, 콘솔에서 바뀐 상태가 배포로 되돌아가지 않는다 |
 | 8 | `routes/helpers.py` | `merged_github_target` 은 저장소·토큰을 **짝으로만** 받는다. 한쪽만 override 하면 나머지가 저장된 값으로 폴백해, 요청자가 고른 저장소에 저장된 토큰(`scope=repo`)으로 커밋된다 |
 | 9 | `routes/models.py` | `PushReviewRequest` 의 경로·README 로 나가는 필드에 상한 — title/tier_name/language 200자, tags 30개×100자, url 은 `http(s)` 500자. 없으면 요청 1건으로 수 MB README 를 커밋하거나 경로 길이 한계를 넘긴다 |
 | 10 | `routes/models.py` | `max_pages` 상한 50. 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40) 슬롯을 페이지당 최대 15.5초 붙든다 — 상한이 크면 요청 몇 건으로 `/health` 까지 막힌다 |
+| 11 | `executor/` · `.github/workflows/deploy.yml` | 실행 전용 Cloud Run 서비스 `algo-executor`. 이미지에 앱 코드·DB·시크릿이 없고(`--clear-env-vars`), 런타임 SA `algo-executor-run` 에는 **IAM 역할이 하나도 없다** — 제출 코드가 메타데이터 서버에서 토큰을 받아도 그 토큰으로 할 수 있는 일이 없다. NAT 없는 서브넷으로 Direct VPC egress(`--vpc-egress all-traffic`)를 걸어 외부 통신을 끊고, `--no-allow-unauthenticated` + 앱 SA 에만 `run.invoker` 로 호출자를 앱으로 제한한다 |
+| 12 | `executor/runner.py` | 실행 자원 상한 — 스트림당 출력 64KB(넘는 바이트는 읽어서 버린다: 파이프를 비워야 자식이 막히지 않는다), stdin 64KB, 실행 10초, 그리고 **프로세스 그룹째 종료**(`start_new_session` + `killpg`). 직접 자식만 죽이면 제출 코드가 남긴 손자가 인스턴스 수명 동안 CPU 를 계속 쓴다. `tests/test_executor_runner.py` 가 넷을 실측으로 고정 |
+| 13 | `routes/execute.py` | `/api/execute` 는 인증이 없는 공개 엔드포인트다 — IP 당 분당 30회로 제한한다(원 IP 는 `X-Forwarded-For` 첫 항목, `request.client` 는 GFE 다). 실행 서비스의 `--max-instances 5` 가 비용 상한이고, 이 제한은 한 사람이 그 상한을 독점하지 못하게 하는 몫이다 |
 
 ### 남아 있는 위험 — 앱에 인증이 없다
 
@@ -230,7 +250,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 GitHub OAuth 토큰(`scope=repo`)을 DB 에 저장하고 공개 엔드포인트가 그 토큰으로 커밋한다.
 
 따라서 **서비스에 접근할 수 있는 사람 = 그 토큰을 쓸 수 있는 사람**이다. 접근 통제를 앱이
-아니라 **Cloud Run IAM** 이 담당한다(위 7번). 운영 서비스를 다시 공개로 돌리면 URL 을 아는
+아니라 **Cloud Run IAM** 이 담당한다(위 7번). 운영 서비스는 현재 공개이므로(#138) URL 을 아는
 누구나 아래를 할 수 있다:
 
 - `GET /auth/github/repos` — 비공개 저장소 이름 전량 조회
