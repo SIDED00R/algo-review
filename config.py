@@ -49,9 +49,11 @@ class Settings(BaseSettings):
     compile_timeout: int = 30
     cors_origins: str = "http://localhost:8080"
     demo_mode: bool = False
-    # 임의 코드 실행(/api/execute)은 기본으로 닫는다 — 자식 프로세스가 앱과 같은 uid·같은
-    # 네트워크 네임스페이스에서 돌아 인프로세스 하드닝으로는 안전해지지 않는다.
-    # 로컬 개발에서만 EXECUTE_ENABLED=true 로 켠다.
+    # 격리된 실행 전용 서비스의 URL. 설정되면 /api/execute 는 실행하지 않고 위임한다.
+    executor_url: str | None = None
+    # 앱 프로세스 안에서 직접 실행하는 경로. 자식이 앱과 같은 uid·같은 네트워크
+    # 네임스페이스에서 돌아 인프로세스 하드닝으로는 안전해지지 않는다 — 실행 서비스를
+    # 띄우지 않는 로컬 개발에서만 EXECUTE_ENABLED=true 로 켠다.
     execute_enabled: bool = False
 
     @property

@@ -63,8 +63,8 @@ async function openProblemModal(ref, title, tierName) {
   // 진행 중인 예제 실행을 무효화하고 버튼을 되돌린다.
   _runToken++;
   resetRunButton();
-  // 숨기지 않는다 — 운영 기본값(EXECUTE_ENABLED=false)에서는 예제 실행이 항상 403 이라,
-  // 실행 뒤에만 나타나게 하면 리뷰로 넘어가려면 반드시 실패 결과를 먼저 봐야 한다.
+  // 숨기지 않는다 — 예제 실행이 실패하거나(컴파일 오류·시간 초과) 실행 서비스가
+  // 응답하지 않을 때도 리뷰로는 넘어갈 수 있어야 한다.
   const pmReviewBtnReset = document.getElementById('pm-review-btn');
   pmReviewBtnReset.textContent = '코드 리뷰 진행';
   pmReviewBtnReset.title = '';
@@ -218,8 +218,8 @@ async function runSamples() {
   btn.disabled = true;
   btn.textContent = '실행 중...';
   resultsEl.innerHTML = '';
-  // 숨기지 않는다 — 운영 기본값(EXECUTE_ENABLED=false)에서는 실행이 항상 403 이라,
-  // 실행 뒤에만 나타나게 하면 리뷰로 넘어가려면 반드시 실패 결과를 먼저 봐야 한다.
+  // 숨기지 않는다 — 예제 실행이 실패하거나(컴파일 오류·시간 초과) 실행 서비스가
+  // 응답하지 않을 때도 리뷰로는 넘어갈 수 있어야 한다.
   const pmReviewBtn = document.getElementById('pm-review-btn');
   pmReviewBtn.textContent = '코드 리뷰 진행';
   pmReviewBtn.title = '';
