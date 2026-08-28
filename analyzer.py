@@ -1,4 +1,5 @@
 import json
+import re
 
 from config import settings
 from llm_client import choice_text, get_client, require_choice
@@ -7,6 +8,35 @@ GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
 _API_TIMEOUT = settings.openai_timeout
+
+
+# JSON 의 유효한 이스케이프 하나, 또는 그 밖의 백슬래시 하나.
+_ESCAPE_OR_STRAY_BACKSLASH = re.compile(r'\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})|\\')
+
+
+def _escape_stray_backslashes(raw: str) -> str:
+    r"""유효한 이스케이프는 남기고 나머지 백슬래시만 이중화한다.
+
+    LLM 이 문자열 값에 LaTeX 를 적으면 `$O(N \log N)$` 처럼 이스케이프되지 않은
+    백슬래시가 들어간다 — JSON 에서 `\l` 은 유효한 이스케이프가 아니다.
+    """
+    return _ESCAPE_OR_STRAY_BACKSLASH.sub(
+        lambda m: m.group(0) if len(m.group(0)) > 1 else "\\\\", raw)
+
+
+def parse_review_json(raw: str) -> dict:
+    """LLM 응답 본문을 dict 로 읽는다. 실패하면 백슬래시를 복구해 한 번 더 시도한다."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    try:
+        return json.loads(_escape_stray_backslashes(raw))
+    except json.JSONDecodeError as e:
+        # JSONDecodeError 는 ValueError 의 서브클래스라, 감싸지 않으면 라우터의 '사용자용 안내'
+        # 분기를 그대로 타고 파싱 오류 원문이 502 와 함께 나간다.
+        raise ValueError("AI 응답을 JSON 으로 해석하지 못했습니다. "
+                         "모델 설정(OPENAI_MODEL)을 확인해주세요.") from e
 
 
 _STRING_FIELDS = ("complexity", "better_algorithm", "feedback")
@@ -42,7 +72,8 @@ def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
 
     system_prompt = """당신은 알고리즘 코드 리뷰 전문가입니다.
 주어진 경쟁 프로그래밍 문제와 사용자의 풀이 코드를 분석하여 구체적이고 교육적인 피드백을 제공합니다.
-모든 응답은 반드시 한국어로 작성하세요. JSON 형식으로만 응답하세요."""
+모든 응답은 반드시 한국어로 작성하세요. JSON 형식으로만 응답하세요.
+수식은 LaTeX 없이 일반 텍스트로 적으세요 (예: $O(N \\log N)$ 이 아니라 O(N log N))."""
 
     user_prompt = f"""다음 {platform_label} 문제와 풀이 코드를 분석해주세요.
 
@@ -105,15 +136,7 @@ efficiency 기준:
     raw = choice_text(response)
     if not raw:
         raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError as e:
-        # JSONDecodeError 는 ValueError 의 서브클래스라, 감싸지 않으면 라우터의 '사용자용 안내'
-        # 분기를 그대로 타고 파싱 오류 원문이 502 와 함께 나간다.
-        raise ValueError("AI 응답을 JSON 으로 해석하지 못했습니다. "
-                         "모델 설정(OPENAI_MODEL)을 확인해주세요.") from e
-
-    return normalize_review_result(result)
+    return normalize_review_result(parse_review_json(raw))
 
 
 def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -> str:
