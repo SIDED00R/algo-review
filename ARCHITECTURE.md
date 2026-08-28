@@ -70,7 +70,7 @@
 ### 서비스 레이어
 | 파일 | 단일 책임 |
 |------|----------|
-| `analyzer.py` | LLM 코드 분석 + 응답 정규화(`normalize_review_result`). 클라이언트는 `llm_client` 를 쓴다 |
+| `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json`)·정규화(`normalize_review_result`). 클라이언트는 `llm_client` 를 쓴다 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
 | `cf_translator.py` | Codeforces 문제 본문 한국어 번역. `llm_client` 를 쓴다 — 문제 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
@@ -312,6 +312,7 @@ DB 가 컨테이너 임시 파일이다.
 | 문자 수 윈도우 정규식 | `[\s\S]{0,1200}` 로 함수 안을 찾으면 한두 줄만 추가돼도 "호출이 사라졌다" 는 틀린 메시지로 빨강이 난다(실측 여유 41자·137자) | 중괄호 균형으로 함수 본문을 잘라내고 그 안에서 찾는다(`_js_function_body`) |
 | 예외 메시지의 쿼리스트링 | Codeforces 서명 호출은 `apiKey`·`apiSig` 를 **쿼리스트링**에 넣는다. requests 계열 예외 메시지는 요청 URL 전문을 포함하므로, `raise_for_status()` 뿐 아니라 **`requests.get` 자체가 던지는** `ConnectTimeout`/`ConnectionError` 도 키를 싣는다(urllib3 `MaxRetryError` 를 감싼다). 그 예외가 `detail=f"...{e}"` 를 타면 인증 없는 공개 엔드포인트가 운영자 키를 익명 요청자에게 돌려준다 | `_codeforces_api_request` 가 **함수를 나가는 모든 예외**를 원문 없는 `ValueError` 로 치환하고, 라우터는 500 detail 에 타입명만 싣는다. `tests/test_codeforces_credentials.py` 가 전송 예외 4종을 고정 |
 | `json.dumps(None)` | 문자열 필드의 `None` 은 NOT NULL 컬럼에서 `IntegrityError` 로 **요란하게** 죽지만, 리스트 필드는 `json.dumps(None)` → `"null"` 이 되어 예외 없이 통과하고 읽을 때 `json.loads` → `None` 이 되어 API 가 `"strengths": null` 을 내보낸다 | 정규화를 생산자(`normalize_review_result`) 한 곳에서 끝내고 문자열·리스트를 함께 다룬다. 저장 함수 둘은 dict 를 직접 받는 공개 경로라 각자 한 번 더 막는다 |
+| JSON 모드가 보장하지 않는 것 | `response_format={"type":"json_object"}` 는 Gemini 호환 엔드포인트에서 **문자열 값 안의 이스케이프까지 강제하지 않는다**. 모델이 복잡도를 LaTeX 로 적으면 `$O(N \log N)$` 이 그대로 실려 `\l` 에서 `Invalid \escape` 가 난다. `finish_reason` 은 `stop` 이라 토큰 초과 가드에도 걸리지 않고, 모델이 LaTeX 를 쓸 때만 터지므로 **간헐적**이다(동일 프롬프트 20회 중 5회) | `parse_review_json` 이 파싱 실패 시 이스케이프되지 않은 백슬래시만 이중화해 재파싱한다 — 유효한 이스케이프를 먼저 소비하지 않으면 `C:\\Users` 의 정상 백슬래시까지 망가진다. 프롬프트로도 수식을 일반 텍스트로 요구한다(피드백은 KaTeX 렌더 대상이 아니다) |
 | 검색 실패 vs 빈 결과 | 외부 검색이 전면 실패했는데 빈 목록을 돌려주면 호출부가 "조건에 맞는 문제 없음" 과 구분할 수 없다. 운영에서 solved.ac 가 Cloud Run 을 403 으로 막는 동안 `/api/recommend` 는 빈 추천을 주고 UI 는 **사용자를 탓했다** — 같은 응답에 평균 티어와 취약 태그가 채워져 있는데도 | 검색기가 `ProblemSearchError` 를 던지고, 라우터가 `themes` 응답이 이미 쓰던 `error` 필드 계약으로 내려보낸다. 프론트는 `error` 가 있으면 그 이유를 보인다 |
 | 마이그레이션 실패 은닉 | "온디맨드 DB 정지 때도 기동은 계속한다" 는 의도로 `except Exception` 을 쓰면 잘못된 리비전·DDL 오류·다중 인스턴스 `upgrade head` 경합까지 warning 한 줄로 덮는다. 새 컬럼이 없는 스키마로 서비스하다 나중에 원인 불명 500 이 난다 | `except OperationalError` 로 좁힌다 — **연결 실패만** 흘려보낸다 |
 | 데이터 공백으로 분기 | "BOJ 태그 통계가 비면 CF" 같은 추론은 두 플랫폼을 함께 쓰는 사용자에게서 무너진다 — BOJ 기록이 하나라도 있으면 CF 리포트를 볼 수 없다 | `stats` 와 같이 **명시 쿼리 파라미터**로 받는다. 형제 API 가 파라미터를 쓰는데 하나만 추론하고 있으면 그 자체가 신호다 |
