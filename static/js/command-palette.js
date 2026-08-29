@@ -37,6 +37,8 @@
 
   function render() {
     cursor = Math.max(0, Math.min(cursor, rows.length - 1));
+    // 목록 안에 있던 포커스는 재렌더로 <body> 에 떨어진다 — 활성 항목으로 되돌린다.
+    const hadListFocus = listEl.contains(document.activeElement);
     const noticeText = notice || (rows.length ? '' : '결과가 없습니다.');
     listEl.innerHTML = rows.map((r, i) => `
           <li>
@@ -52,6 +54,7 @@
     listEl.querySelector('.cmdk-item.active')?.scrollIntoView({ block: 'nearest' });
     // 목록 교체로 포커스가 <body> 로 떨어진다. 노드 제거는 focusout 이 없어 직접 부른다.
     recoverModalFocus(overlay);
+    if (hadListFocus) listEl.querySelector('.cmdk-item.active')?.focus();
   }
 
   function rootRows(query) {

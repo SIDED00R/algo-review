@@ -6,7 +6,7 @@
 종료로 수집이 상시 실패하므로 매 리뷰가 그 상태가 된다.
 """
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 import db
@@ -127,3 +127,18 @@ def test_empty_solved_title_does_not_overwrite_resolved_title(minimal_client, mo
     # 그 가드를 무조건 대입으로 바꿔도 스냅샷은 그대로다.
     assert resp.json()["title"] == "Watermelon"  # 빈 문자열로 덮이지 않았다
     assert resp.json()["tags"] == ["math"]       # 빈 태그도 덮지 않는다
+
+
+def test_resolve_problem_info_failure_restores_the_claimed_row(minimal_client, monkeypatch):
+    """resolve_problem_info 가 실패해도 선점한 행이 목록에서 사라지면 안 된다."""
+    def _raise(*a, **k):
+        raise HTTPException(status_code=502, detail="문제 조회 실패")
+    monkeypatch.setattr(solved_route, "resolve_problem_info", _raise)
+    db.save_solved_problem(problem_id=0, title="Watermelon", tier=0, tier_name="Codeforces 800",
+                           tags=["math"], code="print(1)", language="Python 3",
+                           platform="codeforces", problem_ref="4A")
+
+    resp = minimal_client.post("/api/review-imported/codeforces/4A")
+
+    assert resp.status_code == 502
+    assert db.get_solved_problem("codeforces", "4A") is not None

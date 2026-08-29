@@ -2,10 +2,9 @@
  *  재연결을 시도하지 않는다 — 서버가 503(온디맨드 DB 정지)일 때 이 경로를 탄다. */
 function showGithubStatusError(iconBtn, statusBadge, connectInner, message) {
   showDisconnectedGithubUI(iconBtn, statusBadge, connectInner);
-  const msg = document.getElementById('github-repo-msg');
+  const msg = document.getElementById('github-status-error');
   if (msg) {
     msg.textContent = `GitHub 연결 상태를 확인하지 못했습니다: ${message}`;
-    msg.className = 'action-msg bad';
   }
 }
 

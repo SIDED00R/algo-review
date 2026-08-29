@@ -3,13 +3,16 @@
 실행이 공개 서비스로 열리면 "제출 코드가 정상적일 것" 이라는 가정이 사라진다. 무한
 출력·무한 루프·남는 손자 프로세스는 인스턴스를 통째로 묶어버리므로 실측으로 고정한다.
 """
+import io
 import os
 import pathlib
+import subprocess
 import tempfile
 import time
 
 import pytest
 
+from executor import runner
 from executor.runner import _TRUNCATED_NOTICE, MAX_OUTPUT_BYTES, UnsupportedLanguage, run_code
 
 
@@ -42,6 +45,21 @@ def test_output_under_the_cap_is_untouched():
 
     assert r["stdout"] == "hello\n"
     assert "잘렸습니다" not in r["stdout"]
+
+
+def test_output_exactly_at_the_cap_is_not_marked_truncated():
+    r = _py(f"import sys; sys.stdout.write('x' * {MAX_OUTPUT_BYTES})")
+
+    assert r["exit_code"] == 0
+    assert _TRUNCATED_NOTICE not in r["stdout"]
+    assert len(r["stdout"].encode()) == MAX_OUTPUT_BYTES
+
+
+def test_output_one_byte_over_the_cap_is_marked_truncated():
+    r = _py(f"import sys; sys.stdout.write('x' * {MAX_OUTPUT_BYTES + 1})")
+
+    assert r["exit_code"] == 0
+    assert _TRUNCATED_NOTICE in r["stdout"]
 
 
 def test_infinite_loop_is_cut_at_the_timeout():
@@ -93,3 +111,31 @@ def test_orphaned_grandchildren_are_killed_with_the_group():
 
     time.sleep(3)
     assert not marker.exists(), "손자 프로세스가 살아남아 파일을 남겼다"
+
+
+def test_cpp_compile_timeout_returns_the_expected_stderr_and_exit_code(monkeypatch):
+    """g++ 컴파일이 시간 초과되면 그룹째 죽이되, 반환 계약(문구·exit_code)은 그대로여야 한다."""
+
+    class _FakeCompileProc:
+        def __init__(self):
+            self.pid = 999999
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO(b"")
+            self.stderr = io.BytesIO(b"")
+            self._waited = 0
+
+        def wait(self, timeout=None):
+            self._waited += 1
+            if self._waited == 1:
+                raise subprocess.TimeoutExpired(cmd="g++", timeout=timeout)
+            return -9
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(runner, "_spawn", lambda cmd, cwd: _FakeCompileProc())
+
+    r = runner._run_cpp("int main(){}", b"", timeout=5, compile_timeout=1)
+
+    assert r["stderr"].startswith("[컴파일 시간 초과")
+    assert r["exit_code"] == -1

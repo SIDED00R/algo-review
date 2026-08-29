@@ -28,8 +28,7 @@ def _run_review(platform: str, review: dict) -> dict:
         "problem_ref": review["problem_ref"], "title": review["title"],
         "tier": review["tier"], "tier_name": review["tier_name"], "tags": review["tags"],
     }
-    # 저장된 본문을 넘긴다 — 없으면 resolve_statement 가 스크래핑한다(BOJ 는 상시 실패).
-    # 회차 중 본문이 있는 가장 최근 것을 쓴다. 아래 _repush_bundle 도 같은 값을 쓴다.
+    # 저장된 본문(없으면 최신 회차 것)을 넘긴다 — 아래 _repush_bundle 도 같은 값을 쓴다.
     statement = resolve_statement(
         platform, problem_info,
         db.get_stored_problem_statement(platform, review["problem_ref"]))
@@ -64,7 +63,7 @@ def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool,
             code=review["code"], review=review, submitted_at=review.get("created_at", ""),
             # 저장된 본문이 있으면 그걸 쓴다 — 없으면 push_review_bundle 이 스크래핑하고, BOJ 는
             # 빈 섹션이 돌아와 이미 올라간 문제 설명을 지운다.
-            description=review.get("problem_statement", ""),
+            description=review.get("problem_statement") or db.get_stored_problem_statement(platform, problem_ref),
         )
     except HTTPException as e:
         return False, f"GitHub 업로드 실패: {e.detail} 리뷰는 저장되었습니다."

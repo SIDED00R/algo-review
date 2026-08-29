@@ -37,6 +37,7 @@ _cached_token: tuple[str, str, float] | None = None
 # 못하게 하는 몫이다.
 _RATE_LIMIT_PER_MINUTE = 30
 _rate_lock = threading.Lock()
+# 프로세스 로컬이라 인스턴스가 둘 이상이면 상한도 인스턴스별로만 성립한다.
 _recent_calls: dict[str, list[float]] = {}
 
 

@@ -82,7 +82,7 @@ async function openProblemModal(ref, title, tierName) {
 
     document.getElementById('pm-title').textContent = `${ref}. ${data.title}`;
     document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
-    const pUrl = data.url || cfRefToUrl(ref);
+    const pUrl = /^https?:\/\//i.test(data.url || '') ? data.url : cfRefToUrl(ref);
     document.getElementById('pm-link').innerHTML = pUrl
       ? `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer">문제 링크 열기</a>`
       : '';

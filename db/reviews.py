@@ -370,6 +370,13 @@ def has_graded_tier() -> bool:
             select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
+def has_cf_rating() -> bool:
+    """CF 리뷰가 하나라도 있는지."""
+    with session_scope() as session:
+        return session.scalar(
+            select(Review.id).where(Review.platform == "codeforces").limit(1)) is not None
+
+
 def get_problems_grouped(q: str = "", platform: str = "", tier_min: int | None = None,
                          tier_max: int | None = None, eff: str = "",
                          sort: str = "recent", page: int = 1,

@@ -62,11 +62,18 @@
 
   const INDENT_WIDTH = 4;
 
-  // 들여쓰기 단위는 탭 1칸이다. 파이썬은 한 블록에 탭과 스페이스가 섞이면 TabError 로 거부한다.
+  // 들여쓰기 단위는 탭 1칸이다. 선행 공백이 전부 INDENT_WIDTH 의 배수가 아니면 변환하지
+  // 않는다 — 어중간한 폭을 탭/스페이스로 섞으면 파이썬이 TabError 로 거부한다.
   function tabifyIndent(code) {
-    return code.replace(/^[ \t]+/gm, ws => {
+    const indents = code.match(/^[ \t]+/gm) || [];
+    const colOf = ws => {
       let col = 0;
       for (const ch of ws) col = ch === '\t' ? col + INDENT_WIDTH - (col % INDENT_WIDTH) : col + 1;
+      return col;
+    };
+    if (!indents.every(ws => colOf(ws) % INDENT_WIDTH === 0)) return code;
+    return code.replace(/^[ \t]+/gm, ws => {
+      const col = colOf(ws);
       return '\t'.repeat(Math.floor(col / INDENT_WIDTH)) + ' '.repeat(col % INDENT_WIDTH);
     });
   }

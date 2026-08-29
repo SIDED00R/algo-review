@@ -86,20 +86,33 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
     for tag_name in weak_tags:
         tag_key = get_tag_key_by_name(tag_name)
 
-        # 태그마다 별도 HTTP 호출이라 실패를 태그 단위로 격리한다. 하나가 실패해도
-        # 나머지 태그의 결과는 살리고, 전부 실패했을 때만 실패로 본다.
+        # 태그마다 별도 HTTP 호출이라 실패를 밴드 단위로도 격리한다. 실패한 밴드는 빈
+        # 결과로 두고, 두 밴드 모두 실패한 태그만 실패로 본다.
         try:
             same_problems = search_problems_by_tag(
                 tag_key=tag_key, min_tier=same_min, max_tier=same_max, exclude_ids=solved_ids,
             )[:SAME_PER_TAG]
+        except ProblemSearchError:
+            same_problems = []
+            same_failed = True
+        else:
+            same_failed = False
+        try:
             hard_problems = search_problems_by_tag(
                 tag_key=tag_key, min_tier=hard_min, max_tier=hard_max, exclude_ids=solved_ids,
             )[:HARD_PER_TAG]
         except ProblemSearchError:
+            hard_problems = []
+            hard_failed = True
+        else:
+            hard_failed = False
+
+        if same_failed and hard_failed:
             failures += 1
             continue
 
         problems = same_problems + hard_problems
+        problems = list({p["id"]: p for p in problems}.values())
 
         if problems:
             for p in problems:

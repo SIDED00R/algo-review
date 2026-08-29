@@ -209,6 +209,16 @@ def test_loading_labels_are_specific_per_button(js):
         assert "dataset.loadingLabel" in js[name], f"{name} 버튼에 로딩 문구가 없다"
 
 
+def test_tabify_indent_only_transforms_aligned_indentation(js):
+    """폭이 INDENT_WIDTH 의 배수가 아닌 들여쓰기를 변환하면 탭/스페이스가 섞여 파이썬이
+    TabError 로 거부한다(실측: 2·3칸 들여쓰기 붙여넣기). 배수가 아니면 원문을 그대로 둔다."""
+    body = _js_function_body(js["editor.js"], "function tabifyIndent")
+    assert re.search(r"%\s*INDENT_WIDTH\s*===\s*0", body), \
+        "들여쓰기 폭이 INDENT_WIDTH 의 배수인지 검사하는 가드가 없다"
+    assert re.search(r"return code;", body), \
+        "배수가 아니면 원문을 그대로 반환해야 한다"
+
+
 def test_repo_select_listener_is_bound_once(js):
     """데이터 로딩 함수 안에서 리스너를 걸면 재호출 시 누적된다."""
     assert re.search(r"repoSelect\.dataset\.bound", js["github.js"])

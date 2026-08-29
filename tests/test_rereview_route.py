@@ -121,6 +121,28 @@ def test_repush_passes_stored_statement_as_description(minimal_client, monkeypat
     assert seen["description"] == stored
 
 
+def test_repush_falls_back_to_an_earlier_round_statement(minimal_client, monkeypatch, at_time):
+    """최신 회차에 본문이 없으면 이전 회차의 본문을 버리지 않고 그대로 재푸시한다."""
+    stored = "【문제】\n두 정수 A와 B를 입력받아 A+B를 출력한다."
+    at_time("2026-01-01T00:00:00")
+    _save("good", feedback="f", problem_statement=stored)
+    at_time("2026-01-02T00:00:00")
+    _save("good", feedback="f2", problem_statement="")
+    monkeypatch.setattr(rereview, "merged_github_target", lambda: ("me/solutions", "tok"))
+
+    seen = {}
+
+    def fake_push(repo, token, **kw):
+        seen.update(kw)
+        return "백준/Bronze/1000번. A+B"
+
+    monkeypatch.setattr(rereview, "push_review_bundle", fake_push)
+    body = minimal_client.post("/api/rereview/boj/1000").json()
+
+    assert body["pushed"] is True
+    assert seen["description"] == stored
+
+
 def test_llm_result_lands_on_the_round_that_was_reviewed(minimal_client, monkeypatch, at_time):
     """LLM 이 도는 사이에 대기 회차가 하나 더 쌓여도 결과는 리뷰한 회차에 붙어야 한다.
 

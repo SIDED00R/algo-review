@@ -7,12 +7,19 @@ recommendBtn.dataset.loadingLabel = '추천 계산 중...';
 const _SHOWN_ID_LIMIT = 300;
 const _shownIds = new Set();
 
+// 세대 토큰 — 플랫폼을 바꿔 연속 요청하면 늦게 온 이전 플랫폼 응답이 새 결과를 덮는다.
+let _recommendToken = 0;
+
 // 플랫폼을 바꾸면 이전 결과를 지운다 — 토글과 화면이 다른 플랫폼을 가리키면 안 된다.
 // 자동 재요청은 하지 않는다(추천은 외부 검색 API 를 여러 번 친다).
 document.getElementById('recommend-platform')?.addEventListener('change', () => {
   _shownIds.clear();   // 세션 캐시도 플랫폼별이다 — CF id 가 BOJ 요청의 exclude 로 나간다
   const result = document.getElementById('recommend-result');
   if (result.innerHTML.trim()) {
+    // 진행 중인 이전 플랫폼 요청을 무효화한다. 그 요청의 finally 는 토큰이 갈려
+    // 버튼을 되돌리지 않으므로, 무효화한 쪽에서 버튼 상태도 함께 되돌린다.
+    _recommendToken++;
+    setLoading(recommendBtn, false);
     result.innerHTML =
       '<div class="alert alert-info">플랫폼을 바꿨습니다. \'추천받기\'를 눌러주세요.</div>';
   }
@@ -25,10 +32,9 @@ function rememberShownId(id) {
   }
 }
 
-// 세대 토큰이 없는 유일한 비동기 렌더 경로다. 리셋 버튼은 매 렌더마다 새로 만들어지고
-// setLoading 이 추천 버튼을 disabled 로 만들어, 이 함수가 겹쳐 도는 경로가 없다.
 async function fetchRecommend(excludeIds = new Set()) {
   const result = document.getElementById('recommend-result');
+  const token = ++_recommendToken;
   setLoading(recommendBtn, true);
   result.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 추천 문제를 검색 중입니다...</div>';
 
@@ -36,11 +42,13 @@ async function fetchRecommend(excludeIds = new Set()) {
     const platform = document.getElementById('recommend-platform')?.value || 'codeforces';
     const excludeParam = excludeIds.size > 0 ? `&exclude=${[...excludeIds].join(',')}` : '';
     const data = await fetchJsonOk(`/api/recommend?platform=${encodeURIComponent(platform)}${excludeParam}`, undefined, '추천 실패');
+    if (token !== _recommendToken) return;
     renderRecommend(result, data);
   } catch (e) {
+    if (token !== _recommendToken) return;
     showError(result, e.message);
   } finally {
-    setLoading(recommendBtn, false);
+    if (token === _recommendToken) setLoading(recommendBtn, false);
   }
 }
 

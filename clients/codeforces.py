@@ -336,7 +336,7 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
     if status >= 500 or status in (403, 429):
         # 상태코드를 comment 보다 먼저 본다 — CF 는 레이트리밋·점검 응답에도 comment 를 실어 준다.
         raise UpstreamUnavailable(f"Codeforces API 오류 (HTTP {status})")
-    if comment:
+    if 400 <= status < 500 and comment:
         # CF 가 준 메시지를 그대로 쓴다 — 요청 URL 을 담지 않아 서명이 새지 않는다.
         raise ValueError(comment)
     if status >= 400:

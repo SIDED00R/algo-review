@@ -74,6 +74,13 @@ def test_no_records_still_short_circuits(minimal_client):
     assert body["weak_tags"] == [] and body["recommendations"] == []
 
 
+def test_no_graded_tier_reports_na_instead_of_a_fake_tier(minimal_client):
+    """등급 있는 기록이 없으면 avg_tier 는 추천용 기본값(10.0)이다 — 그대로 표시하면
+    기록이 없는 사용자에게 "Silver I" 가 뜬다."""
+    body = minimal_client.get("/api/recommend?platform=boj").json()
+    assert body["tier_name"] == "N/A"
+
+
 def test_one_tag_failure_does_not_discard_the_others(minimal_client, monkeypatch):
     """태그별로 실패를 격리한다 — 첫 실패에서 던지면 이미 성공한 태그의 결과까지 버린다.
 
@@ -88,8 +95,9 @@ def test_one_tag_failure_does_not_discard_the_others(minimal_client, monkeypatch
 
     def _search(tag_key, min_tier, max_tier, exclude_ids):
         calls["n"] += 1
-        # 첫 태그만 실패시킨다 — 실패하면 그 태그의 두 번째 구간 호출은 일어나지 않으므로
-        # `n <= 2` 로 쓰면 두 번째 태그의 첫 호출까지 막아 "전부 실패" 가 된다.
+        # same/hard 밴드가 각자 try/except 로 격리되므로 same 밴드가 실패해도 같은 태그의
+        # hard 밴드 호출은 그대로 이어진다 — 두 밴드 모두 실패해야 그 태그가 실패로 세어진다.
+        # 여기서는 첫 호출(첫 태그의 same 밴드)만 실패시킨다.
         if calls["n"] == 1:
             raise ProblemSearchError("일시적 실패")
         return [{"id": 1000 + calls["n"], "title": "T", "tier": 5, "tier_name": "Bronze I"}]

@@ -8,8 +8,13 @@ const _reviewing = new Set();
 // 목록은 서버가 걸러 준다 — 전 행을 받아 클라이언트에서 거르면 응답이 기록 수에 비례해
 // 자라고(5천 행에서 1.07MB), 그 스냅샷을 잡은 클로저가 늦게 끝나 화면을 되돌린다.
 let _importPage = 1;
-let _importPerPage = 20;
 let _importTotal = 0;
+
+// per_page 는 DOM select 가 정본이다 — 별도 변수를 두면 change 핸들러가 대입을 놓칠 때
+// 요청 페이지 수와 총 페이지 계산이 서로 다른 값을 본다.
+function importPerPage() {
+  return Number(document.getElementById('import-per-page')?.value) || 20;
+}
 
 function importQuery() {
   const tierKey = document.getElementById('import-tier-filter')?.value || '';
@@ -17,7 +22,7 @@ function importQuery() {
     q: document.getElementById('import-search')?.value || '',
     sort: document.getElementById('import-sort')?.value || 'date-desc',
     page: _importPage,
-    per_page: _importPerPage,
+    per_page: importPerPage(),
     ...tierGroupParams(tierKey),
   };
   // 난이도 그룹은 BOJ 전용이라 platform 을 고정한다 — 그때는 플랫폼 필터가 덮지 않는다.
@@ -78,8 +83,7 @@ function renderImportShell(list) {
   const reload = debounce(() => { _importPage = 1; refreshImportList(); });
   ['import-search', 'import-platform-filter', 'import-tier-filter', 'import-sort']
     .forEach(id => document.getElementById(id).addEventListener('input', reload));
-  document.getElementById('import-per-page').addEventListener('change', e => {
-    _importPerPage = Number(e.target.value);
+  document.getElementById('import-per-page').addEventListener('change', () => {
     _importPage = 1;
     refreshImportList();
   });
@@ -105,7 +109,7 @@ async function refreshImportList() {
   document.getElementById('import-count').textContent = _importTotal;
   renderImportCards(container, data.problems || []);
   renderPager(document.getElementById('import-pager'), _importPage,
-              Math.max(1, Math.ceil(_importTotal / _importPerPage)),
+              Math.max(1, Math.ceil(_importTotal / importPerPage())),
               page => { _importPage = page; refreshImportList(); });
 }
 
