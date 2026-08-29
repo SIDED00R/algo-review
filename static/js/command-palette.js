@@ -12,6 +12,7 @@
   const input = document.getElementById('cmdk-input');
   const listEl = document.getElementById('cmdk-list');
   const crumbEl = document.getElementById('cmdk-crumb');
+  const noticeEl = document.getElementById('cmdk-notice');
 
   let mode = 'root';        // root | problems | ledger
   let rows = [];            // 실행 가능한 항목만 [{label, meta, run}]
@@ -41,13 +42,16 @@
     const hadListFocus = listEl.contains(document.activeElement);
     const noticeText = notice || (rows.length ? '' : '결과가 없습니다.');
     listEl.innerHTML = rows.map((r, i) => `
-          <li>
-            <button type="button" class="cmdk-item ${i === cursor ? 'active' : ''}" data-idx="${i}">
+          <li role="presentation">
+            <button type="button" role="option" id="cmdk-opt-${i}" aria-selected="${i === cursor}"
+                    class="cmdk-item ${i === cursor ? 'active' : ''}" data-idx="${i}">
               <span class="cmdk-item-label">${escapeHtml(r.label)}</span>
               ${r.meta ? `<span class="cmdk-item-meta">${escapeHtml(r.meta)}</span>` : ''}
             </button>
-          </li>`).join('')
-      + (noticeText ? `<li class="cmdk-empty">${escapeHtml(noticeText)}</li>` : '');
+          </li>`).join('');
+    noticeEl.textContent = noticeText;
+    noticeEl.classList.toggle('hidden', !noticeText);
+    input.setAttribute('aria-activedescendant', rows.length ? `cmdk-opt-${cursor}` : '');
     listEl.querySelectorAll('.cmdk-item').forEach(b => {
       b.addEventListener('click', () => run(Number(b.dataset.idx)));
     });

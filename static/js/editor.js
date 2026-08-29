@@ -101,10 +101,15 @@
         'Cmd-/': 'toggleComment',
         // 기본 Shift-Tab 은 indentAuto(줄 재정렬)다 — 내어쓰기로 바꾼다.
         'Shift-Tab': cm => cm.indentSelection('subtract'),
+        // Esc 는 에디터에서 포커스를 뺀다 — Tab·Shift-Tab 은 들여쓰기가 소비한다.
+        'Esc': cm => cm.getInputField().blur(),
         // cm._hintFn을 참조해 언어 변경 후에도 올바른 목록 사용
         'Ctrl-Space': cm => CodeMirror.showHint(cm, cm._hintFn, { completeSingle: false }),
       },
     });
+
+    // aria-describedby 는 조상에서 상속되지 않는다 — 포커스를 받는 textarea 에 직접 건다.
+    cm.getInputField().setAttribute('aria-describedby', `${id}-escape-help`);
 
     cm._hintFn = makeHintFn(MODE_WORDS[mode || 'python'] || []);
 

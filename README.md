@@ -143,10 +143,12 @@ CI([.github/workflows/deploy.yml](.github/workflows/deploy.yml))는 PR·push 마
 gcloud run deploy algo-review \
   --source . \
   --region asia-northeast3 \
-  --set-env-vars DB_PATH=/tmp/app.db
+  --update-env-vars DB_PATH=/tmp/app.db
 ```
 
 컨테이너는 non-root 로 돌고 `/app` 은 root 소유라 `DB_PATH` 를 쓰기 가능한 경로로 지정하지 않으면 모든 DB 호출이 503 이 된다. 인스턴스가 재생성되면 `/tmp` 의 데이터는 사라진다.
+
+`--set-env-vars` 는 **치환**이다 — 이미 떠 있는 `algo-review` 에 쓰면 `EXECUTOR_URL`·`DB_TYPE`·`OPENAI_API_KEY` 가 함께 지워진다. 값 하나만 더할 때는 `--update-env-vars` 를 쓴다.
 
 ### Cloud Run + Cloud SQL (PostgreSQL)
 

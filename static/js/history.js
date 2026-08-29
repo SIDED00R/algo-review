@@ -163,7 +163,7 @@ async function openReviewModal(platform, problemRef) {
 
     // 제출 원장 — 회차·날짜·복잡도·판정을 모노로 정렬한다.
     const ledgerHtml = reviews.map((r, i) => `
-      <button class="ledger-row ${i === 0 ? 'active' : ''}" data-idx="${i}">
+      <button class="ledger-row ${i === 0 ? 'active' : ''}" ${i === 0 ? 'aria-current="true"' : ''} data-idx="${i}">
         <span class="ledger-seq">#${reviews.length - i}</span>
         <span>${escapeHtml(localDate(r.created_at))}</span>
         <span class="ledger-meta">${escapeHtml(r.complexity || '-')}</span>
@@ -182,7 +182,7 @@ async function openReviewModal(platform, problemRef) {
       </div>
       <div class="tag-list">${tagsHtml || '<span class="tag">태그 없음</span>'}</div>
       <div class="ledger">${ledgerHtml}</div>
-      <div id="submission-detail-area"></div>`;
+      <div id="submission-detail-area" tabindex="-1"></div>`;
 
     function renderDetail(idx) {
       const r = reviews[idx];
@@ -232,9 +232,15 @@ async function openReviewModal(platform, problemRef) {
 
     content.querySelectorAll('.ledger-row').forEach(btn => {
       btn.addEventListener('click', () => {
-        content.querySelectorAll('.ledger-row').forEach(b => b.classList.remove('active'));
+        content.querySelectorAll('.ledger-row').forEach(b => {
+          b.classList.remove('active');
+          b.removeAttribute('aria-current');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-current', 'true');
         renderDetail(Number(btn.dataset.idx));
+        // 포커스는 누른 회차 버튼에 머문다 — 바뀐 상세로 옮겨야 결과 위치가 전달된다.
+        document.getElementById('submission-detail-area').focus();
       });
     });
 

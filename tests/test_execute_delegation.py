@@ -158,7 +158,10 @@ def test_global_limit_holds_even_when_the_forwarded_ip_rotates_every_request(mon
 
 
 def test_recent_calls_stays_capped_even_with_unbounded_forged_keys(monkeypatch):
-    """요청자가 정하는 키(XFF)로 무한히 자라지 않는다 — 상한을 넘으면 가장 오래된 것부터 버려진다."""
+    """요청자가 정하는 키(XFF)로 무한히 자라지 않는다 — 상한을 넘으면 가장 오래된 것부터 버려진다.
+
+    전역 한도를 끈 상태에서만 이 분기에 닿는다.
+    """
     monkeypatch.setattr(execute_route, "_recent_calls", {})
     monkeypatch.setattr(execute_route, "_global_calls", [])
     # 이 테스트는 버킷 수 상한만 본다 — 전역 상한은 다른 테스트가 이미 검증했다.

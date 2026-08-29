@@ -174,6 +174,7 @@
         <span id="load-submission-msg" class="hint" aria-live="polite"></span>
       </div>
       <div id="code-input" class="cm-wrap"></div>
+      <p id="code-input-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다.</p>
 
       <div class="action-row">
         <button id="review-btn" class="btn-primary">분석 시작</button>
@@ -446,6 +447,7 @@
             </select>
           </div>
           <div id="pm-code" class="pm-code"></div>
+          <p id="pm-code-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다.</p>
           <div class="pm-run-row">
             <button id="pm-run-btn" class="btn-primary btn-sm">예제 실행</button>
             <button id="pm-review-btn" class="btn-primary btn-sm btn-review">코드 리뷰 진행</button>
@@ -469,12 +471,16 @@
       <div class="cmdk-head">
         <span id="cmdk-crumb" class="cmdk-crumb hidden"></span>
         <input id="cmdk-input" class="cmdk-input" type="text" autocomplete="off"
-               spellcheck="false" placeholder="무엇을 할까요?" aria-label="명령 검색" />
+               spellcheck="false" placeholder="무엇을 할까요?" aria-label="명령 검색"
+               role="combobox" aria-expanded="true" aria-controls="cmdk-list"
+               aria-autocomplete="list" />
         <button type="button" id="cmdk-close" class="cmdk-close" aria-label="닫기">
           <svg aria-hidden="true"><use href="#i-close" /></svg>
         </button>
       </div>
-      <ul id="cmdk-list" class="cmdk-list"></ul>
+      <ul id="cmdk-list" class="cmdk-list" role="listbox" aria-label="명령 결과"></ul>
+      <!-- listbox 자식은 option 만 둔다 — 안내 한 줄은 목록 밖 라이브 영역에 넣는다. -->
+      <p id="cmdk-notice" class="cmdk-empty hidden" aria-live="polite"></p>
       <div class="cmdk-foot">
         <span><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
         <span><kbd>Enter</kbd> 실행</span>
