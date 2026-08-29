@@ -141,3 +141,30 @@ def test_throttling_counts_the_forwarded_client_not_the_proxy(monkeypatch, deleg
     # 다른 IP 는 영향을 받지 않아야 한다.
     other = {"x-forwarded-for": "198.51.100.4"}
     assert client.post("/api/execute", json=_REQ, headers=other).status_code == 200
+
+
+def test_global_limit_holds_even_when_the_forwarded_ip_rotates_every_request(monkeypatch, delegating, client):
+    """XFF 를 매번 새 값으로 바꿔도(위조) 전역 상한은 토폴로지와 무관하게 걸린다."""
+    monkeypatch.setattr(execute_route.requests, "post",
+                        lambda *a, **k: _Response(200, {"stdout": "", "stderr": "",
+                                                        "exit_code": 0, "time_ms": 1}))
+
+    for i in range(execute_route._GLOBAL_LIMIT):
+        headers = {"x-forwarded-for": f"5.5.5.{i}"}
+        assert client.post("/api/execute", json=_REQ, headers=headers).status_code == 200
+
+    headers = {"x-forwarded-for": f"5.5.5.{execute_route._GLOBAL_LIMIT}"}
+    assert client.post("/api/execute", json=_REQ, headers=headers).status_code == 429
+
+
+def test_recent_calls_stays_capped_even_with_unbounded_forged_keys(monkeypatch):
+    """요청자가 정하는 키(XFF)로 무한히 자라지 않는다 — 상한을 넘으면 가장 오래된 것부터 버려진다."""
+    monkeypatch.setattr(execute_route, "_recent_calls", {})
+    monkeypatch.setattr(execute_route, "_global_calls", [])
+    # 이 테스트는 버킷 수 상한만 본다 — 전역 상한은 다른 테스트가 이미 검증했다.
+    monkeypatch.setattr(execute_route, "_GLOBAL_LIMIT", 10 ** 9)
+
+    for i in range(execute_route._MAX_BUCKETS + 500):
+        execute_route._enforce_rate_limit(f"forged-{i}")
+
+    assert len(execute_route._recent_calls) <= execute_route._MAX_BUCKETS

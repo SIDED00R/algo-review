@@ -245,7 +245,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 10 | `routes/models.py` | `max_pages` 상한 50. 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40) 슬롯을 페이지당 최대 15.5초 붙든다 — 상한이 크면 요청 몇 건으로 `/health` 까지 막힌다 |
 | 11 | `executor/` · `.github/workflows/deploy.yml` | 실행 전용 Cloud Run 서비스 `algo-executor`. 이미지에 앱 코드·DB·시크릿이 없고(`--clear-env-vars`), 런타임 SA `algo-executor-run` 에는 **IAM 역할이 하나도 없다** — 제출 코드가 메타데이터 서버에서 토큰을 받아도 그 토큰으로 할 수 있는 일이 없다. NAT 없는 서브넷으로 Direct VPC egress(`--vpc-egress all-traffic`)를 걸어 외부 통신을 끊고, `--no-allow-unauthenticated` + 앱 SA 에만 `run.invoker` 로 호출자를 앱으로 제한한다 |
 | 12 | `executor/runner.py` | 실행 자원 상한 — 스트림당 출력 64KB(넘는 바이트는 읽어서 버린다: 파이프를 비워야 자식이 막히지 않는다), stdin 64KB, 실행 10초, 그리고 **프로세스 그룹째 종료**(`start_new_session` + `killpg`). 직접 자식만 죽이면 제출 코드가 남긴 손자가 인스턴스 수명 동안 CPU 를 계속 쓴다. `tests/test_executor_runner.py` 가 넷을 실측으로 고정 |
-| 13 | `routes/execute.py` | `/api/execute` 는 인증이 없는 공개 엔드포인트다 — IP 당 분당 30회로 제한한다(원 IP 는 `X-Forwarded-For` 첫 항목, `request.client` 는 GFE 다). 실행 서비스의 `--max-instances 5` 가 비용 상한이고, 이 제한은 한 사람이 그 상한을 독점하지 못하게 하는 몫이다 |
+| 13 | `routes/execute.py` | `/api/execute` 는 인증이 없는 공개 엔드포인트다 — `X-Forwarded-For` 첫 항목 당 분당 30회로 제한한다(`request.client` 는 GFE 다). Cloud Run 은 클라이언트가 보낸 `X-Forwarded-For` 를 버리지 않으므로 이 키는 요청자가 정할 수 있다 — 그래서 헤더가 무엇이든 성립하는 전역 분당 120회 상한을 함께 건다. 실행 서비스의 `--max-instances 5` 가 비용 상한이고, 이 전역 상한이 그 비용 상한을 지킨다 |
 
 ### 남아 있는 위험 — 앱에 인증이 없다
 

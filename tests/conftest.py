@@ -75,6 +75,7 @@ def isolated_execute_route(monkeypatch):
     from routes import execute as execute_route
     monkeypatch.setattr(execute_route.settings, "executor_url", None)
     monkeypatch.setattr(execute_route, "_recent_calls", {})
+    monkeypatch.setattr(execute_route, "_global_calls", [])
 
 
 def _assert_disposable_target(url):
