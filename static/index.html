@@ -97,6 +97,7 @@
             <div id="github-connect-inner" class="hidden">
               <p class="github-dropdown-desc">GitHub에 연결하면 풀이를 자동으로 저장할 수 있습니다.</p>
               <button id="github-connect-btn" class="btn-primary">GitHub 연결</button>
+              <p id="github-status-error" class="hint hint-bad"></p>
             </div>
           </div>
         </div>
@@ -301,6 +302,7 @@
             <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
             <h2>BOJ 직접 가져오기</h2>
           </summary>
+          <p class="desc"><strong>acmicpc.net 서비스 종료로 현재 동작하지 않습니다.</strong></p>
           <p class="desc">BOJ 아이디를 입력하면 맞은 제출 기록을 자동으로 가져옵니다.
             세션 쿠키를 입력하면 코드까지 저장할 수 있습니다 (선택 사항).</p>
 
@@ -325,7 +327,7 @@
               <option value="5">최근 ~100개 (5페이지)</option>
               <option value="10">최근 ~200개 (10페이지)</option>
               <option value="20">최근 ~400개 (20페이지)</option>
-              <option value="9999" selected>전체 (모든 기록)</option>
+              <option value="9999" selected>최근 1,000개 (최대)</option>
             </select>
           </div>
 
