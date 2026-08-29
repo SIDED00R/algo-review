@@ -8,6 +8,7 @@
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 import db
 from routes import problem_resolve
@@ -142,6 +143,33 @@ def test_resolve_problem_info_failure_restores_the_claimed_row(minimal_client, m
 
     assert resp.status_code == 502
     assert db.get_solved_problem("codeforces", "4A") is not None
+
+
+@pytest.mark.parametrize("error", [
+    RuntimeError("저장 실패"),
+    IntegrityError("INSERT INTO reviews ...", {}, Exception("중복")),
+])
+def test_review_save_failure_restores_the_claimed_row(minimal_client, monkeypatch, error):
+    """리뷰 저장이 실패해도 선점한 행이 목록에서 사라지면 안 된다.
+
+    구제되는 것은 커넥션이 살아 있는 실패뿐이다 — DB 자체가 죽으면 `_restore()` 도 같은 DB 에
+    쓰므로 함께 실패한다.
+    """
+    monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",
+                        lambda pid: "【문제】두 정수 A와 B를 입력받아 A+B를 출력한다.")
+    monkeypatch.setattr(solved_route.analyzer, "analyze_code", _capture({}))
+
+    def _raise(**kwargs):
+        raise error
+    monkeypatch.setattr(db, "save_review", _raise)
+    _seed_boj()
+
+    with pytest.raises(type(error)):
+        minimal_client.post("/api/review-imported/boj/1000")
+
+    restored = db.get_solved_problem("boj", "1000")
+    assert restored is not None
+    assert restored["code"] == "print(1)"
 
 
 def test_restored_row_keeps_its_original_imported_at(minimal_client, monkeypatch):

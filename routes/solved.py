@@ -63,23 +63,23 @@ def review_imported(platform: str, problem_ref: str):
             raise HTTPException(status_code=502, detail=str(e))
         except Exception as e:
             raise upstream_failure("코드 분석 실패", e)
+
+        # solved 기록의 제목·태그·식별자를 쓰되 빈 값으로 덮지 않는다 — CF 는 문제 조회에서
+        # 받아오므로 solved 행이 비어 있으면 그걸 살려야 한다.
+        problem_info["platform"] = platform
+        problem_info["problem_ref"] = problem_ref
+        if problem.get("title"):
+            problem_info["title"] = problem["title"]
+        if problem.get("tags"):
+            problem_info["tags"] = problem["tags"]
+
+        # 행은 이미 선점 시점에 지웠다 — 여기서 또 지우면 그 사이 사용자가 다시 가져온
+        # 같은 문제까지 지운다.
+        return save_and_build_response(problem_info, problem["code"], result,
+                                       problem.get("language", ""))
     except Exception:
         _restore()
         raise
-
-    # solved 기록의 제목·태그·식별자를 쓰되 빈 값으로 덮지 않는다 — CF 는 문제 조회에서
-    # 받아오므로 solved 행이 비어 있으면 그걸 살려야 한다.
-    problem_info["platform"] = platform
-    problem_info["problem_ref"] = problem_ref
-    if problem.get("title"):
-        problem_info["title"] = problem["title"]
-    if problem.get("tags"):
-        problem_info["tags"] = problem["tags"]
-
-    # 행은 이미 선점 시점에 지웠다 — 여기서 또 지우면 그 사이 사용자가 다시 가져온
-    # 같은 문제까지 지운다.
-    return save_and_build_response(problem_info, problem["code"], result,
-                                   problem.get("language", ""))
 
 
 @router.delete("/api/solved-history")

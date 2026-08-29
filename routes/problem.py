@@ -17,6 +17,11 @@ _PROBLEM_CACHE_MAX = 200
 _PROBLEM_CACHE: dict[str, dict] = {}
 _FALLBACK_TTL = 60  # 번역 실패 시 재시도까지 대기 시간(초)
 
+# ref_key → 진행 중인 수집·번역 작업. 캐시 미스가 겹치면 한 요청만 실제로 수집하고 나머지는
+# 그 결과를 기다린다 — 캐시에 들어가기 전 구간(스크래핑 + 유료 번역 4건)이 수 초~십수 초다.
+# 인스턴스 로컬이다 — 다른 인스턴스로 라우팅된 요청은 각자 수집한다(캐시와 같은 한계).
+_IN_FLIGHT: dict[str, asyncio.Task] = {}
+
 
 def _cache_get(ref_key: str) -> dict | None:
     entry = _PROBLEM_CACHE.get(ref_key)
@@ -40,6 +45,13 @@ def _cache_set(ref_key: str, result: dict, translation_ok: bool) -> None:
     }
 
 
+def _release_in_flight(ref_key: str, task: asyncio.Task) -> None:
+    """끝난 작업을 맵에서 지운다 — 실패·취소도 지운다(다음 요청이 다시 수집한다)."""
+    _IN_FLIGHT.pop(ref_key, None)
+    if not task.cancelled():
+        task.exception()  # 대기자가 모두 끊긴 경우의 "never retrieved" 경고를 막는다
+
+
 @router.get("/api/problem/cf/{problem_ref}")
 async def get_cf_problem(problem_ref: str):
     if IS_DEMO:
@@ -55,6 +67,17 @@ async def get_cf_problem(problem_ref: str):
     if cached is not None:
         return cached
 
+    task = _IN_FLIGHT.get(ref_key)
+    if task is None:
+        # 이벤트 루프 단일 스레드라 조회~등록 사이에 다른 요청이 끼어들지 않는다.
+        task = asyncio.ensure_future(_scrape_and_translate(ref_key, problem_ref))
+        _IN_FLIGHT[ref_key] = task
+        task.add_done_callback(lambda t, key=ref_key: _release_in_flight(key, t))
+    # shield 로 대기자를 개시자의 취소에서 떼어낸다 — 개시 요청이 끊겨도 작업과 다른 대기자는 계속된다.
+    return await asyncio.shield(task)
+
+
+async def _scrape_and_translate(ref_key: str, problem_ref: str) -> dict:
     try:
         # 동기 HTTP 호출(최대 10초)이라 이벤트 루프를 막지 않게 스레드로 뺀다 — 아래 번역과 같은 이유.
         raw = await asyncio.to_thread(api_client.scrape_cf_problem, problem_ref)
