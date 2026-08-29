@@ -1,6 +1,6 @@
 FROM python:3.13-slim
 
-# C++ 제출을 컴파일한다. 앱 이미지와 달리 여기 말고는 g++ 가 필요 없다.
+# C++ 제출을 컴파일한다.
 RUN apt-get update && apt-get install -y --no-install-recommends g++ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
