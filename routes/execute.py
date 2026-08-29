@@ -36,13 +36,17 @@ _cached_token: tuple[str, str, float] | None = None
 # 실행 서비스의 max-instances 가 비용 상한이고, 이쪽은 한 명이 그 상한을 독점하지
 # 못하게 하는 몫이다.
 _RATE_LIMIT_PER_MINUTE = 30
+_GLOBAL_LIMIT = 120        # 분당 전체 실행 상한 — 키를 위조해도 이 값을 넘지 못한다
+_MAX_BUCKETS = 4096        # _recent_calls 가 요청자가 만든 키로 무한히 자라지 않게 한다
 _rate_lock = threading.Lock()
 # 프로세스 로컬이라 인스턴스가 둘 이상이면 상한도 인스턴스별로만 성립한다.
 _recent_calls: dict[str, list[float]] = {}
+_global_calls: list[float] = []
 
 
 def _client_ip(request: Request) -> str:
-    # Cloud Run 은 GFE 를 거치므로 request.client 는 프록시 주소다. 원 IP 는 XFF 의 첫 항목.
+    # Cloud Run 은 GFE 를 거치므로 request.client 는 프록시 주소다. XFF 첫 항목은 앞단이
+    # 버리지 않아 요청자가 정할 수 있다 — 개별 한도용 키일 뿐 신뢰 경계가 아니다.
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -60,8 +64,19 @@ def _enforce_rate_limit(ip: str) -> None:
         if len(hits) >= _RATE_LIMIT_PER_MINUTE:
             raise HTTPException(status_code=429,
                                 detail="실행 요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.")
+        # Cloud Run 은 클라이언트가 보낸 X-Forwarded-For 를 버리지 않는다 — 이 키는 요청자가 정할 수 있다.
+        # 개별 한도는 프록시 뒤 사용자를 위한 것이고, 비용 상한은 아래 전역 한도가 담당한다.
+        _global_calls[:] = [t for t in _global_calls if t > cutoff]
+        if len(_global_calls) >= _GLOBAL_LIMIT:
+            raise HTTPException(status_code=429,
+                                detail="실행 요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.")
+        _global_calls.append(now)
         hits.append(now)
         _recent_calls[ip] = hits
+        if len(_recent_calls) > _MAX_BUCKETS:
+            oldest_first = sorted(_recent_calls, key=lambda k: _recent_calls[k][-1])
+            for key in oldest_first[: len(_recent_calls) - _MAX_BUCKETS]:
+                del _recent_calls[key]
 
 
 def _identity_token(audience: str) -> str:

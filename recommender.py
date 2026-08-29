@@ -62,8 +62,8 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
                         avg_difficulty: float) -> list[dict]:
     """취약 태그별 추천 문제.
 
-    weak_tags 와 avg_difficulty 는 호출부가 구해서 넘긴다 — 유일한 호출자
-    (routes/recommend.py)가 응답에도 그 값들을 실어야 해서 어차피 먼저 계산한다.
+    weak_tags 와 avg_difficulty 는 호출부가 구해서 넘긴다.
+    avg_difficulty 는 BOJ 면 평균 티어(티어 척도 1~30), Codeforces 면 평균 레이팅(CF 척도 800~3500)이다.
     """
     if not weak_tags:
         return []
