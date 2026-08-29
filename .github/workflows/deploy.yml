@@ -147,13 +147,6 @@ jobs:
       - name: Deploy ${{ matrix.service }}
         run: gcloud run deploy ${{ matrix.service }} --source ${{ matrix.source }} --region "$REGION" --project "$PROJECT_ID" ${{ matrix.extra_args }} --quiet
 
-      - name: Resolve ${{ matrix.service }} URL
-        id: url
-        run: |
-          echo "url=$(gcloud run services describe ${{ matrix.service }} \
-                       --region "$REGION" --project "$PROJECT_ID" \
-                       --format='value(status.url)')" >> "$GITHUB_OUTPUT"
-
   smoke:
     name: Smoke ${{ matrix.service }}
     needs: [deploy]
