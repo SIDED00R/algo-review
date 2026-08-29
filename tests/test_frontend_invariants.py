@@ -321,8 +321,8 @@ def test_editor_focus_ring_is_on_the_wrapper(css):
 def test_row_hairlines_do_not_depend_on_dom_structure(css):
     """목록 행의 구분선이 컨테이너 구조에 의존하면 안 된다.
 
-    쓰면 안 되는 셀렉터가 둘이다. ① `.row:first-child` — #history-list 의 첫 자식은 항상
-    .toolbar 라 리뷰 기록 탭에서 매칭되지 않는다. ② `.row + .row` — 가져오기 목록은 행마다
+    쓰면 안 되는 셀렉터가 둘이다. ① `.row:first-child` — 컨테이너의 첫 자식이 무엇이냐에
+    구조적으로 의존한다. ② `.row + .row` — 가져오기 목록은 행마다
     코드 보기 패널 div 를 형제로 끼워 넣고, 인접(+)은 DOM 구조 기준이라 display:none
     형제도 인접을 끊어 그 탭에서만 구분선이 2px 로 겹친다.
 

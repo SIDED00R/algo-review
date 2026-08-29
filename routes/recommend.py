@@ -39,19 +39,25 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     if platform == "codeforces":
         avg_rating = db.get_average_cf_rating()
         avg_tier = 0
-        tier_name = f"CF {int(avg_rating)}" if db.has_cf_rating() else "N/A"
-        tier_range = recommender.cf_rating_range_description(avg_rating)
+        has_avg = db.has_cf_rating()
+        tier_name = f"CF {int(avg_rating)}" if has_avg else "N/A"
+        tier_range = recommender.cf_rating_range_description(avg_rating) if has_avg else "-"
     else:
         avg_tier = db.get_average_tier()
-        tier_name = TIER_NAMES.get(int(avg_tier), "N/A") if db.has_graded_tier() else "N/A"
-        tier_range = recommender.tier_range_description(avg_tier)
+        has_avg = db.has_graded_tier()
+        tier_name = TIER_NAMES.get(int(avg_tier), "N/A") if has_avg else "N/A"
+        tier_range = recommender.tier_range_description(avg_tier) if has_avg else "-"
+
+    # 응답 표시용 값 — avg_tier 는 아래 recommender.get_recommendations 에 원래 값
+    # 그대로 넘겨야 하므로 재대입하지 않는다.
+    display_avg_tier = avg_tier if has_avg else 0
 
     weak_tags = recommender.get_weak_tags_scored(5, platform=platform)
 
     if not weak_tags:
         # 키 집합을 정상 반환과 같게 유지한다 — 분기마다 다르면 프론트가 방어 코드로
         # 메꾸게 되고, 나중에 키 하나를 지워도 아무 데서도 드러나지 않는다.
-        return {"avg_tier": avg_tier, "tier_name": tier_name, "tier_range": tier_range,
+        return {"avg_tier": display_avg_tier, "tier_name": tier_name, "tier_range": tier_range,
                 "weak_tags": [], "recommendations": [], "platform": platform, "error": ""}
 
     # 검색 실패를 빈 추천으로 내려보내면 프론트가 '먼저 코드 리뷰를 진행해보세요' 로 안내한다 —
@@ -66,7 +72,7 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         recs, error = [], str(e)
 
     return {
-        "avg_tier": avg_tier,
+        "avg_tier": display_avg_tier,
         "tier_name": tier_name,
         "tier_range": tier_range,
         "weak_tags": weak_tags,

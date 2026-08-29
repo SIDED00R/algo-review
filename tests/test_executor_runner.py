@@ -134,8 +134,60 @@ def test_cpp_compile_timeout_returns_the_expected_stderr_and_exit_code(monkeypat
             pass
 
     monkeypatch.setattr(runner, "_spawn", lambda cmd, cwd: _FakeCompileProc())
+    kill_calls = []
+    monkeypatch.setattr(runner, "_kill_tree", lambda proc, pgid: kill_calls.append(pgid))
 
     r = runner._run_cpp("int main(){}", b"", timeout=5, compile_timeout=1)
 
     assert r["stderr"].startswith("[컴파일 시간 초과")
     assert r["exit_code"] == -1
+    expected_pgid = 999999 if os.name == "posix" else None
+    assert kill_calls == [expected_pgid]
+
+
+def test_cpp_compile_error_stderr_over_the_cap_is_truncated(monkeypatch):
+    """컴파일 실패 stderr 가 상한을 넘으면 잘림 안내가 붙고 길이가 상한 이하여야 한다."""
+
+    class _FakeFailedCompileProc:
+        def __init__(self):
+            self.pid = 999999
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO(b"")
+            self.stderr = io.BytesIO(b"e" * (MAX_OUTPUT_BYTES + 10_000))
+
+        def wait(self, timeout=None):
+            return 1
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(runner, "_spawn", lambda cmd, cwd: _FakeFailedCompileProc())
+
+    r = runner._run_cpp("int main(){", b"", timeout=5, compile_timeout=5)
+
+    assert "잘렸습니다" in r["stderr"]
+    assert len(r["stderr"].split(_TRUNCATED_NOTICE)[0].encode()) <= MAX_OUTPUT_BYTES
+
+
+def test_cpp_compile_error_stderr_normalizes_crlf(monkeypatch):
+    """컴파일 실패 stderr 도 CRLF 를 LF 로 정규화해야 한다."""
+
+    class _FakeFailedCompileProc:
+        def __init__(self):
+            self.pid = 999999
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO(b"")
+            self.stderr = io.BytesIO(b"a\r\nb\r\n")
+
+        def wait(self, timeout=None):
+            return 1
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(runner, "_spawn", lambda cmd, cwd: _FakeFailedCompileProc())
+
+    r = runner._run_cpp("int main(){", b"", timeout=5, compile_timeout=5)
+
+    assert "\r" not in r["stderr"]
+    assert r["stderr"] == "a\nb\n"

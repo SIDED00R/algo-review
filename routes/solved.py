@@ -30,7 +30,8 @@ def review_imported(platform: str, problem_ref: str):
             problem["problem_id"], problem.get("title", ""), problem.get("tier", 0),
             problem.get("tags", []), code=problem.get("code", ""),
             language=problem.get("language", ""), platform=platform,
-            problem_ref=problem_ref, tier_name=problem.get("tier_name", ""))
+            problem_ref=problem_ref, tier_name=problem.get("tier_name", ""),
+            imported_at=problem.get("imported_at", ""))
 
     try:
         if not problem.get("code"):

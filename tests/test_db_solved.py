@@ -54,3 +54,25 @@ def test_cached_problem_info_falls_back_to_solved():
 
 def test_cached_problem_info_none_when_absent():
     assert db.get_cached_problem_info(12345) is None
+
+
+def test_restore_after_claim_preserves_imported_at_and_order():
+    """claim 후 라우터의 _restore() 와 같은 인자로 재저장하면 원래 imported_at 이
+    되살아나야 한다 — 그러지 않으면 목록 순서가 뒤집히고 가져온 날짜가 오늘로 보인다."""
+    mk_solved(problem_id=1000, problem_ref="1000", imported_at="2026-01-01T00:00:00+00:00")
+    mk_solved(problem_id=2000, problem_ref="2000", imported_at="2026-06-01T00:00:00+00:00")
+
+    claimed = db.claim_solved_problem("boj", "1000")
+    # _restore() (routes/solved.py) 와 같은 인자로 재저장한다.
+    db.save_solved_problem(
+        claimed["problem_id"], claimed.get("title", ""), claimed.get("tier", 0),
+        claimed.get("tags", []), code=claimed.get("code", ""),
+        language=claimed.get("language", ""), platform="boj",
+        problem_ref="1000", tier_name=claimed.get("tier_name", ""),
+        imported_at=claimed.get("imported_at", ""))
+
+    history = db.get_solved_history()["problems"]
+    refs = [p["problem_ref"] for p in history]
+    assert refs == ["2000", "1000"], "claim 이전과 순서가 다르다"
+    by_ref = {p["problem_ref"]: p for p in history}
+    assert by_ref["1000"]["imported_at"] == "2026-01-01T00:00:00+00:00"

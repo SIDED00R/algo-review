@@ -110,11 +110,9 @@ jobs:
           # 접근 정책을 명시한다 — 생략하면 gcloud 가 기존 IAM 을 그대로 둔다.
           - service: algo-review           # 운영: 공개, 기존 env 유지
             source: "."
-            smoke: db
             extra_args: "--allow-unauthenticated"
           - service: algo-review-demo      # 데모: 공개, mock 모드
             source: "."
-            smoke: db
             # --set-env-vars 는 치환이다. DB_PATH: 컨테이너가 non-root 라 /app 에 못 쓴다.
             # APP_URL 이 없으면 GitHub OAuth redirect 가 http://localhost:8080 으로 간다.
             extra_args: "--allow-unauthenticated --set-env-vars DEMO_MODE=true,DB_PATH=/tmp/demo.db,APP_URL=https://algo-review-demo-dqrvxahm6a-du.a.run.app"
@@ -123,7 +121,6 @@ jobs:
           # 이 컨테이너에 값이 있으면 제출 코드가 /proc/1/environ 으로 읽는다.
           - service: algo-executor
             source: "executor"
-            smoke: execute
             extra_args: >-
               --no-allow-unauthenticated
               --service-account algo-executor-run@boj-code-review-2024.iam.gserviceaccount.com
@@ -150,6 +147,9 @@ jobs:
   smoke:
     name: Smoke ${{ matrix.service }}
     needs: [deploy]
+    # deploy 매트릭스 한 다리가 실패해도 나머지 서비스의 스모크는 돈다. 배포가 아예 없었던
+    # 경우(PR·lint/test 실패)만 스킵한다. 배포 실패한 서비스의 스모크는 직전 리비전을 향한다.
+    if: ${{ !cancelled() && needs.deploy.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

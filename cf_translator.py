@@ -42,7 +42,7 @@ def translate_cf_text(text: str, title: str) -> str:
     """번역 성공 시 번역문, 응답이 비어 있으면 원문을 그대로 반환. API 예외는 전파한다.
 
     응답이 max_tokens 에 걸려 잘린 경우도 성공으로 간주해 잘린 번역문 + 안내 문구를 반환한다.
-    routes/problem.py 는 이 결과를 60초 TTL 로 캐시한다.
+    routes/problem.py 는 성공 결과를 만료 없이 캐시한다.
 
     입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
     """

@@ -141,7 +141,7 @@ def test_non_ascii_stdin_is_readable():
 
 def test_output_is_unbuffered_enough_to_survive_a_crash():
     """-u 가 없으면 버퍼에 남은 출력이 비정상 종료에 유실된다."""
-    r = _py("import sys; print('before'); sys.exit(3)", "", 8)
+    r = _py("import sys, os; print('before'); os._exit(3)", "", 8)
 
     assert r["exit_code"] == 3
     assert "before" in r["stdout"]

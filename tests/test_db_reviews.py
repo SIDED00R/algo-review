@@ -76,9 +76,7 @@ def test_average_tier_window_limited_to_30(at_time):
 
 
 def test_average_tier_excludes_codeforces_rows():
-    """BOJ 전용 지표다 — 지금은 CF 리뷰의 tier 가 항상 0 이라 `tier > 0` 만으로도
-    걸러지지만 그건 우연이다. CF 레이팅을 티어로 매핑하면 BOJ 평균이 오염된다.
-    """
+    """평균 티어의 모집단은 platform='boj' 다 — tier 값이 아니라 플랫폼으로 거른다."""
     mk_review(problem_id=1, problem_ref="1", tier=10)
     # CF 행에 실제 티어가 붙는 미래를 흉내낸다.
     mk_review(problem_id=0, platform="codeforces", problem_ref="4A", tier=30,

@@ -38,6 +38,8 @@ def _validate_state(state: str) -> tuple[bool, str]:
         nonce, ts_str, sig = state.split(".", 2)
     except ValueError:
         return False, ""
+    if not state.isascii():
+        return False, ""
     expected = hmac.new(_HMAC_KEY, f"{nonce}.{ts_str}".encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
         return False, ""

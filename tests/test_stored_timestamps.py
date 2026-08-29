@@ -52,7 +52,7 @@ def test_the_app_and_the_github_readme_agree_on_the_day(at_time):
 
     assert readme_day.startswith("2026년 8월 22일"), readme_day
     assert screen_day == "2026-08-22"
-    # 잘라 쓰면 전날이 된다 — 고친 것이 무엇인지 못박는다.
+    # created_at 은 UTC 다 — 앞 10자를 그대로 날짜로 쓰면 KST 기준 전날이 된다.
     assert created[:10] == "2026-08-21"
 
 

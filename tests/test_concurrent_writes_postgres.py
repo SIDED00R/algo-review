@@ -159,7 +159,7 @@ def test_only_one_request_fills_a_pending_round():
 def test_concurrent_fills_of_two_rounds_reconcile_to_one_count():
     """같은 문제의 대기 회차 둘을 동시에 채웠을 때, 집계가 결국 1 로 수렴해야 한다.
 
-    증분 집계()는 이 창에서 정확하지 않을 수 있다 — 둘 다 "아직 리뷰된
+    증분 집계(_bump_tag_stats)는 이 창에서 정확하지 않을 수 있다 — 둘 다 "아직 리뷰된
     회차가 없다" 를 보고 각자 세거나(2), 한쪽이 상대의 미커밋 INSERT 를 못 봐 건너뛴다(1).
     어느 쪽이 되는지는 타이밍에 달렸으므로 여기서 못박지 않는다.
 

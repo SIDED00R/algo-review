@@ -155,7 +155,8 @@ def _execute(cmd: list[str], stdin: bytes, timeout: int, cwd: str) -> dict:
 
 
 def _run_python(code: str, stdin: bytes, timeout: int) -> dict:
-    # -I 는 환경변수·사용자 site·스크립트 디렉터리를 sys.path 에서 뺀다. UTF-8·무버퍼는 플래그로 준다.
+    # -I 는 PYTHON* 환경변수를 전부 무시하고(-E) 사용자 site·스크립트 디렉터리를 sys.path 에서 뺀다.
+    # 그래서 UTF-8·무버퍼는 환경변수가 아니라 커맨드라인 플래그로 준다.
     # cwd 는 임시 디렉터리다 — 제출 코드가 만드는 파일과 상대 경로 접근이 여기 갇힌다.
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -179,9 +180,10 @@ def _run_cpp(code: str, stdin: bytes, timeout: int, compile_timeout: int) -> dic
         pgid = proc.pid if os.name == "posix" else None
         _close(proc.stdin)   # 컴파일은 입력을 읽지 않는다
         out, err = bytearray(), bytearray()
+        err_truncated = [False]
         workers = [
             threading.Thread(target=_pump, args=(proc.stdout, out, [False]), daemon=True),
-            threading.Thread(target=_pump, args=(proc.stderr, err, [False]), daemon=True),
+            threading.Thread(target=_pump, args=(proc.stderr, err, err_truncated), daemon=True),
         ]
         for worker in workers:
             worker.start()
@@ -199,8 +201,7 @@ def _run_cpp(code: str, stdin: bytes, timeout: int, compile_timeout: int) -> dic
         for worker in workers:
             worker.join(timeout=1)
         if returncode != 0:
-            stderr_text = bytes(err).decode("utf-8", errors="replace")
-            return {"stdout": "", "stderr": stderr_text[:MAX_OUTPUT_BYTES], "exit_code": returncode}
+            return {"stdout": "", "stderr": _decode(err, err_truncated[0]), "exit_code": returncode}
         return _execute([exe], stdin, timeout, tmpdir)
 
 

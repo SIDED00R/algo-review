@@ -5,6 +5,7 @@ CF 기록이 없는 사용자에게 "CF 1200" 이 뜬다.
 """
 import pytest
 
+import db
 from routes import stats
 
 
@@ -16,3 +17,37 @@ def minimal_client(minimal_app):
 def test_no_cf_reviews_reports_na_instead_of_a_fake_rating(minimal_client):
     body = minimal_client.get("/api/stats?platform=codeforces").json()
     assert body["avg_tier_name"] == "N/A"
+
+
+def test_unrated_cf_reviews_report_na_instead_of_a_fake_rating(minimal_client):
+    """CF 리뷰가 있어도 전부 Unrated 면 avg_tier_name 은 "N/A" 다 — 그러지 않으면
+    get_average_cf_rating() 의 기본값(1200.0)이 "CF 1200" 으로 표시된다."""
+    db.save_review(problem_id=1, title="A", tier=0, tags=[], code="print(1)",
+                   feedback="f", efficiency="poor", platform="codeforces",
+                   problem_ref="1A", tier_name="Codeforces Unrated")
+
+    body = minimal_client.get("/api/stats?platform=codeforces").json()
+
+    assert body["avg_tier_name"] == "N/A"
+
+
+def test_rated_cf_review_reports_the_parsed_rating(minimal_client):
+    db.save_review(problem_id=1, title="A", tier=0, tags=[], code="print(1)",
+                   feedback="f", efficiency="poor", platform="codeforces",
+                   problem_ref="1A", tier_name="Codeforces 1600")
+
+    body = minimal_client.get("/api/stats?platform=codeforces").json()
+
+    assert body["avg_tier_name"] == "CF 1600"
+
+
+def test_has_cf_rating_is_false_on_an_empty_db():
+    assert db.has_cf_rating() is False
+
+
+def test_has_cf_rating_is_true_once_a_rated_cf_review_exists():
+    db.save_review(problem_id=1, title="A", tier=0, tags=[], code="print(1)",
+                   feedback="f", efficiency="poor", platform="codeforces",
+                   problem_ref="1A", tier_name="Codeforces 1600")
+
+    assert db.has_cf_rating() is True
