@@ -58,13 +58,12 @@ def get_weak_tags_scored(top_n: int = 5, platform: str = "boj") -> list[str]:
 
 
 def get_recommendations(weak_tags: list[str], platform: str = "boj",
-                        extra_exclude: set | None = None,
-                        avg_difficulty: float | None = None) -> list[dict]:
+                        extra_exclude: set | None = None, *,
+                        avg_difficulty: float) -> list[dict]:
     """취약 태그별 추천 문제.
 
     weak_tags 와 avg_difficulty 는 호출부가 구해서 넘긴다 — 유일한 호출자
     (routes/recommend.py)가 응답에도 그 값들을 실어야 해서 어차피 먼저 계산한다.
-    여기서 다시 조회하면 같은 요청이 reviews 전 행 윈도우 쿼리를 두 번 돈다.
     """
     if not weak_tags:
         return []
@@ -72,7 +71,7 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
         return _get_cf_recommendations(weak_tags, extra_exclude=extra_exclude,
                                        avg_rating=avg_difficulty)
 
-    avg_tier = db.get_average_tier() if avg_difficulty is None else avg_difficulty
+    avg_tier = avg_difficulty
     same_min = max(1,  int(avg_tier) - TIER_RANGE_LOW)
     same_max = min(30, int(avg_tier) + TIER_RANGE_SAME_HIGH)
     hard_min = min(30, int(avg_tier) + TIER_RANGE_HARD_LOW)
@@ -127,10 +126,8 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
     return recommendations
 
 
-def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = None,
-                            avg_rating: float | None = None) -> list[dict]:
-    if avg_rating is None:
-        avg_rating = db.get_average_cf_rating()
+def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = None, *,
+                            avg_rating: float) -> list[dict]:
     cf_same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
     cf_same_max = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
     # hard 구간은 same_max 다음 레이팅부터 시작 — 경계값이 양쪽에 걸려 같은 문제가 중복 추천되는 것을 방지

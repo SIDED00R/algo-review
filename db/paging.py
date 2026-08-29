@@ -26,5 +26,6 @@ def search_filter(columns, q: str):
     화면과 서버에서 다른 결과를 준다. 대소문자 무시는 `lower()` 로 방언 차이를 없앤다
     (Postgres 의 ILIKE 는 SQLite 에 없다).
     """
-    needle = f"%{(q or '').strip().lower()}%"
-    return or_(*[func.lower(col).like(needle) for col in columns])
+    raw = (q or "").strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    needle = f"%{raw}%"
+    return or_(*[func.lower(col).like(needle, escape="\\") for col in columns])

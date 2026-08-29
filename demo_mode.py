@@ -71,7 +71,7 @@ DEMO_CF_PROBLEM = {
 DEMO_RECOMMENDATIONS = {
     "avg_tier": 0,
     "tier_name": "CF 1200",
-    "tier_range": "CF 1000 ~ CF 1600",
+    "tier_range": "CF 1100 ~ CF 1700",
     "weak_tags": ["greedy", "dp", "graphs"],
     "recommendations": [
         {
