@@ -341,7 +341,7 @@ def _codeforces_api_request(method_name: str, params: dict | None = None,
     if status >= 400:
         raise ValueError(f"Codeforces API 오류 (HTTP {status})")
     if payload is None or payload.get("status") != "OK":
-        # 2xx + 비-JSON 은 점검 페이지·프록시 응답이다. 요청자가 고칠 수 있는 것이 없다.
+        # 2xx 인데 JSON 이 아니거나 status 가 OK 가 아닌 응답이다.
         raise UpstreamUnavailable("Codeforces API 응답을 해석할 수 없습니다.")
     result = payload.get("result")
     if result is None:

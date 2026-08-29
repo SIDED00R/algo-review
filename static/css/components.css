@@ -163,8 +163,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 
 /* 목록 행 — 개별 박스 대신 헤어라인 구분.
 
-   위·아래 선을 스스로 갖고 앞에 행이 있으면 위 선을 뺀다. `.row:first-child` 로는 안 된다
-   (#history-list 의 첫 자식은 항상 .toolbar 다).
+   위·아래 선을 스스로 갖고, 앞에 행이 있으면 위 선을 뺀다.
    인접(+)이 아니라 일반 형제(~)를 쓴다 — 가져오기 목록은 행 사이에 코드 보기 패널 div 를
    끼워 넣는데 `+` 는 display:none 형제도 인접을 끊는다. */
 .row {

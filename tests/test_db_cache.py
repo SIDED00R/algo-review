@@ -64,7 +64,7 @@ def test_corrupt_payload_is_treated_as_missing_not_raised():
 
 
 def test_a_broken_row_can_be_repaired_by_the_next_write():
-    """가드의 존재 이유 — 예외가 나가면 호출부가 cache_set 에 도달하지 못한다."""
+    """손상된 행은 다음 쓰기로 정상 값이 된다 — cache_get 은 예외 대신 None 을 돌려준다."""
     _write_raw("repairable", "{not json", "not-a-date")
 
     assert db.cache_get("repairable", 3600) is None   # 예외가 아니라 None

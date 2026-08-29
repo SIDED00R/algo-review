@@ -123,7 +123,7 @@ ruff check .                 # 린트
 bash scripts/check_js.sh     # JS 구문·전역 충돌·index.html 로드 누락 검사
 ```
 
-CI(`.github/workflows/deploy.yml`)는 PR·push 마다 lint(ruff) · lint-js · test(SQLite/PostgreSQL 두 방언) · deploy · verify-execute 를 돌리고, 통과해야 배포한다.
+CI([.github/workflows/deploy.yml](.github/workflows/deploy.yml))는 PR·push 마다 lint(ruff) · lint-js · test(SQLite/PostgreSQL 두 방언)를 돌리고, 셋이 통과해야 배포한다. deploy(세 서비스) → smoke(서비스별 `/health`·`/run` 확인) · verify-execute(운영 앱의 예제 실행 확인)는 PR 이 아닌 main 실행에서만 돈다.
 
 ## Codeforces 관련 주의사항
 
@@ -185,8 +185,10 @@ CODEFORCES_API_SECRET=...
 gcloud run deploy algo-review-demo \
   --source . \
   --region asia-northeast3 \
-  --set-env-vars "DEMO_MODE=true"
+  --set-env-vars "DEMO_MODE=true,DB_PATH=/tmp/demo.db,APP_URL=https://algo-review-demo-dqrvxahm6a-du.a.run.app"
 ```
+
+`--set-env-vars` 는 치환이라 세 값을 함께 준다. `DB_PATH` 를 빼면 위 「Cloud Run (SQLite)」 절의 경고대로 모든 DB 호출이 503 이 된다.
 
 `DEMO_MODE=true` 설정 시:
 - LLM·GitHub·외부 API 호출 없이 mock 응답 반환
@@ -294,7 +296,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `1`) |
 | `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. 설정하면 `/api/execute` 는 직접 실행하지 않고 위임한다 — **운영이 쓰는 경로다** |
 | `EXECUTE_ENABLED` | 선택 | `true` 설정 시 앱 프로세스 안에서 직접 실행한다. **로컬 개발 전용이다** — 자식 프로세스가 앱과 같은 uid·네트워크 네임스페이스에서 돌아 메타데이터 서버와 `/proc/1/environ` 에 닿는다(자세한 내용은 `ARCHITECTURE.md` 보안 조치 1번) |
-| `COMPILE_TIMEOUT` | 선택 | C++ 컴파일 타임아웃(초). 앱의 로컬 실행 경로와 실행 서비스가 함께 읽는다 (기본값: `30`) |
+| `COMPILE_TIMEOUT` | 선택 | C++ 컴파일 타임아웃(초). 앱의 로컬 실행 경로가 읽는다 — 실행 서비스는 `--clear-env-vars` 로 배포돼 이 값을 받지 못하고 `executor/runner.py` 의 기본값 30초를 쓴다 (기본값: 30) |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |
 | `DATABASE_URL` | 선택 | SQLAlchemy 접속 URL 직접 지정 (설정 시 아래 `DB_*` 무시) |

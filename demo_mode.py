@@ -130,7 +130,6 @@ DEMO_RECOMMENDATIONS = {
     ],
 }
 
-# BOJ 탭용.
 DEMO_RECOMMENDATIONS_BOJ = {
     "avg_tier": 11,
     "tier_name": "Gold V",
