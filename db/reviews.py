@@ -366,15 +366,20 @@ def has_graded_tier() -> bool:
             select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
+# get_average_cf_rating() 의 윈도우 서브쿼리와 공유 — CF 레이팅 필터는 두 함수가 같은
+# 모집단을 봐야 한다(BOJ 쪽 tier > 0 과 대응).
+_CF_RATED = (
+    Review.platform == "codeforces",
+    Review.tier_name.like("Codeforces %"),
+    Review.tier_name != "Codeforces Unrated",
+)
+
+
 def has_cf_rating() -> bool:
     """파싱 가능한 레이팅이 있는 CF 리뷰가 하나라도 있는지."""
     with session_scope() as session:
         return session.scalar(
-            select(Review.id).where(
-                Review.platform == "codeforces",
-                Review.tier_name.like("Codeforces %"),
-                Review.tier_name != "Codeforces Unrated",
-            ).limit(1)) is not None
+            select(Review.id).where(*_CF_RATED).limit(1)) is not None
 
 
 def get_problems_grouped(q: str = "", platform: str = "", tier_min: int | None = None,
@@ -536,11 +541,12 @@ def get_review_history(limit: int = 10, platform: str | None = None) -> list:
 
 
 def get_average_cf_rating() -> float:
-    """최근 30개 고유 문제의 CF 레이팅 평균 — get_average_tier 와 동일한 윈도우(static/js/recommend.js 라벨과 일치)."""
+    """최근 30개 고유 문제 중 **레이팅 있는** 최신 회차의 CF 레이팅 평균 — get_average_tier 와
+    동일한 윈도우(static/js/recommend.js 라벨과 일치)."""
     rn = func.row_number().over(
         partition_by=Review.problem_ref, order_by=Review.created_at.desc()).label("rn")
     with session_scope() as session:
-        sub = select(Review.tier_name, Review.created_at, rn).where(Review.platform == "codeforces").subquery()
+        sub = select(Review.tier_name, Review.created_at, rn).where(*_CF_RATED).subquery()
         names = session.scalars(
             select(sub.c.tier_name).where(sub.c.rn == 1)
             .order_by(sub.c.created_at.desc()).limit(_AVG_TIER_WINDOW)

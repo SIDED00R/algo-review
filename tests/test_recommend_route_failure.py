@@ -12,7 +12,9 @@ import pytest
 import requests
 
 import db
+import recommender
 from clients import ProblemSearchError, solved_ac
+from constants import TIER_NAMES
 from routes import recommend
 
 _BOJ = dict(problem_id=1000, title="A+B", tier=8, tags=["math"],
@@ -81,21 +83,37 @@ def test_no_graded_tier_reports_na_instead_of_a_fake_tier(minimal_client):
     assert body["tier_name"] == "N/A"
 
 
-def test_no_graded_tier_has_zero_avg_tier_and_dash_range(minimal_client):
-    """등급 있는 기록이 없으면 응답의 avg_tier 는 0, tier_range 는 "-" 다."""
+def test_no_graded_tier_has_zero_avg_tier_and_real_band(minimal_client, monkeypatch):
+    """등급 있는 기록이 없어 avg_tier 는 0 이어도, tier_range 는 실제로 검색에 쓰인 밴드를
+    그대로 보여준다 — recommendations 가 채워진 화면에서 "-" 는 항상 거짓이다."""
+    monkeypatch.setattr(recommend.recommender, "get_weak_tags_scored", lambda *a, **k: ["math"])
+    monkeypatch.setattr(recommend.recommender, "get_tag_key_by_name", lambda t: t)
+
+    seen_bands = []
+
+    def _search(tag_key, min_tier, max_tier, exclude_ids):
+        seen_bands.append((min_tier, max_tier))
+        return []
+
+    monkeypatch.setattr(recommend.recommender, "search_problems_by_tag", _search)
+
     body = minimal_client.get("/api/recommend?platform=boj").json()
+
     assert body["avg_tier"] == 0
-    assert body["tier_range"] == "-"
+    assert seen_bands, "search_problems_by_tag 가 호출되지 않았다"
+    assert body["tier_range"] == f"{TIER_NAMES[seen_bands[0][0]]} ~ {TIER_NAMES[seen_bands[1][1]]}"
+    assert body["tier_range"] == "Silver II ~ Platinum III"
 
 
 def test_graded_tier_present_shows_real_avg_tier_and_range(minimal_client):
-    """등급 있는 리뷰가 있으면 avg_tier 는 0 이 아니고 tier_range 도 채워진다."""
+    """등급 있는 리뷰가 있으면 avg_tier 는 0 이 아니고 tier_range 도 그 평균으로 계산된
+    실제 밴드다."""
     db.save_review(**_BOJ)
 
     body = minimal_client.get("/api/recommend?platform=boj").json()
 
     assert body["avg_tier"] > 0
-    assert body["tier_range"] != "-"
+    assert body["tier_range"] == recommender.tier_range_description(8.0)
 
 
 def test_recommendation_band_uses_raw_avg_not_display_value(minimal_client, monkeypatch):

@@ -41,15 +41,15 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         avg_tier = 0
         has_avg = db.has_cf_rating()
         tier_name = f"CF {int(avg_rating)}" if has_avg else "N/A"
-        tier_range = recommender.cf_rating_range_description(avg_rating) if has_avg else "-"
+        tier_range = recommender.cf_rating_range_description(avg_rating)
     else:
         avg_tier = db.get_average_tier()
         has_avg = db.has_graded_tier()
         tier_name = TIER_NAMES.get(int(avg_tier), "N/A") if has_avg else "N/A"
-        tier_range = recommender.tier_range_description(avg_tier) if has_avg else "-"
+        tier_range = recommender.tier_range_description(avg_tier)
 
-    # 응답 표시용 값 — avg_tier 는 아래 recommender.get_recommendations 에 원래 값
-    # 그대로 넘겨야 하므로 재대입하지 않는다.
+    # 응답에 싣는 값. 추천 밴드는 아래에서 원래 평균값(BOJ avg_tier / CF avg_rating)으로
+    # 계산한다.
     display_avg_tier = avg_tier if has_avg else 0
 
     weak_tags = recommender.get_weak_tags_scored(5, platform=platform)
