@@ -176,8 +176,8 @@ def main() -> int:
         platform, ref = problem["platform"], problem["problem_ref"]
         label = platform + "/" + ref
 
-        # 문제 단위로 예외를 잡아 SKIP 사유로 집계한다. ref 형식이 깨진 행이나
-        # DB 예외가 여기서 걸린다.
+        # 문제 단위로 HTTP 수집·파싱 예외를 잡아 SKIP 사유로 집계한다.
+        # DB 쓰기 실패는 여기서 잡지 않고 스크립트를 중단시킨다.
         try:
             if platform == "boj":
                 if not (repo and token):
