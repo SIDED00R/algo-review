@@ -37,7 +37,7 @@ _cached_token: tuple[str, str, float] | None = None
 # 못하게 하는 몫이다.
 _RATE_LIMIT_PER_MINUTE = 30
 _GLOBAL_LIMIT = 120        # 분당 전체 실행 상한 — 키를 위조해도 이 값을 넘지 못한다
-_MAX_BUCKETS = 4096        # _recent_calls 가 요청자가 만든 키로 무한히 자라지 않게 한다
+_MAX_BUCKETS = 4096        # 버킷 수 상한 — _GLOBAL_LIMIT 이 이 값 이하인 동안은 도달하지 않는다
 _rate_lock = threading.Lock()
 # 프로세스 로컬이라 인스턴스가 둘 이상이면 상한도 인스턴스별로만 성립한다.
 _recent_calls: dict[str, list[float]] = {}

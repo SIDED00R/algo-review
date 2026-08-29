@@ -432,6 +432,41 @@ def test_modal_a11y_is_shared_not_duplicated():
         assert "registerModal(" in src, f"{name} 이 공통 모듈을 쓰지 않는다"
 
 
+def test_command_palette_is_wired_as_a_combobox_listbox(html, js):
+    """↑↓ 는 포커스를 옮기지 않는다 — 활성 항목은 combobox/listbox 배선으로만 전달된다."""
+    block = html.split('id="cmdk-input"')[1][:400]
+    assert 'role="combobox"' in block, "#cmdk-input 에 role=combobox 가 없다"
+    assert 'aria-controls="cmdk-list"' in block, "#cmdk-input 이 목록을 가리키지 않는다"
+    list_block = html.split('id="cmdk-list"')[1][:200]
+    assert 'role="listbox"' in list_block, "#cmdk-list 에 role=listbox 가 없다"
+
+    body = _js_function_body(js["command-palette.js"], "function render")
+    assert 'role="option"' in body, "항목이 option 으로 노출되지 않는다"
+    assert "aria-selected" in body, "활성 항목에 aria-selected 표시가 없다"
+    assert "aria-activedescendant" in body, "입력이 활성 항목을 가리키지 않는다"
+
+
+def test_ledger_marks_the_selected_submission(js):
+    """제출 원장은 N 개 중 하나만 유효한 배타 선택이다 — 활성 회차만 aria-current 를 갖는다."""
+    src = js["history.js"]
+    assert 'aria-current="true"' in src, "선택된 회차에 aria-current 를 주지 않는다"
+    assert re.search(r"setAttribute\(\s*['\"]aria-current['\"]", src), \
+        "회차를 바꿀 때 새 aria-current 를 설정하지 않는다"
+    assert re.search(r"removeAttribute\(\s*['\"]aria-current['\"]\s*\)", src), \
+        "회차를 바꿀 때 이전 aria-current 를 지우지 않는다"
+
+
+def test_editor_has_a_keyboard_escape_route(js, html):
+    """Tab·Shift-Tab 은 들여쓰기가 소비한다 — Esc 가 유일한 탈출 경로다(WCAG 2.1.2)."""
+    body = _js_function_body(js["editor.js"], "function createEditor")
+    assert re.search(r"['\"]Esc['\"]\s*:", body), "extraKeys 에 Esc 바인딩이 없다"
+    assert re.search(r"getInputField\(\)\.setAttribute\(\s*['\"]aria-describedby['\"]", body), \
+        "안내가 포커스를 받는 요소(textarea)에 연결되지 않았다"
+    # aria-describedby 는 가리키는 id 가 없으면 조용히 아무것도 읽지 않는다.
+    for editor_id in ("code-input", "pm-code"):
+        assert f'id="{editor_id}-escape-help"' in html, f"{editor_id} 안내 요소가 없다"
+
+
 def test_problem_modal_has_a_height_ceiling(css):
     """상한이 없으면 박스가 문제문 길이만큼 자란다.
 
