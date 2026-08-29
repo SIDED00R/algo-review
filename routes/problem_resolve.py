@@ -79,8 +79,7 @@ def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str
     return _as_boj(info)
 
 
-# 본문 수집 함수는 예외 대신 실패 문자열을 반환한다 — 그대로 LLM 에 넘기면 프롬프트의
-# 문제 설명 자리에 에러 메시지가 박힌다. 빈 본문을 주는 편이 낫다.
+# clients 의 본문 수집 함수는 예외 대신 아래 접두사로 시작하는 실패 문자열을 반환한다.
 _SCRAPE_FAILURE_PREFIXES = (
     "크롤링 실패",
     "문제 설명을 가져올 수 없습니다",

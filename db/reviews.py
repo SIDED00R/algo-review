@@ -337,9 +337,8 @@ _AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
 def get_average_tier() -> float:
     """최근 30개 고유 **BOJ** 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다.
 
-    플랫폼을 명시한다. `tier > 0` 만으로도 지금은 CF 가 걸러지지만(clients/codeforces.py
-    가 CF 리뷰에 항상 tier=0 을 넣는다) 그건 우연이다. 형제 함수 get_tier_history·
-    get_average_cf_rating 은 이미 플랫폼을 명시한다.
+    모집단은 platform='boj' 로 명시한다. 지금은 CF 리뷰의 tier 가 항상 0 이라 `tier > 0`
+    만으로도 걸러지지만, 이 함수의 기준은 tier 값이 아니라 플랫폼이다.
     """
     rn = func.row_number().over(
         partition_by=(Review.platform, Review.problem_ref),
@@ -362,17 +361,20 @@ def get_average_tier() -> float:
 
 def has_graded_tier() -> bool:
     """등급(tier > 0)이 있는 BOJ 리뷰가 하나라도 있는지."""
-    # 존재만 본다 — LIMIT 1.
     with session_scope() as session:
         return session.scalar(
             select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
 def has_cf_rating() -> bool:
-    """CF 리뷰가 하나라도 있는지."""
+    """파싱 가능한 레이팅이 있는 CF 리뷰가 하나라도 있는지."""
     with session_scope() as session:
         return session.scalar(
-            select(Review.id).where(Review.platform == "codeforces").limit(1)) is not None
+            select(Review.id).where(
+                Review.platform == "codeforces",
+                Review.tier_name.like("Codeforces %"),
+                Review.tier_name != "Codeforces Unrated",
+            ).limit(1)) is not None
 
 
 def get_problems_grouped(q: str = "", platform: str = "", tier_min: int | None = None,

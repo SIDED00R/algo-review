@@ -142,3 +142,21 @@ def test_resolve_problem_info_failure_restores_the_claimed_row(minimal_client, m
 
     assert resp.status_code == 502
     assert db.get_solved_problem("codeforces", "4A") is not None
+
+
+def test_restored_row_keeps_its_original_imported_at(minimal_client, monkeypatch):
+    """되돌린 행은 imported_at 도 원래 값 그대로여야 한다 — 아니면 claim 시각으로
+    덮여 목록 순서가 뒤집히고 가져온 날짜가 오늘로 보인다."""
+    def _raise(*a, **k):
+        raise HTTPException(status_code=502, detail="문제 조회 실패")
+    monkeypatch.setattr(solved_route, "resolve_problem_info", _raise)
+    db.save_solved_problem(problem_id=0, title="Watermelon", tier=0, tier_name="Codeforces 800",
+                           tags=["math"], code="print(1)", language="Python 3",
+                           platform="codeforces", problem_ref="4A",
+                           imported_at="2026-01-01T00:00:00+00:00")
+
+    resp = minimal_client.post("/api/review-imported/codeforces/4A")
+
+    assert resp.status_code == 502
+    restored = db.get_solved_problem("codeforces", "4A")
+    assert restored["imported_at"] == "2026-01-01T00:00:00+00:00"

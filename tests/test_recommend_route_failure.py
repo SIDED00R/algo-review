@@ -81,6 +81,45 @@ def test_no_graded_tier_reports_na_instead_of_a_fake_tier(minimal_client):
     assert body["tier_name"] == "N/A"
 
 
+def test_no_graded_tier_has_zero_avg_tier_and_dash_range(minimal_client):
+    """등급 있는 기록이 없으면 응답의 avg_tier 는 0, tier_range 는 "-" 다."""
+    body = minimal_client.get("/api/recommend?platform=boj").json()
+    assert body["avg_tier"] == 0
+    assert body["tier_range"] == "-"
+
+
+def test_graded_tier_present_shows_real_avg_tier_and_range(minimal_client):
+    """등급 있는 리뷰가 있으면 avg_tier 는 0 이 아니고 tier_range 도 채워진다."""
+    db.save_review(**_BOJ)
+
+    body = minimal_client.get("/api/recommend?platform=boj").json()
+
+    assert body["avg_tier"] > 0
+    assert body["tier_range"] != "-"
+
+
+def test_recommendation_band_uses_raw_avg_not_display_value(minimal_client, monkeypatch):
+    """등급 없는 상태에서도 추천 밴드는 표시용 0 이 아니라 원래 기본값(10.0)으로 계산돼야
+    한다 — avg_tier 를 표시값으로 재대입하면 밴드가 Bronze 대(1~2)로 무너진다."""
+    monkeypatch.setattr(recommend.recommender, "get_weak_tags_scored", lambda *a, **k: ["math"])
+    monkeypatch.setattr(recommend.recommender, "get_tag_key_by_name", lambda t: t)
+
+    seen_bands = []
+
+    def _search(tag_key, min_tier, max_tier, exclude_ids):
+        seen_bands.append((min_tier, max_tier))
+        return []
+
+    monkeypatch.setattr(recommend.recommender, "search_problems_by_tag", _search)
+
+    minimal_client.get("/api/recommend?platform=boj")
+
+    assert seen_bands, "search_problems_by_tag 가 호출되지 않았다"
+    # avg=10.0(기본값) 기준 same 밴드는 (9, 12) — Gold V ~ Gold III.
+    # avg=0(표시값)이 새어 들어가면 (1, 2) — Bronze V ~ Bronze IV 로 무너진다.
+    assert seen_bands[0] == (9, 12), f"밴드가 표시값(0)으로 계산됐다: {seen_bands[0]}"
+
+
 def test_one_tag_failure_does_not_discard_the_others(minimal_client, monkeypatch):
     """태그별로 실패를 격리한다 — 첫 실패에서 던지면 이미 성공한 태그의 결과까지 버린다.
 
