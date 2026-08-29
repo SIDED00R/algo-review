@@ -33,8 +33,8 @@ def parse_review_json(raw: str) -> dict:
     try:
         return json.loads(_escape_stray_backslashes(raw))
     except json.JSONDecodeError as e:
-        # JSONDecodeError 는 ValueError 의 서브클래스라, 감싸지 않으면 라우터의 '사용자용 안내'
-        # 분기를 그대로 타고 파싱 오류 원문이 502 와 함께 나간다.
+        # JSONDecodeError 는 ValueError 의 서브클래스다. 라우터의 '사용자용 안내'
+        # 분기는 ValueError 메시지를 그대로 노출한다.
         raise ValueError("AI 응답을 JSON 으로 해석하지 못했습니다. "
                          "모델 설정(OPENAI_MODEL)을 확인해주세요.") from e
 
@@ -126,8 +126,7 @@ efficiency 기준:
 
     require_choice(response)
     if response.choices[0].finish_reason == "length":
-        # max_tokens 에 걸려 JSON 이 중간에 잘렸다 — json.loads 로 넘기면 유료 호출을 다 쓴
-        # 뒤 알아보기 힘든 JSONDecodeError 로 500이 난다. 사람이 읽을 수 있는 에러로 분기한다.
+        # max_tokens 에 걸려 JSON 이 중간에 잘렸다. 사람이 읽을 수 있는 에러로 분기한다.
         raise ValueError(
             f"AI 응답이 최대 토큰({_MAX_TOKENS_REVIEW})을 초과해 잘렸습니다. "
             "코드가 너무 길 수 있습니다."
@@ -140,8 +139,7 @@ efficiency 기준:
 
 
 def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -> str:
-    # 빈 입력 안내는 라우터가 400 으로 낸다(routes/report.py) — 여기 두면 같은 문구가
-    # 두 곳에 정의돼 어느 쪽이 정본인지 알 수 없다.
+    # 빈 입력 안내는 라우터(routes/report.py)가 400 으로 낸다.
 
     client = get_client()
 
@@ -151,7 +149,7 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
     )
 
     recent_problems = "\n".join(
-        # tier_name 을 쓴다 — CF 행은 tier 가 항상 0 이라 숫자만 쓰면 난이도 신호가 사라진다.
+        # tier_name 을 쓴다. CF 행은 tier 가 항상 0 이다.
         # tier_name 은 BOJ 가 "Gold V", CF 가 "Codeforces 1400" 으로 양쪽 다 의미를 갖는다.
         f"- [{r['tier_name'] or '난이도 미상'}] {r['title']} ({', '.join(r['tags'][:3])}) → {r['efficiency']}"
         for r in review_history[:10]
@@ -180,12 +178,10 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         timeout=_API_TIMEOUT,
     )
 
-    # 인덱싱보다 먼저 확인한다 — 순서가 뒤집히면 choices 가 빈 응답에서 IndexError 가 나
-    # 가드에 도달하지 못한다.
+    # 인덱싱보다 먼저 확인한다. 순서가 바뀌면 빈 응답에서 IndexError 가 난다.
     require_choice(response)
     if response.choices[0].finish_reason == "length":
-        # max_tokens 에 걸려 리포트가 중간에서 잘렸다 — 캐시가 없어 매번 재생성되므로
-        # 잘린 채로 200을 내보내지 않고 사람이 읽을 수 있는 에러로 분기한다.
+        # max_tokens 에 걸려 리포트가 중간에서 잘렸다. 사람이 읽을 수 있는 에러로 분기한다.
         raise ValueError(
             f"AI 응답이 최대 토큰({_MAX_TOKENS_REPORT})을 초과해 잘렸습니다. "
             "데이터가 너무 많을 수 있습니다."
@@ -193,7 +189,6 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
 
     text = choice_text(response)
     if not text.strip():
-        # 빈 문자열을 돌려주면 프론트가 내용 없는 카드를 그리고 오류 안내도 없다.
-        # 리포트는 캐시가 없어 매번 재생성되므로 과금만 반복된다.
+        # 빈 문자열을 그대로 반환하면 프론트가 오류 안내 없이 빈 카드를 그린다.
         raise ValueError("AI 가 빈 응답을 돌려줬습니다. 잠시 후 다시 시도해주세요.")
     return text

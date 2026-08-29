@@ -295,8 +295,7 @@ def test_readme_paths_are_found_by_number_not_by_path_assembly(monkeypatch):
         {"type": "blob", "path": "백준/Gold/9999. 제목/README.md/x"},
         {"type": "blob", "path": "백준/Gold/9998. 제목/sub/README.md"},
         {"type": "blob", "path": "백준/README.md"},
-        # BOJ 루트가 아닌 것은 제외. 번호 파싱이 성공하는 폴더명을 써야 루트 필터만이 이유가
-        # 된다 — 번호 경계에 먼저 걸리면 그 필터를 지워도 결과가 같아 거짓 초록이 된다.
+        # BOJ 루트가 아닌 것은 제외. 번호 파싱이 성공하는 폴더명을 쓴다.
         {"type": "blob", "path": "Codeforces/Div2/777. Watermelon/README.md"},
         # blob 이 아닌 항목은 제외
         {"type": "tree", "path": "백준/Gold/8888. 제목/README.md"},

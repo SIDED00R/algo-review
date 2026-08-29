@@ -77,8 +77,7 @@ async def _unhandled_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "서버 내부 오류가 발생했습니다."})
 
 
-# 목록 응답이 커질 수 있다. JSON 은 압축률이 10배 안팎이고 압축 CPU 는 100ms 수준이다.
-# minimum_size 아래는 그대로 통과한다.
+# 목록 응답이 커질 수 있다. minimum_size 아래는 그대로 통과한다.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 

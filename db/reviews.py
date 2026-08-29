@@ -148,8 +148,7 @@ def update_pending_review(platform: str, problem_ref: str, result: dict,
 def get_stored_problem_statement(platform: str, problem_ref: str) -> str:
     """그 문제의 회차 중 비어 있지 않은 가장 최근 본문.
 
-    problem_statement 는 회차마다 저장되지만 의미는 문제의 속성이다 — 최신 행만 보면
-    본문 없이 저장된 회차가 앞선 본문을 가린다.
+    problem_statement 는 회차마다 저장되지만 의미는 문제의 속성이다.
     """
     platform = (platform or "boj").strip().lower()
     with session_scope() as session:
@@ -250,8 +249,8 @@ def _reconcile_tag_stats() -> None:
 def get_tag_stats() -> list:
     """BOJ 태그별 good/poor 집계.
 
-    tag_stats 는 `_bump_tag_stats` 가 증분으로 채우는 비정규화 표라, 그 경로를 타지 않고
-    들어온 행(백필·직접 INSERT)은 빠져 있다. 그래서 이 경로가 주기적으로 전면 재계산한다.
+    tag_stats 는 `_bump_tag_stats` 가 증분으로 채우는 비정규화 표다. 그 경로를 타지 않고
+    들어온 행(백필·직접 INSERT)은 빠져 있다. 이 경로가 주기적으로 전면 재계산한다.
     """
     global _tag_stats_reconciled_at
     def _read():
@@ -264,8 +263,8 @@ def get_tag_stats() -> list:
             ]
 
     rows = _read()
-    # 재계산은 한 번에 하나만 돈다. 표가 차 있으면 기다리지 않고 뒤처진 값을 쓰고,
-    # 비어 있으면 기다린다 — 빈 표로 응답하면 "기록이 없습니다" 화면이 나간다.
+    # 재계산은 한 번에 하나만 돈다. 표가 차 있으면 기다리지 않고, 비어 있으면
+    # _TAG_STATS_LOCK_WAIT_SEC 만큼 기다린다.
     if rows:
         acquired = _tag_stats_lock.acquire(blocking=False)
     else:
@@ -339,9 +338,8 @@ def get_average_tier() -> float:
     """최근 30개 고유 **BOJ** 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다.
 
     플랫폼을 명시한다. `tier > 0` 만으로도 지금은 CF 가 걸러지지만(clients/codeforces.py
-    가 CF 리뷰에 항상 tier=0 을 넣는다) 그건 우연이다 — CF 레이팅을 티어로 매핑하는
-    변경이 들어오면 BOJ 평균 티어와 추천 난이도가 조용히 오염된다.
-    형제 함수 get_tier_history·get_average_cf_rating 은 이미 플랫폼을 명시한다.
+    가 CF 리뷰에 항상 tier=0 을 넣는다) 그건 우연이다. 형제 함수 get_tier_history·
+    get_average_cf_rating 은 이미 플랫폼을 명시한다.
     """
     rn = func.row_number().over(
         partition_by=(Review.platform, Review.problem_ref),
@@ -364,10 +362,17 @@ def get_average_tier() -> float:
 
 def has_graded_tier() -> bool:
     """등급(tier > 0)이 있는 BOJ 리뷰가 하나라도 있는지."""
-    # 존재만 보면 되므로 LIMIT 1 이다 — COUNT 는 조건에 맞는 행을 전부 센다(5만 행에서 37ms).
+    # 존재만 본다 — LIMIT 1.
     with session_scope() as session:
         return session.scalar(
             select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
+
+
+def has_cf_rating() -> bool:
+    """CF 리뷰가 하나라도 있는지."""
+    with session_scope() as session:
+        return session.scalar(
+            select(Review.id).where(Review.platform == "codeforces").limit(1)) is not None
 
 
 def get_problems_grouped(q: str = "", platform: str = "", tier_min: int | None = None,

@@ -32,7 +32,7 @@
 │  models · connection         │       │  solved.ac · Codeforces          │
 │  reviews · solved · cache    │       │  GitHub · OpenAI                 │
 │  github_settings · migrate   │       └──────────────────────────────────┘
-│  normalize                   │
+│  normalize · paging          │
 └────────┬────────────────────┘
          │   (단순 상수는 constants.py — 레이어 간 상호 import 없이 어느 쪽에서도 참조)
          │
@@ -60,11 +60,12 @@
 ### 서버 진입점
 | 파일 | 단일 책임 |
 |------|----------|
-| `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /health`, 전역 예외 핸들러 |
+| `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /`(index.html 서빙 + `__V__` 자산 캐시 버전 치환), `GET /health`, 전역 예외 핸들러 |
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/CORS 등 |
 | `constants.py` | 플랫폼 화이트리스트·티어 이름·`normalize_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
 | `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`cf_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
+| `timestamps.py` | 저장 시각의 단일 규약 — 항상 오프셋 있는 UTC 로 저장(`utc_now_iso`), 읽을 때 오프셋 없는 값은 UTC 로 해석(`parse_stored`) |
 | `backfill_statements.py` | 기존 기록의 `problem_statement` 백필(일회성 CLI). BOJ 는 GitHub README, CF 는 codeforces.com 재수집. dry-run 기본, `--apply` 로만 기록 |
 
 ### 서비스 레이어
@@ -106,12 +107,13 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
 | `db/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
+| `db/paging.py` | 목록 API 페이지네이션 경계(`paging_bounds`, 상한 100)와 검색 술어(`search_filter`) — 리뷰 기록·가져온 기록 공용 |
 | `migrations/` | Alembic 환경(`env.py`) + 리비전(`versions/`) |
 
 ### 외부 클라이언트 레이어 (`clients/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 는 `constants.py` 에서 직접 가져온다(재수출 shim 은 소비처 3곳을 정본으로 옮기면서 제거했다). `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
+| `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 의 정본은 `constants.py` 다. `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), 예외 두 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) |
@@ -197,7 +199,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
-| `routes/execute.py` | `subprocess.run` | 격리된 환경에서 코드 실행 |
+| `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
+| `routes/execute.py` | `executor.runner.run_code` | EXECUTE_ENABLED 인 로컬 개발에서만 인프로세스 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | LLM 종합 리포트 생성 |
 | `routes/import_boj.py` | `clients.get_user_submissions` | BOJ 제출 목록 크롤링 |
@@ -278,7 +281,7 @@ DB 가 컨테이너 임시 파일이다.
 | 본문 수집 함수 | `get_problem_statement()`·`get_codeforces_problem_statement()` 는 예외를 던지지 않고 **실패 문자열**을 반환한다. 그대로 넘기면 프롬프트의 문제 설명 자리에 `"크롤링 실패: 404 …"` 가 들어간다. BOJ 는 acmicpc.net 종료로 수집이 상시 실패한다 | LLM 에 본문을 넘기는 **세 경로 전부**(`review`·`rereview`·`review-imported`)가 `resolve_statement()` 를 쓴다 — `is_scrape_failure()` 로 걸러 빈 본문을 준다. 백필도 저장 직전에 같은 검사를 한다(저장하면 그 문제의 리뷰가 영구히 오염된다). **수집 함수를 직접 부르는 경로를 새로 만들면 안 된다** — 그 경로는 이 필터를 우회한다 |
 | BOJ README 경로 |  저장소 폴더명은 BaekjoonHub 규칙이라 공백이 `U+2005`, 특수문자가 전각(`A＋B`)이고 `번` 이 없다. 티어 폴더도 저장 당시 값이라 DB 와 다르다(acmicpc 종료 후 조회 실패로 `Unrated` 인 행이 많다) → 경로를 조립하면 거의 다 404 다 | `get_boj_readme_paths()` 로 트리를 한 번 받아 번호로 찾는다. 번호 경계를 느슨하게 보면 `2024 대회 후기` 를 2024번 문제로 오인한다 |
 | BOJ README 재푸시 | 수집 실패를 빈 섹션으로 오인하면 본문 없는 README 로 덮어써 **이미 올라간 문제 설명이 지워진다** | 두 겹으로 막는다 — ① `get_boj_problem_sections()` 가 `get_cf_problem_sections()` 와 같은 계약으로 실패 시 `None` 을 반환한다(200 인데 세 섹션이 다 빈 경우도 실패로 본다), ② `require_sections` 가드가 `None` 뿐 아니라 "모든 섹션이 빈 dict" 도 502 로 막는다. 여기에 `rereview`·`github_push` 가 저장된 `problem_statement` 를 `description` 으로 넘겨 스크래핑 자체를 건너뛴다. `tests/test_push_review_bundle_sections.py` 가 두 플랫폼 × 두 실패 표현을 고정 |
-| 재업로드 '제출 일자' | `db.save_review` 는 `datetime.now()` 를 **tz 없이** 저장하고 Cloud Run 컨테이너는 UTC 다. `_format_kst` 가 변환하지 않으면 최초 push(KST)와 재푸시(UTC)의 날짜가 9시간 어긋난다 | `_format_kst` 가 naive 값을 UTC 로 간주해 KST 로 변환한다. `tests/test_helpers_readme.py` 가 naive·UTC·KST 세 입력을 고정 |
+| 재업로드 '제출 일자' | `db.save_review` 는 `timestamps.utc_now_iso()` 로 오프셋 있는 UTC 를 저장한다. 오프셋 없이 저장된 옛 행이 남아 있어, 읽는 쪽이 그 값을 어떤 시간대로 볼지 규칙을 정해야 한다 | `_format_kst` 가 naive 값을 UTC 로 간주해 KST 로 변환한다. `tests/test_helpers_readme.py` 가 naive·UTC·KST 세 입력을 고정 |
 | 언어 ↔ 확장자 | `get_file_extension` 이 만든 확장자를 `_ext_to_language` 가 모르면 그 언어로 push 한 풀이를 다시 가져올 때 `language` 가 빈 문자열이 되고, `rereview` 가 파일명을 재현할 수 없다며 재업로드를 거부한다. BOJ 는 `C99`, CF 는 `GNU G++17 7.3.0` 처럼 `c`/`c++` 부분문자열이 없는 표기를 쓴다 | 두 함수를 왕복으로 고정한다 — `tests/test_clients_utils.py` 가 실제 표기 30여 종과 "만들 수 있는 확장자 전체가 역매핑에 있다" 를 검사 |
 | GitHub 트리 조회 | 항목 10 만 개 / 7MB 를 넘기면 GitHub 가 `truncated=true` 와 함께 트리를 자른다. 부분 결과를 성공으로 취급하면 가져오기·백필이 **조용히 일부 문제를 누락**한다 | `fetch_repo_tree()` 가 `truncated` 를 확인해 예외로 드러낸다 |
 | 성장 곡선 dedupe | `get_tier_history` 는 문제당 **모든 회차**를 준다. 문제당 한 점만 쓰려고 마지막 회차를 남기면, `tier` 는 회차가 아니라 문제의 속성이라 값은 그대로이고 **그 문제가 시계열에 놓이는 날짜만 이동**한다 → 오래된 문제를 재제출하면 이미 지나간 구간의 레이팅이 소급 변한다 | 정순 1패스로 **첫 등장**을 남긴다(서버가 오름차순이므로 재정렬도 불필요). `tests/test_frontend_invariants.py` 가 `.reverse()` 부재를 고정 |
@@ -290,7 +293,7 @@ DB 가 컨테이너 임시 파일이다.
 | CodeMirror 모드 등록 | `mode/rust` 는 `CodeMirror.defineSimpleMode` 를 쓴다 — `addon/mode/simple` 이 없으면 rust.min.js 가 죽고 Rust 하이라이팅이 **조용히 등록되지 않는다**(페이지에 uncaught TypeError 가 남는다) | addon 을 모드 스크립트보다 먼저 로드한다. 모드 등록 여부는 헤드리스 브라우저로 실측해야 잡힌다 |
 | CSS 특이도 | 앱 스타일을 서드파티 뒤에 두는 것은 **동일 특이도일 때만** 이긴다. `input[type="text"]`(0,1,1)는 `.cmdk-input`(0,1,0)을 파일 순서와 무관하게 이겨, 그 블록의 선언 6개가 전부 무효였다(테두리 없는 입력이 1px 테두리 + 6px radius + 12px 패딩으로 렌더) | JS 가 만드는 컨트롤에 클래스만 주는 규칙은 요소 선택자를 함께 붙여 특이도를 맞춘다. 헤드리스 브라우저의 computed style 로만 잡힌다 |
 | outline 클리핑 | 래퍼에 `overflow:hidden` 이 있으면 **자식**의 `outline-offset` 링은 전량 잘린다 — 포커스 표시가 사라진 채 규칙은 남아 있다 | 링은 래퍼 자신의 `:focus-within` 에 그린다. 자기 overflow 는 자기 outline 을 자르지 않는다 |
-| 구조 의존 셀렉터 | `.row:first-child` 로 목록 상단선을 주면, 첫 자식이 `.toolbar` 인 컨테이너에서는 영원히 매칭되지 않는다 | 인접 선택자(`.row + .row`)로 뒤집어 컨테이너 구조에 의존하지 않게 한다 |
+| 구조 의존 셀렉터 | `.row:first-child` 로 목록 상단선을 주면, 첫 자식이 `.toolbar` 인 컨테이너에서는 영원히 매칭되지 않는다 | 일반 형제 선택자(`.row ~ .row`)로 뒤집어 컨테이너 구조에 의존하지 않게 한다 |
 | 비텍스트 대비 | 텍스트 대비(1.4.3)만 검산하면 **1.4.11(비텍스트 3:1)** 이 빠진다. 폼·`.btn-secondary`·칩은 배경이 지면과 1.03~1.06:1 이라 테두리가 유일한 식별 수단인데 `--line`/`--line-strong` 은 1.15~1.68:1 이었다 | 컨트롤 경계 전용 `--line-control` 을 분리한다(카드 구분선은 장식이라 대상 아님 — 일괄 상향하면 화면이 시끄러워진다) |
 | ARIA 선언 vs 동작 | `role="tablist"` 를 선언하면 보조기술 사용자는 화살표 키 이동을 기대한다. 선언만 있고 동작이 없으면 없는 것보다 나쁘다 | 화살표·Home·End + roving tabindex 를 `tabs.js` 에 둔다. 마크업의 초기 `tabindex` 도 맞춘다(JS 실행 전 상태) |
 | 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달 셋 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |

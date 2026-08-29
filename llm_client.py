@@ -34,8 +34,8 @@ def get_client() -> OpenAI:
 
 def require_choice(response) -> None:
     """choices 가 비면 인덱싱이 IndexError 로 새어 "list index out of range" 라는 해독
-    불가 500 이 된다. .env.example 이 Gemini 호환 엔드포인트를 1급 대안으로 안내하므로
-    (응답 형태가 미묘하게 다를 수 있다) 현실적인 경계다. **인덱싱보다 먼저 호출해야 한다.**
+    불가 500 이 된다. .env.example 은 Gemini 호환 엔드포인트를 대안으로 안내하며, 그 경우
+    응답 형태가 미묘하게 다를 수 있다. **인덱싱보다 먼저 호출해야 한다.**
     """
     if not getattr(response, "choices", None):
         raise ValueError("AI 응답에 결과가 없습니다. 제공자 설정(OPENAI_BASE_URL·모델)을 확인해주세요.")

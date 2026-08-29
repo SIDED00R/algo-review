@@ -72,7 +72,7 @@ echo "== 최상위 선언 충돌 검사 =="
 #   let/const/class 끼리 중복        → SyntaxError
 #   let/const/class × function/var   → SyntaxError
 #   function 끼리 / var 끼리         → 합법
-# 합본 파싱보다 약하지만(첫 선언자만 본다) node 없이 돌고 충돌한 이름을 짚어 준다.
+# 각 이름의 첫 선언자만 본다. node 없이도 동작한다.
 lexical=$(grep -hoE "^(const|let|class)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}" \
   | awk '{print $NF}' | sort)
 vars=$(grep -hoE "^((async[[:space:]]+)?function|var)[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*" "${files[@]}" \
@@ -97,7 +97,7 @@ fi
 
 echo "== $HTML_FILE 로드 누락 검사 =="
 # JS·CSS 가 index.html 에 `?v=` 와 함께 참조되는지 본다.
-# nullglob 때문에 경로가 틀리면 목록이 비어 "전부 참조됨" 이 찍힌다 — 먼저 센다.
+# 목록이 비면 검사가 성립하지 않는다 — 개수를 먼저 확인한다.
 css_files=("$CSS_DIR"/*.css)
 if [ ${#css_files[@]} -eq 0 ]; then
   echo "  검사할 CSS 가 없습니다 — 경로가 맞습니까? ($CSS_DIR)"

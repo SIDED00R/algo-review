@@ -65,6 +65,9 @@ function problemLabel(problem) {
  *  @param {function(number)} onGo  페이지 번호를 받는 이동 콜백 */
 function renderPager(pager, page, totalPages, onGo) {
   if (!pager) return;
+  // innerHTML 교체는 포커스를 <body> 로 떨어뜨린다 — 키보드로 페이지를 넘기던 사용자가
+  // 매번 다시 Tab 을 눌러야 한다. 교체 전 포커스가 페이저 안에 있었는지 기록해 둔다.
+  const hadFocus = pager.contains(document.activeElement);
   if (totalPages <= 1) { pager.innerHTML = ''; return; }
 
   let html = `<button class="page-btn" ${page === 1 ? 'disabled' : ''} data-page="${page - 1}">‹</button>`;
@@ -79,6 +82,7 @@ function renderPager(pager, page, totalPages, onGo) {
   if (end < totalPages) html += `${end < totalPages - 1 ? '<span class="page-ellipsis">…</span>' : ''}<button class="page-btn" data-page="${totalPages}">${totalPages}</button>`;
   html += `<button class="page-btn" ${page === totalPages ? 'disabled' : ''} data-page="${page + 1}">›</button>`;
   pager.innerHTML = html;
+  if (hadFocus) pager.querySelector('.page-btn.active')?.focus();
 
   pager.querySelectorAll('.page-btn:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => onGo(Number(btn.dataset.page)));

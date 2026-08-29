@@ -39,11 +39,11 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     if platform == "codeforces":
         avg_rating = db.get_average_cf_rating()
         avg_tier = 0
-        tier_name = f"CF {int(avg_rating)}" if avg_rating != 1200.0 or db.get_solved_cf_refs() else "N/A"
+        tier_name = f"CF {int(avg_rating)}" if db.has_cf_rating() else "N/A"
         tier_range = recommender.cf_rating_range_description(avg_rating)
     else:
         avg_tier = db.get_average_tier()
-        tier_name = TIER_NAMES.get(int(avg_tier), "N/A")
+        tier_name = TIER_NAMES.get(int(avg_tier), "N/A") if db.has_graded_tier() else "N/A"
         tier_range = recommender.tier_range_description(avg_tier)
 
     weak_tags = recommender.get_weak_tags_scored(5, platform=platform)
@@ -58,8 +58,7 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     # themes 응답이 쓰는 error 필드 계약을 그대로 따른다.
     error = ""
     try:
-        # 위에서 구한 평균 난이도를 넘긴다 — 넘기지 않으면 recommender 가 같은 요청 안에서
-        # reviews 전 행 윈도우 쿼리를 한 번 더 돈다(5만 행에서 490ms).
+        # 위에서 구한 평균 난이도를 넘긴다.
         recs = recommender.get_recommendations(
             weak_tags[:3], platform=platform, extra_exclude=extra_exclude,
             avg_difficulty=avg_rating if platform == "codeforces" else avg_tier)

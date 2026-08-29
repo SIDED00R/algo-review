@@ -56,7 +56,6 @@ def import_from_github(req: GithubImportRequest):
                 failed.append(problem_id)
                 continue
 
-            code = ""
             try:
                 code = api_client.get_raw_github_content(repo, p["path"], req.token)
             except Exception as e:

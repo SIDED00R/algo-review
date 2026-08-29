@@ -13,15 +13,12 @@ class UpstreamUnavailable(ValueError):
 class ProblemSearchError(RuntimeError):
     """문제 검색이 **실패**했다 — 빈 결과와 구분한다.
 
-    빈 목록으로 돌려주면 호출부가 "조건에 맞는 문제 없음"과 구분할 수 없다. 그러면
-    외부 API 가 막혀 있을 때도 응답에 평균 티어와 취약 태그는 채워진 채 추천만 비어,
-    UI 가 "아직 추천 데이터가 없습니다. 먼저 코드 리뷰를 몇 개 진행해보세요." 로
-    **사용자를 탓하게 된다**.
+    빈 목록으로 돌려주면 호출부가 "조건에 맞는 문제 없음"과 구분할 수 없다.
     """
 
 
 # BOJ 는 `C99`·`C11`·`C90`(+ `(Clang)` 변종), CF 는 `GNU C11`, 프론트는 `C` 를 쓴다.
-# 놓치면 확장자가 .txt 가 되고 rereview 가 재업로드를 거부한다.
+# 놓치면 확장자가 .txt 가 된다. rereview 는 재업로드를 거부한다.
 _C_LANG_RE = re.compile(r"(?:^|\s)c(?:\d+|2x)?(?:\s|$)")
 # C++ 은 컴파일러 이름이 앞에 붙어 `c++` 부분문자열이 없는 표기가 많다 — CF 는
 # `GNU G++17 7.3.0`, BOJ 는 `Clang++17`. `c++` 만 찾으면 둘 다 .txt 로 떨어진다.
@@ -82,9 +79,8 @@ def get_file_extension(language: str) -> str:
 
 
 def _ext_to_language(filename: str) -> str:
-    """확장자에서 언어를 되돌린다. get_file_extension 이 만드는 모든 확장자를 받아야 한다 —
-    빠뜨리면 그 언어로 push 한 풀이를 다시 가져올 때 language 가 빈 문자열이 되고,
-    rereview 가 파일명을 재현할 수 없다며 재업로드를 거부한다."""
+    """확장자에서 언어를 되돌린다. get_file_extension 이 만드는 모든 확장자를 받아야 한다.
+    빠뜨리면 그 언어로 push 한 풀이를 다시 가져올 때 language 가 빈 문자열이 된다."""
     ext_map = {
         ".py": "Python 3", ".java": "Java", ".cpp": "C++", ".cc": "C++",
         ".c": "C", ".js": "JavaScript", ".ts": "TypeScript", ".kt": "Kotlin",

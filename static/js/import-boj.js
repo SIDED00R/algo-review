@@ -11,7 +11,7 @@ importBtn.addEventListener('click', async () => {
   if (!bojId) { showError(result, 'BOJ 아이디를 입력하세요.'); return; }
 
   setLoading(importBtn, true);
-  const pageDesc = pages >= 9999 ? '전체' : `최대 ${pages * 20}개`;
+  const pageDesc = pages >= 9999 ? '최근 1,000개' : `최대 ${pages * 20}개`;
   result.innerHTML = `<div class="alert alert-info"><span class="spinner"></span> 제출 기록을 가져오는 중입니다... (${pageDesc}, 기록이 많으면 수 분 소요)</div>`;
 
   try {

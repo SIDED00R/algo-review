@@ -92,16 +92,15 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
         fresh = _fetch_cf_pool(theme["cf_tag"])
 
     bands = fresh
-    # 부분 실패일 때만 만료 캐시를 본다 — 전부 성공한 정상 경로에서 읽으면 DB 왕복이 헛돈다.
+    # 부분 실패일 때만 만료 캐시를 본다.
     stale = None if all(fresh) else db.cache_get_stale(key)
-    # 밴드별로 따로 fetch하므로 일부만 실패할 수 있다(레이트리밋 등) — 실패(빈) 밴드는 이전 캐시로
-    # 채워 부분 실패가 이미 좋은 밴드까지 지우지 않게 한다. 밴드 수가 다르면(설정 변경) 병합하지
-    # 않는다 — zip이 짧은 쪽으로 잘라 잘린 결과를 캐시에 못박아 버린다.
+    # 밴드별로 따로 fetch한다. 실패(빈) 밴드는 이전 캐시로 채운다. 밴드 수가 다르면(설정 변경)
+    # 병합하지 않는다 — zip 은 짧은 쪽에 맞춰 자른다.
     if stale is not None and len(stale) == len(fresh):
         bands = [new_band if new_band else old_band for new_band, old_band in zip(fresh, stale)]
 
-    # 새로 받은 밴드가 하나라도 있을 때만 저장한다 — 전면 실패까지 저장하면 updated_at이 갱신돼
-    # TTL(24시간) 내내 재시도가 멈춘 채 옛 데이터만 나간다.
+    # 새로 받은 밴드가 하나라도 있을 때만 저장한다. 전면 실패 시 저장하면 updated_at 이
+    # 갱신되어 TTL(24시간) 동안 재시도가 멈춘다.
     if any(fresh):
         db.cache_set(key, bands)
         return bands
@@ -109,9 +108,8 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
     return stale
 
 
-# 이미 푼 문제 집합의 짧은 메모. 테마 탭 프리페치가 테마 10개를 연달아 요청하는데
-# 테마마다 같은 전 행 스캔이 돈다.
-# TTL 안에서는 방금 리뷰한 문제가 테마 목록에 남을 수 있다.
+# 이미 푼 문제 집합의 짧은 메모.
+# TTL(_SOLVED_TTL_SEC) 안에서는 방금 리뷰한 문제가 테마 목록에 남을 수 있다.
 _SOLVED_TTL_SEC = 30
 _solved_cache: dict[str, tuple[set, float]] = {}
 

@@ -48,8 +48,8 @@ function fillReviewForm(review, seq, total) {
   // problemLabel 이 CF 는 problem_ref, BOJ 는 problem_id 를 준다 — 분기를 새로 쓰지 않는다.
   document.getElementById('problem-id').value = problemLabel(review);
 
-  // 조건 없이 대입한다. resolve_statement 는 요청에 본문이 있으면 무조건 그것을 쓰므로,
-  // 이전 문제의 붙여넣은 본문이 남으면 다른 문제를 그 본문으로 리뷰한다.
+  // 조건 없이 대입한다. resolve_statement 는 요청에 본문이 있으면 무조건 그것을 쓴다.
+  // 이전 문제의 붙여넣은 본문이 남으면 다른 문제가 그 본문으로 리뷰된다.
   const statement = document.getElementById('problem-statement');
   statement.value = review.problem_statement || '';
   document.getElementById('statement-toggle').open = Boolean(statement.value);

@@ -1,9 +1,9 @@
 """라우터 공용 헬퍼 — GitHub push(README 조립, 저장 폴더·커밋 메시지, 저장소 타깃 병합,
 번들 push)와 요청 검증(require_platform · require_language · upstream_failure).
 
-push 함수가 둘인 이유: push_solution 은 파일별 PUT(가져오기처럼 수백 건을 훑는 경로에서
-한 문제가 실패해도 나머지가 진행되어야 한다), push_review_bundle 은 README+코드를
-한 커밋으로 묶는다(단건 등록은 저장소 이력이 문제 단위로 남는 게 낫다).
+push_solution 은 파일별 PUT 이다(가져오기처럼 수백 건을 훑는 경로에서 한 문제가 실패해도
+나머지가 진행된다). push_review_bundle 은 README+코드를 한 커밋으로 묶는다(단건 등록은
+저장소 이력이 문제 단위로 남는다).
 """
 import logging
 import re
@@ -43,8 +43,7 @@ def upstream_failure(action: str, exc: Exception) -> HTTPException:
 def require_platform(value: str) -> str:
     """플랫폼 문자열을 검증해 400 으로 바꾼다.
 
-    validate_platform 은 pydantic 검증용이라 ValueError 를 던진다 — 라우터에서 그대로
-    쓰면 500 이 된다. 라우터마다 따로 처리하면 같은 값이 엔드포인트마다 다르게 처리된다.
+    validate_platform 은 pydantic 검증용이라 ValueError 를 던진다.
     """
     try:
         return validate_platform(value)
@@ -57,8 +56,7 @@ def require_reviewable_code(code: str) -> str:
 
     `ReviewRequest` 는 pydantic 이 요청 본문에서 막지만, 가져오기로 들어온 코드는 그
     검증을 거치지 않는다(`/api/import*` 는 크롤링·API 결과를 그대로 저장한다).
-    `analyzer.analyze_code` 는 문제 본문만 자르고 코드는 자르지 않으므로, 막지 않으면
-    큰 소스가 그대로 프롬프트가 되어 과금·타임아웃으로 간다.
+    `analyzer.analyze_code` 는 문제 본문만 자르고 코드는 자르지 않는다.
     """
     if len(code or "") > MAX_CODE_LENGTH:
         raise HTTPException(
@@ -72,8 +70,8 @@ def require_language(language: str) -> str:
     """제출 언어를 강제한다. 사용자가 폼에서 언어를 고르는 세 엔드포인트
     (/api/review, /api/review/pending, /api/push-review)가 이 규칙을 공유한다.
 
-    언어를 모르면 확장자가 `.txt` 가 되고, rereview 가 파일명을 재현하지 못해 그 행의
-    재업로드를 영구 거부한다.
+    언어를 모르면 확장자가 `.txt` 가 된다. rereview 는 파일명을 재현하지 못해
+    재업로드를 거부한다.
 
     `/api/review-imported` 는 부르지 않는다 — 그 경로의 language 는 가져오기 원본에서
     오므로 요청자가 고칠 수단이 없다.
@@ -89,7 +87,7 @@ def require_problem_ref(platform: str, problem_ref) -> str:
     """저장소 경로·URL 에 쓸 문제 번호를 플랫폼 형식으로 검증한다.
 
     통과시키면 `get_problem_url` 이 던지는 ValueError 가 라우터를 그대로 빠져나가
-    500 "서버 내부 오류" 가 된다 — 같은 오류를 리뷰 경로는 400 + 형식 안내로 준다.
+    500 "서버 내부 오류" 가 된다.
     """
     ref = str(problem_ref or "").strip()
     if platform == "boj":
@@ -235,8 +233,8 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
         {"path": f"{folder}/{problem_ref}{ext}", "content": code},
     ], msg)
     if not ok:
-        # push_files_to_github 는 네트워크 오류·401·404·422 를 전부 False 로 삼킨다 —
-        # 대다수가 GitHub 쪽 장애·거절이므로 상류 실패로 본다.
+        # push_files_to_github 는 네트워크 오류·401·404·422 를 전부 False 로 삼킨다.
+        # 상류 실패로 본다.
         raise HTTPException(status_code=502, detail="GitHub push에 실패했습니다.")
     return folder
 
@@ -298,8 +296,7 @@ def build_readme(problem_ref: str, title: str,
                  tier_name: str, tags: list, language: str, url: str,
                  description: str = "", input_desc: str = "", output_desc: str = "",
                  review: dict | None = None, submitted_at: str = "") -> str:
-    # 호출자가 입력/출력을 따로 주지 않았고 본문에 마커가 있으면 되쪼갠다 — 재푸시는
-    # 저장된 본문 하나만 넘기므로, 되쪼개지 않으면 세 섹션이 한 덩어리로 뭉친다.
+    # 호출자가 입력/출력을 따로 주지 않았고 본문에 마커가 있으면 되쪼갠다.
     if description and not (input_desc or output_desc):
         description, input_desc, output_desc = split_statement_markers(description)
     date_str = _submitted_at_str(submitted_at)

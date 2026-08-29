@@ -33,7 +33,7 @@ _SECTION_TO_LABEL = {"문제 설명": "문제", "입력": "입력", "출력": "�
 def _plain_text(markup: str) -> str:
     """BaekjoonHub README 는 본문을 HTML(`<p>`, `<sup>` …)로 담는다 — 태그를 벗긴다.
 
-    이 앱의 build_readme 가 쓴 본문에는 태그가 없어 아무 영향이 없다.
+    이 앱의 build_readme 가 쓴 본문에는 태그가 없다.
     """
     if "<" not in markup:
         return markup.strip()
@@ -47,8 +47,8 @@ def parse_readme_sections(markdown: str) -> str:
     - 이 앱의 `build_readme`: `## 문제 설명` / `## 입력` / `## 출력`, 태그 없음
     - BaekjoonHub: `### 문제 설명` / `### 입력 ` / `### 출력 `, 본문이 HTML, 헤더 뒤 공백 있음
 
-    `【문제】…【입력】…【출력】` 로 되돌린다 — get_problem_statement 가 만들던 형태와 같아야
-    저장된 값이 이질적으로 보이지 않는다. 리뷰 섹션·머리말은 라벨 화이트리스트로 걸러진다.
+    `【문제】…【입력】…【출력】` 형태로 되돌린다 — get_problem_statement 가 만드는 형태와 같다.
+    리뷰 섹션·머리말은 라벨 화이트리스트로 걸러진다.
     """
     parts = []
     # `##` 또는 `###` 헤더로 자른다. `#` 하나(문서 제목)는 건드리지 않는다.
@@ -67,7 +67,6 @@ def parse_readme_sections(markdown: str) -> str:
 def reason_bucket(reason: str) -> str:
     """건너뛴 이유를 요약용 범주로 줄인다.
 
-    상세 이유에는 경로가 붙어 있어 그대로 세면 항목이 전부 달라지고 요약이 의미를 잃는다.
     괄호·콜론 앞까지만 남긴다.
     """
     for sep in (" (", ": "):
@@ -80,10 +79,9 @@ def fetch_boj_statement(problem: dict, repo: str, token: str,
                         readme_paths: dict[int, list[str]]) -> tuple[str, str]:
     """GitHub README 에서 BOJ 본문을 읽는다. (본문, 사유) 를 반환하고 실패 시 본문은 빈 문자열.
 
-    경로를 조립해 맞히려 하면 실패한다 — BaekjoonHub 는 공백을 U+2005 로, 특수문자를 전각으로
-    바꾸고 `번` 을 붙이지 않으며, 티어 폴더도 저장 당시 값이라 DB 와 다를 수 있다.
-    그래서 번호로 트리에서 찾는다. 같은 문제에 폴더가 둘 있을 수 있어(앱이 올린 것 +
-    BaekjoonHub 것) 본문이 나오는 첫 번째를 쓴다.
+    BaekjoonHub 경로는 공백을 U+2005 로, 특수문자를 전각으로 바꾸고 `번` 을 붙이지 않으며,
+    티어 폴더도 저장 당시 값이라 DB 와 다를 수 있다. 번호로 트리에서 찾는다. 같은 문제에
+    폴더가 둘 있을 수 있고(앱이 올린 것 + BaekjoonHub 것) 본문이 나오는 첫 번째를 쓴다.
     """
     try:
         problem_id = int(problem["problem_ref"])
@@ -122,8 +120,8 @@ def db_target_label() -> str:
 
 
 def main() -> int:
-    # 출력에 em dash 등 cp949 로 인코딩할 수 없는 문자가 있다 — Windows 콘솔 기본
-    # 코드페이지에서 UnicodeEncodeError 로 스크립트가 중간에 죽는다.
+    # 출력에 cp949 로 인코딩할 수 없는 문자(em dash 등)가 있다.
+    # Windows 콘솔 기본 코드페이지는 cp949 다.
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, OSError):
@@ -160,8 +158,8 @@ def main() -> int:
             print("경고: GitHub 연결·저장소가 없어 BOJ 는 건너뜁니다 "
                   "(acmicpc.net 종료로 README 가 유일한 소스입니다).\n")
         else:
-            # 트리는 한 번만 받는다 — 문제마다 경로를 두드리면 요청이 수십 배로 늘고
-            # 폴더명 규칙이 달라 대부분 404 가 된다.
+            # 트리는 한 번만 받는다. 폴더명 규칙이 문제마다 달라 개별 경로 요청은
+            # 대부분 404 가 된다.
             try:
                 readme_paths = api_client.get_boj_readme_paths(repo, token)
                 print("저장소 BOJ README " + str(len(readme_paths)) + "개 확인\n")
@@ -178,8 +176,8 @@ def main() -> int:
         platform, ref = problem["platform"], problem["problem_ref"]
         label = platform + "/" + ref
 
-        # 문제 하나의 실패로 전체가 죽으면 요약이 출력되지 않는다 — ref 형식이 깨진 행이나
-        # DB 예외가 그대로 올라올 수 있다. 문제 단위로 잡아 SKIP 사유로 집계한다.
+        # 문제 단위로 예외를 잡아 SKIP 사유로 집계한다. ref 형식이 깨진 행이나
+        # DB 예외가 여기서 걸린다.
         try:
             if platform == "boj":
                 if not (repo and token):
@@ -194,8 +192,8 @@ def main() -> int:
         except Exception as e:
             statement, source = "", "처리 중 예외: " + type(e).__name__
 
-        # 실패 문자열을 저장하면 resolve_statement 가 그걸 무조건 우선하므로 그 문제의
-        # 리뷰가 영구히 오염된다. 저장 직전에 한 번 더 막는다.
+        # resolve_statement 는 저장된 값이 있으면 무조건 그것을 우선한다.
+        # 저장 직전에 한 번 더 막는다.
         if statement and (is_scrape_failure(statement) or len(statement) < MIN_STATEMENT_LEN):
             source = "본문이 너무 짧거나 실패 문자열 (" + str(len(statement)) + "자)"
             statement = ""

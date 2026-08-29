@@ -37,12 +37,7 @@ def test_submitted_code_does_not_run_in_the_repo_directory():
 @pytest.mark.parametrize("key", ["OPENAI_API_KEY", "DB_PASSWORD", "GITHUB_CLIENT_SECRET",
                                  "CODEFORCES_API_SECRET", "CODEFORCES_PASSWORD"])
 def test_secret_environment_variables_do_not_reach_the_subprocess(monkeypatch, key):
-    """실제로 심은 센티넬이 새지 않는지 본다.
-
-    "이 키들이 stdout 에 없다" 만 단정하면 필터를 통째로 지워도 통과한다 — 로컬·CI 환경에
-    그 키가 애초에 없기 때문이다(pydantic-settings 는 .env 를 파일에서 읽고 os.environ 에
-    넣지 않는다). 센티넬을 직접 심어 필터를 태운다.
-    """
+    """실제로 심은 센티넬이 새지 않는지 본다."""
     monkeypatch.setenv(key, "sentinel-must-not-leak")
 
     assert key not in safe_env()   # 필터 자체
@@ -71,7 +66,7 @@ def test_normal_code_still_runs():
 # ── 엔드포인트 게이트 ──
 #
 # 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버와
-# /proc/1/environ 경로가 남는다. 그래서 앱 안에서 직접 실행하는 경로는 기본 비활성이고
+# /proc/1/environ 경로가 남는다. 앱 안에서 직접 실행하는 경로는 기본 비활성이고
 # 로컬 개발에서만 켠다(운영은 실행 서비스로 위임한다 — test_execute_delegation.py).
 
 _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
@@ -80,8 +75,7 @@ _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 
 def _client():
     """conftest 의 minimal_app 과 같은 최소 앱.
 
-    픽스처 대신 함수인 이유는 **한 테스트가 설정을 바꿔가며 앱을 두 번 만들기 때문**이다.
-    픽스처는 테스트당 한 번만 평가되므로 그 형태가 나오지 않는다.
+    한 테스트가 설정을 바꿔가며 앱을 두 번 만든다. 픽스처는 테스트당 한 번만 평가된다.
     """
     app = FastAPI()
     app.include_router(execute_route.router)

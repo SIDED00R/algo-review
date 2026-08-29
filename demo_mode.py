@@ -130,7 +130,7 @@ DEMO_RECOMMENDATIONS = {
     ],
 }
 
-# BOJ 탭용 — 위 CF 데이터를 platform 만 바꿔 돌려주면 BOJ 탭에 CF 문제·레이팅이 뜬다.
+# BOJ 탭용.
 DEMO_RECOMMENDATIONS_BOJ = {
     "avg_tier": 11,
     "tier_name": "Gold V",

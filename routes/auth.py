@@ -10,15 +10,15 @@ from fastapi.responses import RedirectResponse
 from config import settings
 from routes.models import SetRepoRequest
 from routes.helpers import upstream_failure
-from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS
+from demo_mode import IS_DEMO, DEMO_GITHUB_STATUS, DEMO_REPOS, demo_block
 
 _logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter()
 
 _STATE_TTL = 300  # seconds
-_HMAC_KEY = settings.github_client_secret.encode() or b"dev-fallback-key"
-# 사용된 nonce → 만료 시각. 만료된 것만 정리한다(일괄 삭제는 replay 창을 다시 연다).
+_HMAC_KEY = settings.github_client_secret.encode() or secrets.token_bytes(32)
+# 사용된 nonce → 만료 시각. 만료된 것만 정리한다.
 # 프로세스 로컬이라 인스턴스가 둘 이상이면 재사용 차단도 인스턴스별로만 성립한다.
 _USED_NONCES: dict[str, float] = {}
 
@@ -52,7 +52,7 @@ def _consume_nonce(nonce: str) -> None:
     """트랜잭션 성공 후에만 호출. 만료된 항목만 정리해 유효 기간 내 nonce는 항상 차단."""
     now = time.time()
     _USED_NONCES[nonce] = now + _STATE_TTL
-    # 만료된 항목만 제거한다 — 일괄 삭제는 기존 nonce replay 를 허용한다.
+    # 만료된 항목만 제거한다.
     # 스냅샷을 뜬다 — 동시 콜백이 겹치면 순회 중 크기가 바뀌어 RuntimeError 가 난다.
     expired = [k for k, exp in list(_USED_NONCES.items()) if exp <= now]
     for k in expired:
@@ -142,6 +142,8 @@ def github_status():
 
 @router.post("/auth/github/repo")
 def set_github_repo(req: SetRepoRequest):
+    if IS_DEMO:
+        demo_block("GitHub 설정 변경은 데모 버전에서 지원되지 않습니다.")
     if not db.get_github_settings():
         raise HTTPException(status_code=400, detail="GitHub 연결 먼저 해주세요.")
     db.update_github_target_repo(req.repo)
@@ -150,6 +152,8 @@ def set_github_repo(req: SetRepoRequest):
 
 @router.delete("/auth/github")
 def github_disconnect():
+    if IS_DEMO:
+        demo_block("GitHub 연결 해제는 데모 버전에서 지원되지 않습니다.")
     db.delete_github_settings()
     return {"ok": True}
 

@@ -86,8 +86,9 @@ class ImportRequest(BaseModel):
     @field_validator("max_pages")
     @classmethod
     def max_pages_bounds(cls, v):
-        # 9999("전체") 선택 시 모든 기록을 가져온다. 이 라우터는 동기라 요청 하나가 anyio
-        # 스레드풀(기본 40) 슬롯을 페이지당 최대 15초 + 0.5초 동안 붙든다.
+        # 9999("전체") 를 선택해도 요청당 최대 MAX_IMPORT_PAGES 페이지(약 1,000건)로 자른다.
+        # 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40) 슬롯을 페이지당 최대
+        # 15초 + 0.5초 동안 붙든다.
         return max(1, min(v, MAX_IMPORT_PAGES))
 
 
@@ -219,9 +220,7 @@ class ExecuteRequest(BaseModel):
     @field_validator("code")
     @classmethod
     def code_max_length(cls, v):
-        if len(v) > 50_000:
-            raise ValueError("코드는 50,000자를 초과할 수 없습니다.")
-        return v
+        return validate_code_length(v)
 
     @field_validator("stdin")
     @classmethod

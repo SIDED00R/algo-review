@@ -78,7 +78,7 @@ def _kill_tree(proc: subprocess.Popen, pgid: int | None) -> None:
         pass
 
 
-def _pump(stream, sink: bytearray) -> None:
+def _pump(stream, sink: bytearray, truncated: list) -> None:
     try:
         while True:
             chunk = stream.read1(8192)
@@ -86,7 +86,11 @@ def _pump(stream, sink: bytearray) -> None:
                 break
             room = MAX_OUTPUT_BYTES - len(sink)
             if room > 0:
+                if len(chunk) > room:
+                    truncated[0] = True
                 sink += chunk[:room]
+            else:
+                truncated[0] = True
     except (ValueError, OSError):
         # kill 이후 닫힌 파이프. 읽던 것까지가 결과다.
         pass
@@ -112,11 +116,11 @@ def _close(stream) -> None:
         pass
 
 
-def _decode(buf: bytearray) -> str:
+def _decode(buf: bytearray, truncated: bool) -> str:
     # 개행을 LF 로 통일한다 — 윈도우 로컬에서 자식이 내는 CRLF 가 그대로 나가면 프론트의
     # 예제 출력 비교가 어긋난다(파이프를 바이트로 읽으므로 자동 변환이 없다).
     text = buf.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
-    return text + _TRUNCATED_NOTICE if len(buf) >= MAX_OUTPUT_BYTES else text
+    return text + _TRUNCATED_NOTICE if truncated else text
 
 
 def _execute(cmd: list[str], stdin: bytes, timeout: int, cwd: str) -> dict:
@@ -126,9 +130,10 @@ def _execute(cmd: list[str], stdin: bytes, timeout: int, cwd: str) -> dict:
     # 회수 전에 확보해 둔다 — 회수 뒤에는 pid 로 그룹을 되찾을 수 없다.
     pgid = proc.pid if os.name == "posix" else None
     out, err = bytearray(), bytearray()
+    out_truncated, err_truncated = [False], [False]
     workers = [
-        threading.Thread(target=_pump, args=(proc.stdout, out), daemon=True),
-        threading.Thread(target=_pump, args=(proc.stderr, err), daemon=True),
+        threading.Thread(target=_pump, args=(proc.stdout, out, out_truncated), daemon=True),
+        threading.Thread(target=_pump, args=(proc.stderr, err, err_truncated), daemon=True),
         threading.Thread(target=_feed, args=(proc.stdin, stdin), daemon=True),
     ]
     for worker in workers:
@@ -145,13 +150,13 @@ def _execute(cmd: list[str], stdin: bytes, timeout: int, cwd: str) -> dict:
         worker.join(timeout=1)
     if timed_out:
         return {"stdout": "", "stderr": f"[시간 초과 - {timeout}초]", "exit_code": -1}
-    return {"stdout": _decode(out), "stderr": _decode(err), "exit_code": exit_code}
+    return {"stdout": _decode(out, out_truncated[0]), "stderr": _decode(err, err_truncated[0]),
+            "exit_code": exit_code}
 
 
 def _run_python(code: str, stdin: bytes, timeout: int) -> dict:
-    # UTF-8·무버퍼는 커맨드라인 플래그로 준다 — -I 가 모든 PYTHON* 환경변수를 무시한다.
-    # 작업 디렉터리를 격리한다 — cwd 를 지정하지 않으면 sys.path[0] 가 리포 루트가 되어
-    # 제출 코드가 `import config` 로 .env 를 읽는다. -I 는 환경변수·사용자 site import 를 끊는다.
+    # -I 는 환경변수·사용자 site·스크립트 디렉터리를 sys.path 에서 뺀다. UTF-8·무버퍼는 플래그로 준다.
+    # cwd 는 임시 디렉터리다 — 제출 코드가 만드는 파일과 상대 경로 접근이 여기 갇힌다.
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             return _execute([sys.executable, "-I", "-X", "utf8=1", "-u", "-c", code],
@@ -167,25 +172,35 @@ def _run_cpp(code: str, stdin: bytes, timeout: int, compile_timeout: int) -> dic
         with open(src, "w", encoding="utf-8") as file:
             file.write(code)
         try:
-            compiled = subprocess.run(
-                ["g++", "-O2", "-std=c++17", "-o", exe, src],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=compile_timeout,
-                env=safe_env(),
-                cwd=tmpdir,   # 실행 단계와 같은 이유 — 서버 CWD 를 상속하지 않는다
-            )
+            proc = _spawn(["g++", "-O2", "-std=c++17", "-o", exe, src], tmpdir)
         except FileNotFoundError:
             return {"stdout": "", "stderr": "[g++ 컴파일러를 찾을 수 없습니다]", "exit_code": -1}
+        # g++ 가 cc1plus/as/ld 를 자식으로 띄우므로 타임아웃 시 그룹째 죽여야 한다.
+        pgid = proc.pid if os.name == "posix" else None
+        _close(proc.stdin)   # 컴파일은 입력을 읽지 않는다
+        out, err = bytearray(), bytearray()
+        workers = [
+            threading.Thread(target=_pump, args=(proc.stdout, out, [False]), daemon=True),
+            threading.Thread(target=_pump, args=(proc.stderr, err, [False]), daemon=True),
+        ]
+        for worker in workers:
+            worker.start()
+        try:
+            proc.wait(timeout=compile_timeout)
         except subprocess.TimeoutExpired:
             # 컴파일도 실행과 같이 시간 초과를 잡는다. 잡지 않으면 과도한 템플릿 재귀 등으로
             # 컴파일이 길어질 때 예외가 라우터를 탈출해 원인 불명 500 이 된다.
+            _kill_tree(proc, pgid)
+            proc.wait()
+            for worker in workers:
+                worker.join(timeout=1)
             return {"stdout": "", "stderr": f"[컴파일 시간 초과 - {compile_timeout}초]", "exit_code": -1}
-        if compiled.returncode != 0:
-            return {"stdout": "", "stderr": compiled.stderr[:MAX_OUTPUT_BYTES],
-                    "exit_code": compiled.returncode}
+        returncode = proc.wait()
+        for worker in workers:
+            worker.join(timeout=1)
+        if returncode != 0:
+            stderr_text = bytes(err).decode("utf-8", errors="replace")
+            return {"stdout": "", "stderr": stderr_text[:MAX_OUTPUT_BYTES], "exit_code": returncode}
         return _execute([exe], stdin, timeout, tmpdir)
 
 

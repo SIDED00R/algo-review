@@ -1,4 +1,4 @@
-"""db.reviews 파사드의 현행 동작 고정 — SQLAlchemy 전환 후에도 이 동작이 유지되어야 한다."""
+"""db.reviews 파사드의 현행 동작을 고정한다."""
 from datetime import datetime, timedelta
 
 import db
@@ -146,7 +146,7 @@ def test_normal_review_after_pending_still_counts_tags(at_time):
     at_time("2024-01-01T00:00:00")
     mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency=db.PENDING_EFFICIENCY)
     at_time("2024-01-02T00:00:00")
-    # 대기 등록 후 리뷰 탭에서 '분석 시작'을 다시 돌린 경우 — 대기 행 때문에 첫 집계를 놓치면 안 된다.
+    # 대기 등록 후 리뷰 탭에서 '분석 시작'을 다시 돌린 경우. 대기 행이 있어도 첫 집계가 잡힌다.
     mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
     stats = {s["tag"]: s for s in db.get_tag_stats()}
     assert stats["dp"]["good_count"] == 1
@@ -260,9 +260,7 @@ def test_analyzer_normalizes_null_string_fields():
 
 
 def test_tag_stats_rebuilds_the_table_when_it_is_empty():
-    """tag_stats 는 BOJ 첫 제출에서만 채워지는 비정규화 테이블이라, 그 경로를 타지 않고
-    들어온 행(마이그레이션·백필·직접 INSERT)만 있으면 비어 있다. 복원이 없으면 BOJ 리뷰가
-    아무리 많아도 /api/report 가 "아직 저장된 기록이 없습니다"(400)를 낸다."""
+    """tag_stats 가 비어 있어도 get_tag_stats() 가 테이블을 복원한다."""
     mk_review(problem_id=1, problem_ref="1", tags=["dp"], efficiency="good")
     mk_review(problem_id=2, problem_ref="2", tags=["dp"], efficiency="poor")
     with session_scope(commit=True) as session:
@@ -272,18 +270,13 @@ def test_tag_stats_rebuilds_the_table_when_it_is_empty():
     assert stats["dp"]["total_count"] == 2
     assert stats["dp"]["good_count"] == 1 and stats["dp"]["poor_count"] == 1
 
-    # 읽기마다 계산하는 폴백이 아니라 **테이블을 복원**해야 한다.
+    # 테이블이 복원되어 있다(읽기마다 계산하는 폴백이 아니다).
     with session_scope() as session:
         assert session.query(db.models.TagStat).count() == 1
 
 
 def test_a_new_review_after_rebuild_does_not_collapse_the_numbers(at_time):
-    """복원 뒤 새 리뷰가 들어와도 숫자가 이어져야 한다.
-
-    읽을 때마다 폴백을 계산하는 방식은 스위치가 all-or-nothing 이다 — 빈 tag_stats +
-    BOJ 리뷰 다수 상태에서 새 리뷰 1건이 들어오면 그 1건짜리 TagStat 행 때문에 폴백을
-    건너뛰어 통계가 붕괴한다.
-    """
+    """복원 뒤 새 리뷰가 들어와도 숫자가 이어진다."""
     at_time("2024-01-01T00:00:00")
     for i in range(5):
         mk_review(problem_id=i, problem_ref=str(i), tags=["dp"], efficiency="good")

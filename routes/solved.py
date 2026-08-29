@@ -32,42 +32,39 @@ def review_imported(platform: str, problem_ref: str):
             language=problem.get("language", ""), platform=platform,
             problem_ref=problem_ref, tier_name=problem.get("tier_name", ""))
 
-    if not problem.get("code"):
-        _restore()
-        raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 세션 쿠키로 다시 가져오기 해주세요.")
     try:
+        if not problem.get("code"):
+            raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 세션 쿠키로 다시 가져오기 해주세요.")
         require_reviewable_code(problem["code"])
-    except HTTPException:
+
+        if platform == "codeforces":
+            # 조회 실패를 400/500 으로 매핑하는 공용 해석기를 쓴다(직접 호출하면 ValueError 가 500 으로만 샌다).
+            problem_info = resolve_problem_info("codeforces", None, problem_ref)
+        else:
+            problem_id = problem["problem_id"]
+            problem_info = {
+                "id": problem_id,
+                "platform": "boj",
+                "problem_ref": str(problem_id),
+                "title": problem["title"],
+                "tier": problem["tier"],
+                "tier_name": problem["tier_name"],   # normalize_common_row 가 항상 채운다
+                "tags": problem["tags"],
+            }
+
+        # 수집 함수는 예외 대신 실패 문자열을 반환한다 — 리뷰·재리뷰와 같은 해석기를 써서
+        # 실패를 빈 본문으로 바꾼다.
+        statement = resolve_statement(platform, problem_info)
+
+        try:
+            result = analyzer.analyze_code(problem_info, statement, problem["code"])
+        except ValueError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        except Exception as e:
+            raise upstream_failure("코드 분석 실패", e)
+    except Exception:
         _restore()
         raise
-
-    if platform == "codeforces":
-        # 조회 실패를 400/500 으로 매핑하는 공용 해석기를 쓴다(직접 호출하면 ValueError 가 500 으로만 샌다).
-        problem_info = resolve_problem_info("codeforces", None, problem_ref)
-    else:
-        problem_id = problem["problem_id"]
-        problem_info = {
-            "id": problem_id,
-            "platform": "boj",
-            "problem_ref": str(problem_id),
-            "title": problem["title"],
-            "tier": problem["tier"],
-            "tier_name": problem["tier_name"],   # normalize_common_row 가 항상 채운다
-            "tags": problem["tags"],
-        }
-
-    # 수집 함수는 예외 대신 실패 문자열을 반환한다 — 리뷰·재리뷰와 같은 해석기를 써서
-    # 실패를 빈 본문으로 바꾼다.
-    statement = resolve_statement(platform, problem_info)
-
-    try:
-        result = analyzer.analyze_code(problem_info, statement, problem["code"])
-    except ValueError as e:
-        _restore()
-        raise HTTPException(status_code=502, detail=str(e))
-    except Exception as e:
-        _restore()
-        raise upstream_failure("코드 분석 실패", e)
 
     # solved 기록의 제목·태그·식별자를 쓰되 빈 값으로 덮지 않는다 — CF 는 문제 조회에서
     # 받아오므로 solved 행이 비어 있으면 그걸 살려야 한다.

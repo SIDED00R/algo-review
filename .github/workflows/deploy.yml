@@ -116,7 +116,8 @@ jobs:
             source: "."
             smoke: db
             # --set-env-vars 는 치환이다. DB_PATH: 컨테이너가 non-root 라 /app 에 못 쓴다.
-            extra_args: "--allow-unauthenticated --set-env-vars DEMO_MODE=true,DB_PATH=/tmp/demo.db"
+            # APP_URL 이 없으면 GitHub OAuth redirect 가 http://localhost:8080 으로 간다.
+            extra_args: "--allow-unauthenticated --set-env-vars DEMO_MODE=true,DB_PATH=/tmp/demo.db,APP_URL=https://algo-review-demo-dqrvxahm6a-du.a.run.app"
           # 실행 전용: 앱만 호출할 수 있고, 권한이 없는 전용 SA 로 돌며, VPC 로만 나가는
           # 서브넷(NAT 없음)이라 제출 코드가 외부로 나가지 못한다. env 는 비운다 —
           # 이 컨테이너에 값이 있으면 제출 코드가 /proc/1/environ 으로 읽는다.
@@ -146,6 +147,34 @@ jobs:
       - name: Deploy ${{ matrix.service }}
         run: gcloud run deploy ${{ matrix.service }} --source ${{ matrix.source }} --region "$REGION" --project "$PROJECT_ID" ${{ matrix.extra_args }} --quiet
 
+  smoke:
+    name: Smoke ${{ matrix.service }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: algo-review
+            smoke: db
+          - service: algo-review-demo
+            smoke: db
+          - service: algo-executor
+            smoke: execute
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: boj-code-review-2024
+          workload_identity_provider: projects/707325519995/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@boj-code-review-2024.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Resolve ${{ matrix.service }} URL
         id: url
         run: |
@@ -171,26 +200,36 @@ jobs:
         # 배포가 성공해도 서비스가 기능적으로 죽어 있을 수 있다 — server.py 는 DB 연결 실패를
         # warning 으로 넘기고 /health 는 DB 가 죽어도 200 을 준다. db 필드로 그것을 가른다.
         # 실행 서비스는 /health 가 아무것도 증명하지 못한다(의존성이 없다) — 실제로 코드를
-        # 한 번 돌려 본다.
+        # 한 번 돌려 본다. algo-review(운영)의 db:ok 미달은 온디맨드 Cloud SQL 정지가 정상
+        # 상태이므로 warning 으로만 남기고 실패시키지 않는다 — 나머지 서비스는 하드 실패.
         env:
           URL: ${{ steps.url.outputs.url }}
           ID_TOKEN: ${{ steps.idtoken.outputs.id_token }}
           SMOKE: ${{ matrix.smoke }}
+          SERVICE: ${{ matrix.service }}
         run: |
           if [ "$SMOKE" = "execute" ]; then
             CODE=$(curl -sS -m 90 -o /tmp/run.json -w '%{http_code}' -X POST \
                      -H "Authorization: Bearer $ID_TOKEN" -H "Content-Type: application/json" \
                      -d '{"code":"print(6*7)","language":"Python 3","stdin":"","timeout_sec":5}' \
-                     "$URL/run")
+                     "$URL/run" || true)
           else
             CODE=$(curl -sS -m 30 -o /tmp/run.json -w '%{http_code}' \
-                     -H "Authorization: Bearer $ID_TOKEN" "$URL/health")
+                     -H "Authorization: Bearer $ID_TOKEN" "$URL/health" || true)
           fi
-          BODY=$(cat /tmp/run.json)
+          if [ -z "$CODE" ] || [ "$CODE" = "000" ]; then
+            echo "::error::$URL 호출 자체가 실패했습니다(타임아웃/DNS 등)"
+            exit 1
+          fi
+          BODY=$(cat /tmp/run.json 2>/dev/null || echo "")
           echo "$CODE $BODY"
           # 403 을 "DB 이상" 으로 보고하면 엉뚱한 곳을 뒤지게 된다 — 원인을 갈라 준다.
           if [ "$CODE" = "401" ] || [ "$CODE" = "403" ]; then
             echo "::error::$URL 호출이 $CODE — 배포 SA 에 run.routes.invoke 가 있는지 확인하세요"
+            exit 1
+          fi
+          if [ "$CODE" != "200" ]; then
+            echo "::error::$URL 호출이 $CODE"
             exit 1
           fi
           if [ "$SMOKE" = "execute" ]; then
@@ -199,22 +238,27 @@ jobs:
               exit 1
             }
           else
-            echo "$BODY" | grep -q '"db":"ok"' || {
+            if echo "$BODY" | grep -q '"db":"ok"'; then
+              :
+            elif [ "$SERVICE" = "algo-review" ]; then
+              echo "::warning::$URL/health 가 db:ok 를 주지 않습니다 — 온디맨드 Cloud SQL 정지 중이면 정상입니다"
+            else
               echo "::error::$URL/health 가 db:ok 를 주지 않습니다 — DB 연결·env 를 확인하세요"
               exit 1
-            }
+            fi
           fi
 
   verify-execute:
     name: Verify 예제 실행 (운영)
     needs: [deploy]
     # 서비스별 스모크는 각자 살아 있는 것만 본다 — 앱이 실행 서비스를 실제로 호출하는지는
-    # 여기서만 드러난다. 이 결함(#142)이 배포를 통과한 이유가 그것이다.
+    # 여기서만 드러난다.
     #
-    # deploy 잡의 결론을 보지 않는다(!cancelled). 온디맨드 Cloud SQL 이 정지 중이면 앱
-    # 스모크가 db:ok 를 받지 못해 deploy 가 빨강이 되는데, 실행 경로는 DB 를 쓰지 않으므로
-    # 그때도 확인해야 한다(#144). 배포 자체의 실패는 deploy 잡이 그대로 빨강으로 남는다.
-    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    # deploy 잡의 결론만 보지 않는다(!cancelled) — smoke 잡의 결과와는 별개로 이 검증이
+    # 돈다(예: algo-review 의 db:ok 미달은 smoke 에서 warning 일 뿐 실패가 아니다). deploy
+    # 잡 자체가 스킵되면(lint·test 실패로 배포가 아예 없었던 경우) 검증할 배포가 없으므로
+    # 함께 스킵한다.
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.deploy.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

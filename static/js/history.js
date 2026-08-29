@@ -29,7 +29,8 @@ async function loadHistory({ keepControls = false } = {}) {
   setLoading(historyBtn, true);
   if (!keepControls) {
     _historyPage = 1;
-    list.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
+    (document.getElementById('h-rows') || list).innerHTML =
+      '<div class="alert alert-info"><span class="spinner"></span> 불러오는 중...</div>';
   }
 
   try {
@@ -38,13 +39,13 @@ async function loadHistory({ keepControls = false } = {}) {
     if (token !== _historyToken) return;
     _historyTotal = data.total || 0;
     if (!keepControls) renderHistoryControls(list);
-    renderProblemList(list, data.problems || [], _historyTotal > 0 || hasHistoryFilter());
+    renderProblemList(document.getElementById('h-rows'), data.problems || [], _historyTotal > 0 || hasHistoryFilter());
     renderPager(document.getElementById('h-pager'), _historyPage,
                 Math.max(1, Math.ceil(_historyTotal / HISTORY_PER_PAGE)),
                 page => { _historyPage = page; loadHistory({ keepControls: true }); });
   } catch (e) {
     if (token !== _historyToken) return;
-    showError(list, e.message);
+    showError(document.getElementById('h-rows') || list, e.message);
   } finally {
     if (token === _historyToken) setLoading(historyBtn, false);
   }
@@ -84,6 +85,9 @@ function renderHistoryControls(container) {
   pager.id = 'h-pager';
   pager.className = 'pager';
   container.appendChild(pager);
+  const rows = document.createElement('div');
+  rows.id = 'h-rows';
+  container.appendChild(rows);
 
   // 필터가 바뀌면 첫 페이지부터 다시 받는다. 입력마다 서버를 치지 않도록 묶는다.
   const reload = debounce(() => { _historyPage = 1; loadHistory({ keepControls: true }); });
