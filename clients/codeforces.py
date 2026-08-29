@@ -187,9 +187,9 @@ def _replace_tex_images_with_markers(el) -> None:
 def cf_xpath_text(tree, expr: str) -> str:
     """선택한 요소의 텍스트를 뽑는다.
 
-    주의: 조회 전용이 아니라 tree 를 in-place 로 변경한다 — 선택된 서브트리에서
+    조회 전용이 아니라 tree 를 in-place 로 변경한다 — 선택된 서브트리에서
     script/style/section-title 과 수식 <img> 를 실제로 제거한다. 같은 tree 를 다른
-    xpath 로 다시 읽는 코드를 추가할 때는 이미 제거된 상태를 본다는 점에 유의할 것.
+    xpath 로 다시 읽으면 이미 제거된 상태를 본다.
     """
     nodes = tree.xpath(expr)
     if not nodes:
@@ -210,10 +210,9 @@ def cf_xpath_text(tree, expr: str) -> str:
 def _extract_samples(container) -> list[dict]:
     """예제 입출력 쌍 목록.
 
-    CF는 sample-test 가 문제당 하나이고 그 안에 input/output <pre> 쌍이 여러 개 들어간다 —
-    컨테이너 단위로 순회하며 첫 쌍만 취하면 2번째 이후 예제가 통째로 사라진다.
-    zip 대신 zip_longest 를 쓰는 이유: 인터랙티브 문제처럼 output 이 없는 쪽이 섞이면
-    zip 은 짧은 쪽에서 잘라 예제 전체를 날린다. 없는 쪽은 빈 문자열로 보존한다.
+    CF는 sample-test 가 문제당 하나이고 그 안에 input/output <pre> 쌍이 여러 개 들어간다.
+    zip 대신 zip_longest 를 쓴다. 인터랙티브 문제처럼 output 이 없는 쪽이 섞이면
+    zip 은 짧은 쪽에서 잘라 예제를 날린다. 없는 쪽은 빈 문자열로 보존한다.
     """
     samples = []
     for test in container.xpath('.//div[contains(@class,"sample-test")]'):

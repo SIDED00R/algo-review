@@ -54,7 +54,7 @@
 }
 .btn-ghost:hover:not(:disabled) { color: var(--fg); text-decoration-color: var(--fg); }
 
-/* 비활성 — opacity 로 흐리면 대비가 1.5~2:1 로 붕괴한다. 토큰으로 표현한다. */
+/* 비활성 — opacity 대신 토큰 색으로 표현한다. */
 .btn-primary:disabled, .btn-secondary:disabled, .btn-sm:disabled,
 .btn-ghost:disabled, .page-btn[disabled] {
   background: var(--surface-2);

@@ -153,8 +153,7 @@ def test_tex_markers_to_markdown_leaves_plain_text_untouched():
 
 
 def test_multiple_samples_are_all_extracted():
-    """CF 는 sample-test 가 문제당 하나이고 그 안에 예제 쌍이 여러 개다 —
-    컨테이너 단위로 첫 쌍만 취하면 2번째 이후 예제가 통째로 사라진다."""
+    """CF 는 sample-test 가 문제당 하나이고 그 안에 예제 쌍이 여러 개다. 모든 쌍을 추출한다."""
     from clients.codeforces import _extract_samples
 
     tree = _parse("""

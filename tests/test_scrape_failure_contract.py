@@ -5,8 +5,7 @@
 가려내지 못하면, 그 문자열이 LLM 프롬프트의 문제 설명 자리에 그대로 박히고
 `save_review` 가 `problem_statement` 로 영구 저장한다.
 
-판별자만 리터럴로 검사하거나 생산자를 리터럴 반환 람다로 monkeypatch 하면 **양쪽이
-갈려도 전부 초록**이다. 그래서 여기서는 `requests` 만 스텁하고 **실제 생산자**를 호출한다.
+여기서는 `requests` 만 스텁하고 **실제 생산자**를 호출한다.
 """
 from unittest.mock import MagicMock, patch
 

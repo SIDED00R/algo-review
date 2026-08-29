@@ -1,9 +1,6 @@
 """저장되는 시각의 계약 — 항상 UTC, 항상 오프셋.
 
-오프셋 없이 저장하면 그 문자열이 어느 지역의 벽시계인지 알 수 없다. Cloud Run 은 UTC,
-개발 기계는 KST 라 같은 코드가 만든 값의 의미가 환경마다 달랐고, 그래서 같은 제출이
-GitHub README(KST 로 변환)와 앱 화면(원문을 그대로 자름)에서 **다른 날짜**로 보였다.
-한국 시각 00:00~09:00 제출은 앱에서 전날로 찍혔다 — 하루의 9시간.
+Cloud Run 은 UTC, 개발 기계는 KST 다.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -44,7 +41,7 @@ def test_the_app_and_the_github_readme_agree_on_the_day(at_time):
     """같은 제출이 두 날짜로 보이면 안 된다.
 
     README 는 KST 로 변환해 적고, 화면은 보는 사람의 시간대로 적는다. 한국 사용자라면
-    둘이 같은 날이어야 한다. 저장값을 그냥 잘라 쓰던 시절에는 여기서 하루가 어긋났다.
+    둘이 같은 날이어야 한다.
     """
     at_time(EARLY_MORNING_KST)
     mk_review()

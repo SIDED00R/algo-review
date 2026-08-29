@@ -184,8 +184,7 @@ def fetch_repo_tree(repo: str, token: str | None = None) -> list[dict]:
 def _leading_problem_number(folder: str) -> int | None:
     """폴더명 앞의 문제 번호를 뗀다. `1000. A＋B` 와 `1000번. A+B` 를 모두 받는다.
 
-    숫자 뒤에 `.` 이 와야 하고 그 앞의 `번` 은 있어도 된다 — 경계를 요구하지 않으면
-    `3142` 가 `31429` 를, `1183` 이 `11834` 를 잡고 `2024 대회 후기` 가 2024번이 된다.
+    숫자 뒤에 `.` 이 와야 하고 그 앞의 `번` 은 있어도 된다.
     """
     m = re.match(r"(\d+)(번)?\s*\.", folder.strip())
     return int(m.group(1)) if m else None
@@ -194,9 +193,8 @@ def _leading_problem_number(folder: str) -> int | None:
 def get_boj_readme_paths(repo: str, token: str | None = None) -> dict[int, list[str]]:
     """BOJ 문제 번호 → README.md 경로 후보 목록.
 
-    폴더명을 조립해 맞히려 하면 실패한다 — BaekjoonHub 는 공백을 U+2005 로, 특수문자를
-    전각으로 바꾸고 `번` 을 붙이지 않으며, 티어 폴더도 저장 당시 값이라 DB 와 다를 수 있다.
-    번호로 트리를 뒤지는 편이 정확하다.
+    BaekjoonHub 경로는 공백을 U+2005 로, 특수문자를 전각으로 바꾸고 `번` 을 붙이지 않으며,
+    티어 폴더도 저장 당시 값이라 DB 와 다를 수 있다. 번호로 트리를 뒤진다.
 
     같은 문제에 폴더가 둘 있을 수 있다(BaekjoonHub 것 + 이 앱이 올린 것). 둘 다 돌려주고
     호출자가 본문이 나오는 것을 고르게 한다.

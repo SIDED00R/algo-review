@@ -40,7 +40,7 @@ def test_loader_always_assigns_problem_statement(client):
     """문제 설명 칸을 조건 없이 대입해야 한다.
 
     resolve_statement 는 요청에 본문이 있으면 무조건 그것을 쓴다. 이전 문제의 붙여넣은
-    본문이 남아 있으면 다른 문제를 그 본문으로 리뷰하는 조용한 오답이 난다.
+    본문이 남아 있으면 다른 문제가 그 본문으로 리뷰된다.
     """
     js = _asset(client, "/static/js/load-submission.js")
     # 공백·따옴표에 흔들리지 않게 정규식으로 본다 — 정확 문자열 검사는 포매팅 한 번에

@@ -28,11 +28,11 @@ def _run_review(platform: str, review: dict) -> dict:
         "problem_ref": review["problem_ref"], "title": review["title"],
         "tier": review["tier"], "tier_name": review["tier_name"], "tags": review["tags"],
     }
-    # 저장된 본문(없으면 최신 회차 것)을 넘긴다 — 아래 _repush_bundle 도 같은 값을 쓴다.
+    # 문제 단위로 저장된 본문을 넘긴다 — 비어 있으면 resolve_statement 가 스크래핑한다.
     statement = resolve_statement(
         platform, problem_info,
         db.get_stored_problem_statement(platform, review["problem_ref"]))
-    # 상한 도입 이전에 저장된 행이 있을 수 있다 — 저장 시점 검증만 믿지 않고 여기서도 본다.
+    # 저장된 코드에도 길이 상한을 적용한다 — 가져오기로 들어온 행은 요청 본문 검증을 거치지 않는다.
     require_reviewable_code(review["code"])
     try:
         return analyzer.analyze_code(problem_info, statement, review["code"])
@@ -61,8 +61,8 @@ def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool,
             platform=platform, problem_ref=problem_ref, title=review["title"],
             tier_name=review["tier_name"], tags=review["tags"], language=review["language"],
             code=review["code"], review=review, submitted_at=review.get("created_at", ""),
-            # 저장된 본문이 있으면 그걸 쓴다 — 없으면 push_review_bundle 이 스크래핑하고, BOJ 는
-            # 빈 섹션이 돌아와 이미 올라간 문제 설명을 지운다.
+            # 이 회차 본문 → 문제 단위 저장 본문 순으로 쓴다. description 이 비면
+            # push_review_bundle 이 스크래핑하고, 실패 시 빈 문제 설명 섹션을 올린다.
             description=review.get("problem_statement") or db.get_stored_problem_statement(platform, problem_ref),
         )
     except HTTPException as e:

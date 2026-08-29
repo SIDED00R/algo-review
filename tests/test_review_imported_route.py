@@ -40,7 +40,7 @@ def _capture(seen):
 
     한 줄짜리 대역(`lambda ...: seen.setdefault("statement", s) or _RESULT`)으로 쓰면
     setdefault 가 truthy 를 돌려줄 때 `or` 가 단락돼 dict 대신 문자열이 반환된다
-    (KeyError: 'efficiency'). 그래서 명시 함수로 둔다.
+    (KeyError: 'efficiency'). 명시 함수로 둔다.
     """
     def _fake(info, statement, code):
         seen["info"] = dict(info)

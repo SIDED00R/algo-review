@@ -27,16 +27,14 @@ def cache_get(key: str, max_age_sec: int):
     if not row:
         return None
     payload, updated_at = row
-    # UTC aware 로 통일한다. 파싱 불가한 시각은 만료로 취급한다 — 예외가 나가면 호출부가
-    # cache_set 에 도달하지 못해 그 키가 영구히 복구 불능이 된다.
+    # updated_at 은 오프셋 붙은 ISO 다. 파싱 불가한 값은 만료로 본다.
     try:
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(updated_at)).total_seconds()
     except (TypeError, ValueError):
         return None
     if age > max_age_sec:
         return None
-    # 손상된 페이로드(수동 편집, 부분 쓰기 등)도 fromisoformat 과 같은 이유로 감싼다 —
-    # 여기서 예외가 나가면 cache_set 에 도달하지 못해 그 키가 영구히 자가 복구 불능이 된다.
+    # 손상된 페이로드(수동 편집, 부분 쓰기 등)도 감싼다. 파싱 실패는 만료로 본다.
     try:
         return json.loads(payload)
     except (TypeError, ValueError):
@@ -58,8 +56,7 @@ def cache_set(key: str, payload) -> None:
     """JSON 직렬화 가능한 페이로드를 upsert한다.
 
     merge() 는 SELECT 후 없으면 INSERT 라, 인스턴스 두 개가 같은 키를 동시에 채우면
-    한쪽이 IntegrityError 를 받는다. 캐시 쓰기는 **부수 효과**이므로 그것 때문에 요청이
-    500 이 되면 안 된다 — 상대가 이미 같은 값을 넣었다는 뜻이라 그냥 넘어간다.
+    한쪽이 IntegrityError 를 받는다. 캐시 쓰기는 부수 효과다.
     """
     data = json.dumps(payload, ensure_ascii=False)
     now = datetime.now(timezone.utc).isoformat()

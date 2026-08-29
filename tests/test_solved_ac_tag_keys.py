@@ -1,8 +1,8 @@
 """solved.ac 태그 이름 → 검색 키 변환의 캐시 규약.
 
-키를 틀리면 검색이 200 + 빈 목록을 주므로 `ProblemSearchError` 도 나지 않는다 —
-`/api/recommend` 가 error 없이 그 태그만 조용히 빈다. 그래서 **추측 키가 만료 없는
-성공 캐시에 들어가면** 프로세스 수명 동안 그 태그의 추천이 죽는다.
+키를 틀리면 검색이 200 + 빈 목록을 주므로 `ProblemSearchError` 도 나지 않는다.
+`/api/recommend` 가 error 없이 그 태그만 조용히 빈다. 추측 키가 만료 없는 성공
+캐시에 들어가면 프로세스 수명 동안 그 태그의 추천이 죽는다.
 """
 from unittest.mock import MagicMock, patch
 

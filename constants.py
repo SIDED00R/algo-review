@@ -21,8 +21,8 @@ TIER_NAMES = {
 
 
 def normalize_platform(value: str, default: str = "boj") -> str:
-    """소문자로 정규화한다. 화이트리스트 검증은 하지 않는다 — 호출부의 실패 방식이
-    다르기 때문이다(pydantic 은 ValueError, 라우터는 HTTPException 400)."""
+    """소문자로 정규화한다. 화이트리스트 검증은 하지 않는다. 호출부마다 실패 방식이
+    다르다(pydantic 은 ValueError, 라우터는 HTTPException 400)."""
     return (value or default).strip().lower()
 
 

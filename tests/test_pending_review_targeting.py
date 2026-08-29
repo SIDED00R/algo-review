@@ -84,7 +84,7 @@ def test_tag_stats_count_once_even_when_two_pending_rounds_exist(at_time):
 
 
 def test_review_id_is_required(at_time):
-    """대상을 지정하지 않는 호출은 막는다 — '가장 최신 대기 행' 추측이 이 버그의 원인이었다."""
+    """대상을 지정하지 않는 호출은 막는다 — review_id 는 필수 키워드 인자다."""
     mk_pending("코드 A", at_time, "2026-01-01T00:00:00")
     with pytest.raises(TypeError):
         db.update_pending_review("boj", "1000", RESULT_FOR_A)

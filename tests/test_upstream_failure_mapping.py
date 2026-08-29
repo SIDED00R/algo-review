@@ -45,7 +45,7 @@ def test_codeforces_transport_error_is_upstream_unavailable(monkeypatch, exc):
 
 
 def test_upstream_unavailable_is_still_a_value_error():
-    """기존 `except ValueError` 핸들러의 동작을 깨지 않는다 — 그래서 상속으로 둔다."""
+    """UpstreamUnavailable 은 ValueError 를 상속한다. 기존 `except ValueError` 핸들러가 그대로 동작한다."""
     assert issubclass(UpstreamUnavailable, ValueError)
 
 
