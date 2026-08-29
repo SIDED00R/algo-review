@@ -99,6 +99,30 @@ def test_search_ignores_case_and_surrounding_space():
     assert db.get_problems_grouped(q="  dIjKsTrA ")["total"] == 1
 
 
+def test_search_treats_underscore_as_a_literal_character():
+    """`_` 는 SQL LIKE 와일드카드(임의 한 글자)다 — 이스케이프가 없으면 전 행이 걸린다."""
+    mk_review(problem_id=1, problem_ref="1", title="A_B")
+    mk_review(problem_id=2, problem_ref="2", title="다른 문제")
+
+    def refs(**kw):
+        return {p["problem_ref"] for p in db.get_problems_grouped(**kw)["problems"]}
+
+    assert refs(q="_") == {"1"}
+    assert refs(q="A_B") == {"1"}
+
+
+def test_search_treats_percent_as_a_literal_character():
+    """`%` 는 SQL LIKE 와일드카드(임의 길이)다 — 이스케이프가 없으면 전 행이 걸린다."""
+    mk_review(problem_id=1, problem_ref="1", title="A%B")
+    mk_review(problem_id=2, problem_ref="2", title="다른 문제")
+
+    def refs(**kw):
+        return {p["problem_ref"] for p in db.get_problems_grouped(**kw)["problems"]}
+
+    assert refs(q="%") == {"1"}
+    assert refs(q="a%b") == {"1"}
+
+
 def test_tier_and_platform_and_efficiency_filters():
     mk_review(problem_id=1, problem_ref="1", tier=5, efficiency="good")
     mk_review(problem_id=2, problem_ref="2", tier=15, efficiency="poor")

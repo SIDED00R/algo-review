@@ -84,8 +84,7 @@ def test_no_graded_tier_reports_na_instead_of_a_fake_tier(minimal_client):
 
 
 def test_no_graded_tier_has_zero_avg_tier_and_real_band(minimal_client, monkeypatch):
-    """등급 있는 기록이 없어 avg_tier 는 0 이어도, tier_range 는 실제로 검색에 쓰인 밴드를
-    그대로 보여준다 — recommendations 가 채워진 화면에서 "-" 는 항상 거짓이다."""
+    """등급 있는 기록이 없어 avg_tier 가 0 이어도 tier_range 는 실제로 검색에 쓰인 밴드다."""
     monkeypatch.setattr(recommend.recommender, "get_weak_tags_scored", lambda *a, **k: ["math"])
     monkeypatch.setattr(recommend.recommender, "get_tag_key_by_name", lambda t: t)
 

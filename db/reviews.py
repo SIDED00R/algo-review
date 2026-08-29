@@ -366,8 +366,7 @@ def has_graded_tier() -> bool:
             select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
 
 
-# get_average_cf_rating() 의 윈도우 서브쿼리와 공유 — CF 레이팅 필터는 두 함수가 같은
-# 모집단을 봐야 한다(BOJ 쪽 tier > 0 과 대응).
+# 'Codeforces N' 라벨이 붙은 CF 리뷰 행의 술어. has_cf_rating() 과 get_average_cf_rating() 이 공유한다.
 _CF_RATED = (
     Review.platform == "codeforces",
     Review.tier_name.like("Codeforces %"),
