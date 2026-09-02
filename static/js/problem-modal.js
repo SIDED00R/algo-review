@@ -69,6 +69,8 @@ async function openProblemModal(ref, title, tierName) {
   pmReviewBtnReset.textContent = '코드 리뷰 진행';
   pmReviewBtnReset.title = '';
   window.setEditorValue('pm-code', '');
+  // 임시 저장 키는 문제마다 다르다. bindDraft 는 에디터를 비운 뒤에 부른다.
+  window.bindDraft('pm-code', `codeforces:${ref}`);
 
   try {
     const data = await fetchJsonOk(`/api/problem/cf/${ref}`, undefined, '문제 로딩 실패');
@@ -146,6 +148,8 @@ async function openProblemModal(ref, title, tierName) {
 
 function closeProblemModal() {
   document.getElementById('problem-modal').classList.add('hidden');
+  // unbindDraft 는 대기 중인 임시 저장을 먼저 보낸다.
+  window.unbindDraft('pm-code');
   // 진행 중인 예제 실행이 사라진 노드를 건드리지 않게 세대를 넘긴다.
   _runToken++;
   resetRunButton();
@@ -325,4 +329,6 @@ problemModalEl.addEventListener('click', e => {
 });
 // Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. Esc 리스너는 모달 루트에 걸려야
 // 한다 — document 레벨이면 위에 열린 ⌘K 팔레트와 함께 닫힌다.
-registerModal('problem-modal', closeProblemModal, { initial: '#pm-close-btn' });
+// 이 모달은 코드 에디터를 담고 있어 Esc 로 닫지 않는다 — 닫기는 ✕ 버튼과 바깥 클릭이다.
+registerModal('problem-modal', closeProblemModal,
+              { initial: '#pm-close-btn', escapeCloses: false });

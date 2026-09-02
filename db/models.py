@@ -92,3 +92,14 @@ class ApiCache(Base):
     cache_key: Mapped[str] = mapped_column(Text, primary_key=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CodeDraft(Base):
+    __tablename__ = "code_drafts"
+
+    # 키 하나가 에디터 자리 하나다 — 메인 리뷰 탭은 'main', 문제 뷰어는 'codeforces:{ref}'.
+    draft_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    code: Mapped[str] = mapped_column(Text, nullable=False)
+    # 복원할 때 되돌릴 언어 선택 값이다.
+    language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)

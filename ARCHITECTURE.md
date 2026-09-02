@@ -98,7 +98,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | 파일 | 단일 책임 |
 |------|----------|
-| `db/models.py` | ORM 모델 5개(Review·TagStat·SolvedHistory·GithubSetting·ApiCache) + 인덱스. `reviews.problem_statement` 는 불러오기로 폼을 복원할 때 쓰는, 사용자가 붙여 넣은 원문이다 |
+| `db/models.py` | ORM 모델 6개(Review·TagStat·SolvedHistory·GithubSetting·ApiCache·CodeDraft) + 인덱스. `reviews.problem_statement` 는 불러오기로 폼을 복원할 때 쓰는, 사용자가 붙여 넣은 원문이다 |
 | `db/connection.py` | 지연 엔진 싱글턴(`get_engine`)·세션 컨텍스트(`session_scope`)·`dispose_engine` |
 | `db/migrate.py` | 프로그래매틱 Alembic `upgrade head` 실행(`run_migrations`) |
 | `db/normalize.py` | reviews/solved 행 정규화 공용 헬퍼 (platform·problem_ref·tags·tier_name 폴백) |
@@ -106,6 +106,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
+| `db/drafts.py` | code_drafts 테이블 CRUD — 에디터 임시 저장본. 키 하나가 에디터 자리 하나다(`main` · `codeforces:{ref}`). 빈 코드는 저장하지 않고 행을 지운다 |
 | `db/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 | `db/paging.py` | 목록 API 페이지네이션 경계(`paging_bounds`, 상한 100)와 검색 술어(`search_filter`) — 리뷰 기록·가져온 기록 공용 |
 | `migrations/` | Alembic 환경(`env.py`) + 리비전(`versions/`) |
@@ -132,6 +133,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. 앱 안에서 직접 실행하는 경로는 로컬 개발 전용이다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
+| `routes/drafts.py` | `GET /api/drafts/{key}`, `POST /api/drafts/{key}` | 에디터 임시 저장본 조회/저장. 없는 저장본은 404 가 아니라 빈 값이다 — 프론트가 '아직 없음' 과 '조회 실패' 를 구분해야 한다 |
 | `routes/history.py` | `GET /api/reviews/grouped`, `GET /api/reviews/problem/{platform}/{ref}` | 리뷰 기록 조회 |
 | `routes/solved.py` | `/api/solved-history/*`, `POST /api/review-imported/*` | 가져온 기록 관리 + AI 리뷰 요청 |
 | `routes/stats.py` | `GET /api/stats`, `GET /api/tier-history` | 통계 및 티어 이력 조회 |
@@ -165,7 +167,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `theme.js` | 다크/라이트 테마 토글 (`html[data-theme]`). 첫 페인트 전 확정은 `index.html` `<head>` 인라인 스크립트가 담당 |
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
-| `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다 |
+| `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다. `escapeCloses: false` 는 Esc 닫기만 끈다(에디터가 든 모달용) |
+| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 메인 리뷰 탭은 로드 시 `main` 에 붙고, 문제 뷰어는 열 때 `codeforces:{ref}` 에 붙는다 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
@@ -226,6 +229,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `import-history.js` | `GET /api/solved-history` | 가져온 기록 목록 조회 |
 | `load-submission.js` | `GET /api/reviews/problem/{platform}/{ref}` | 지난 제출 코드·언어·문제 설명 조회 |
 | `command-palette.js` | `GET /api/reviews/grouped` | 팔레트 문제 검색 목록 |
+| `draft.js` | `GET /api/drafts/{key}` · `POST /api/drafts/{key}` | 임시 저장본 복원 / 자동·수동 저장 |
 
 ---
 
@@ -262,9 +266,11 @@ GitHub OAuth 토큰(`scope=repo`)을 DB 에 저장하고 공개 엔드포인트�
 - `GET /api/reviews/problem/...` — 저장된 소스코드·리뷰 전문 열람
 - `/api/report` · `/api/problem/cf/...` — 무제한 유료 LLM 호출
 - `DELETE /api/solved-history` — 가져온 기록 전량 삭제
+- `GET`·`POST /api/drafts/{key}` — 작성 중인 코드 열람·덮어쓰기(빈 코드로 삭제)
 
-데모 서비스는 공개로 두어도 된다 — `DEMO_MODE` 가 쓰기·과금·코드 실행을 전부 차단하고
-DB 가 컨테이너 임시 파일이다.
+데모 서비스는 공개로 두어도 된다 — `DEMO_MODE` 가 과금·코드 실행·GitHub 접근을 차단하고
+DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리뷰 저장·임시 저장) — 그 임시 파일
+안에서 끝나고 방문자끼리 공유된다.
 
 
 ---
@@ -296,6 +302,9 @@ DB 가 컨테이너 임시 파일이다.
 | 비텍스트 대비 | 텍스트 대비(1.4.3)만 검산하면 **1.4.11(비텍스트 3:1)** 이 빠진다. 폼·`.btn-secondary`·칩은 배경이 지면과 1.03~1.06:1 이라 테두리가 유일한 식별 수단인데 `--line`/`--line-strong` 은 1.15~1.68:1 이었다 | 컨트롤 경계 전용 `--line-control` 을 분리한다(카드 구분선은 장식이라 대상 아님 — 일괄 상향하면 화면이 시끄러워진다) |
 | ARIA 선언 vs 동작 | `role="tablist"` 를 선언하면 보조기술 사용자는 화살표 키 이동을 기대한다. 선언만 있고 동작이 없으면 없는 것보다 나쁘다 | 화살표·Home·End + roving tabindex 를 `tabs.js` 에 둔다. 마크업의 초기 `tabindex` 도 맞춘다(JS 실행 전 상태) |
 | 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달 셋 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |
+| 에디터 안의 Esc | CodeMirror 의 Esc(포커스 탈출)는 기본 동작만 막고 keydown 을 위로 흘려보낸다 — 모달 루트가 그것으로 닫히면 **작성 중이던 코드가 그대로 사라진다**(모달의 에디터 값은 닫는 순간 어디에도 남지 않는다) | 문제 뷰어만 `escapeCloses: false` 로 등록한다(닫기는 ✕ 버튼·바깥 클릭). 에디터가 없는 모달은 그대로 Esc 로 닫힌다 |
+| 임시 저장 바인딩 순서 | 문제 뷰어는 열 때 에디터를 비운다. 임시 저장에 **먼저** 붙이면 그 비우기가 변경으로 잡혀 복원본이 빈 값으로 덮인다 | `setEditorValue('pm-code', '')` **뒤에** `bindDraft` 한다. 닫을 때는 `unbindDraft` 가 디바운스 대기분을 먼저 넘긴다 |
+| 못 읽은 임시 저장본 | 조회가 실패했는데(온디맨드 DB 정지 등) 자동 저장을 켜면 **첫 타이핑이 읽지 못한 저장본을 덮어쓴다** — 실패한 순간이 곧 유실이다 | 조회 성공 시에만 `loaded` 를 세우고, 그때만 자동 저장한다. 실패한 자리는 '임시 저장' 버튼(수동)으로만 쓴다 |
 | 문자열 수준 테스트 | 빌드 스텝이 없어 JS/CSS 배선은 문자열 검사가 유일한 방어선이다. 정확 문자열은 공백·인용부호에 깨지고, 느슨한 부분문자열은 `ArrowRightX` 같은 오타를 통과시킨다. **결함을 설명하는 주석에 그 결함의 코드 형태가 적혀 있어** 거짓 빨강도 난다 | 정규식으로 쓰고, 규칙을 찾는 검사는 주석을 제거한 사본을 본다(`tests/test_frontend_invariants.py`) |
 | CSS 형제 결합자 | 인접(`+`)은 DOM 구조 기준이라 `display:none` 형제도 인접을 끊는다 — 가져오기 목록은 행마다 코드 패널 div 를 형제로 끼워 넣으므로 그 탭에서만 구분선이 겹친다 | 목록 행에는 일반 형제(`~`)를 쓴다 |
 | 오버레이 높이 | 모달 박스에 `max-height` 가 없으면 콘텐츠만큼 자라서 내부 `overflow-y:auto` 와 `overflow:hidden` 이 전부 무효가 되고(`scrollHeight == clientHeight`) 헤더가 화면 밖으로 나간다. 긴 CF 문제문에서 10,000px 이상 실측 | `.pm-box` 에 상한을 두고 자식은 `min-height:0` 만 갖는다. 자식에 상한을 나눠 주면 헤더 높이를 매직넘버로 빼야 한다 |

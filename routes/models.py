@@ -235,6 +235,18 @@ class ExecuteRequest(BaseModel):
         return max(1, min(v, 10))
 
 
+class DraftSaveRequest(BaseModel):
+    """에디터 임시 저장 요청. 코드가 비면 저장 대신 그 임시 저장본을 지운다(db.save_draft)."""
+    code: str
+    # 복원할 때 되돌릴 언어 선택 값이다 — select 의 option value 라 짧다.
+    language: str = Field(default="", max_length=50)
+
+    @field_validator("code")
+    @classmethod
+    def code_max_length(cls, v):
+        return validate_code_length(v)
+
+
 class ReviewResponse(BaseModel):
     problem_id: int
     platform: str
