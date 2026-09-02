@@ -46,6 +46,7 @@
    * @param {object} [opts]
    * @param {string} [opts.initial]  열릴 때 포커스할 셀렉터
    * @param {boolean} [opts.ownsEscape]  모달이 이미 Esc 를 처리하면 true (중복 방지)
+   * @param {boolean} [opts.escapeCloses]  false 면 Esc 로 닫지 않는다 (기본 true, 에디터가 든 모달용)
    */
   function registerModal(id, close, opts = {}) {
     const root = document.getElementById(id);
@@ -55,7 +56,7 @@
     root.tabIndex = -1;
 
     root.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && !opts.ownsEscape) {
+      if (e.key === 'Escape' && opts.escapeCloses !== false && !opts.ownsEscape) {
         e.preventDefault();
         e.stopPropagation();   // 겹쳐 열린 상위 모달까지 함께 닫히지 않게 한다
         close();

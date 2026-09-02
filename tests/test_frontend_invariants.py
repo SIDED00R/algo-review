@@ -467,6 +467,71 @@ def test_editor_has_a_keyboard_escape_route(js, html):
         assert f'id="{editor_id}-escape-help"' in html, f"{editor_id} 안내 요소가 없다"
 
 
+def test_the_problem_viewer_does_not_close_on_escape(js):
+    """뷰어 안에서 코드를 쓴다 — 에디터의 Esc(포커스 탈출)는 keydown 을 위로 흘려보내므로,
+    모달 루트가 그것으로 닫히면 작성 중이던 코드가 그대로 사라진다(이 모달의 에디터 값은
+    닫는 순간 어디에도 남지 않는다). 닫기는 ✕ 버튼과 바깥 클릭이다.
+
+    등록만 고정하면 공통 모듈이 옵션을 무시하게 돼도 통과한다 — 양쪽을 함께 못박는다.
+    """
+    assert re.search(r"opts\.escapeCloses\s*!==\s*false", js["modal-a11y.js"]), \
+        "registerModal 이 escapeCloses 를 보지 않는다 — 옵션이 no-op 이다"
+
+    call = re.search(r"registerModal\(\s*['\"]problem-modal['\"][^;]*\)",
+                     js["problem-modal.js"], re.S)
+    assert call, "문제 뷰어가 registerModal 로 등록되지 않는다"
+    assert re.search(r"escapeCloses:\s*false", call.group(0)), \
+        "문제 뷰어가 여전히 Esc 로 닫힌다"
+
+    # 에디터가 없는 모달은 그대로 Esc 로 닫혀야 한다 — 전역으로 끄면 접근성 규약이 사라진다.
+    other = re.search(r"registerModal\(\s*['\"]review-modal['\"][^;]*\)",
+                      js["history.js"], re.S)
+    assert other and "escapeCloses" not in other.group(0), \
+        "리뷰 기록 모달까지 Esc 닫기를 껐다"
+
+
+def test_the_problem_viewer_binds_its_draft_after_clearing_the_editor(js):
+    """순서가 뒤집히면 복원한 코드를 곧바로 지우고, 그 빈 값이 임시 저장본으로 덮인다."""
+    src = js["problem-modal.js"]
+    body = _js_function_body(src, "async function openProblemModal")
+    clear = re.search(r"setEditorValue\(\s*['\"]pm-code['\"]\s*,\s*['\"]['\"]\s*\)", body)
+    bind = re.search(r"bindDraft\(\s*['\"]pm-code['\"]", body)
+    assert clear and bind, "문제 뷰어가 임시 저장에 붙지 않는다"
+    assert clear.start() < bind.start(), "에디터를 비우기 전에 임시 저장에 붙는다"
+
+    # 닫기에서 떼지 않으면 닫는 순간의 마지막 편집(디바운스 대기분)이 유실된다.
+    assert re.search(r"unbindDraft\(\s*['\"]pm-code['\"]\s*\)",
+                     _js_function_body(src, "function closeProblemModal")), \
+        "모달을 닫을 때 대기 중인 임시 저장을 넘기지 않는다"
+
+
+def test_draft_autosave_waits_for_a_successful_load(js):
+    """저장본을 못 읽은 자리에 자동 저장을 켜면 첫 타이핑이 그 저장본을 덮어쓴다 —
+    조회가 실패하는 순간(온디맨드 DB 정지 등)이 곧 유실이다."""
+    src = js["draft.js"]
+    body = _js_function_body(src, "async function saveDraft")
+    assert re.search(r"!st\.loaded\s*&&\s*!manual", body), \
+        "불러오지 못한 자리에도 자동 저장이 나간다"
+
+    bind = _js_function_body(src, "async function bindDraft")
+    assert bind.index("st.loaded = true") > bind.index("catch"), \
+        "조회에 실패해도 자동 저장이 켜진다"
+
+
+def test_draft_controls_exist_for_every_editor(html, js):
+    """draft.js 는 `${editorId}-draft-status`·`-draft-btn` 규약으로 요소를 찾는다 —
+    마크업 id 가 어긋나면 저장 상태가 조용히 아무 데도 표시되지 않는다."""
+    src = js["draft.js"]
+    assert "${editorId}-draft-status" in src and "${editorId}-draft-btn" in src, \
+        "상태·버튼 조회 규약이 바뀌었다"
+    # 저장 시각은 UTC 다 — 변환 없이 그리면 자정 근처에서 어긋난다.
+    assert "parseStoredTime(" in src, "저장 시각을 변환 없이 그린다"
+    for editor_id in ("code-input", "pm-code"):
+        assert f"'{editor_id}':" in src, f"{editor_id} 가 임시 저장 배선에서 빠졌다"
+        assert f'id="{editor_id}-draft-status"' in html, f"{editor_id} 상태 요소가 없다"
+        assert f'id="{editor_id}-draft-btn"' in html, f"{editor_id} 임시 저장 버튼이 없다"
+
+
 def test_problem_modal_has_a_height_ceiling(css):
     """상한이 없으면 박스가 문제문 길이만큼 자란다.
 
@@ -520,6 +585,8 @@ def test_every_async_render_path_checks_its_generation_token(js):
         ("history.js", "async function openReviewModal", r"token !== _modalToken"),
         ("command-palette.js", "async function searchProblems", r"token !== _paletteToken"),
         ("command-palette.js", "async function showLedger", r"token !== _paletteToken"),
+        ("draft.js", "async function bindDraft", r"token !== st\.token"),
+        ("draft.js", "async function saveDraft", r"token !== st\.token"),
     ]
     for name, signature, pattern in guarded:
         body = _js_function_body(js[name], signature)

@@ -20,7 +20,7 @@ from demo_mode import IS_DEMO
 from routes import (
     auth, review, pending_review, rereview, github_push, problem, execute, recommend,
     history, solved, import_github, import_boj, import_codeforces,
-    stats, report, themes,
+    stats, report, themes, drafts,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -113,6 +113,7 @@ app.include_router(import_codeforces.router)
 app.include_router(stats.router)
 app.include_router(report.router)
 app.include_router(themes.router)
+app.include_router(drafts.router)
 
 
 @app.get("/health")

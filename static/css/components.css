@@ -115,6 +115,10 @@
   flex-wrap: wrap; margin-bottom: var(--s-1); }
 .field-head > label, .field-head > .label { margin-bottom: 0; }
 
+/* 임시 저장 줄 — 에디터 바로 아래에 버튼과 상태 문구를 한 줄로 둔다. */
+.draft-row { display: flex; align-items: center; gap: var(--s-2);
+  flex-wrap: wrap; margin-top: var(--s-1); }
+
 /* 한 줄 다중 필드 */
 .field-row { display: grid; gap: var(--s-3); margin-bottom: var(--s-4); }
 @media (min-width: 720px) {

@@ -175,6 +175,10 @@
       </div>
       <div id="code-input" class="cm-wrap"></div>
       <p id="code-input-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다.</p>
+      <div class="draft-row">
+        <button type="button" id="code-input-draft-btn" class="btn-ghost">임시 저장</button>
+        <span id="code-input-draft-status" class="hint" aria-live="polite"></span>
+      </div>
 
       <div class="action-row">
         <button id="review-btn" class="btn-primary">분석 시작</button>
@@ -447,7 +451,11 @@
             </select>
           </div>
           <div id="pm-code" class="pm-code"></div>
-          <p id="pm-code-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다.</p>
+          <p id="pm-code-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다. 이 창은 Esc 로 닫히지 않습니다.</p>
+          <div class="draft-row">
+            <button type="button" id="pm-code-draft-btn" class="btn-ghost">임시 저장</button>
+            <span id="pm-code-draft-status" class="hint" aria-live="polite"></span>
+          </div>
           <div class="pm-run-row">
             <button id="pm-run-btn" class="btn-primary btn-sm">예제 실행</button>
             <button id="pm-review-btn" class="btn-primary btn-sm btn-review">코드 리뷰 진행</button>
@@ -513,6 +521,8 @@
   <script src="/static/js/utils.js?v=__V__"></script>
   <!-- registerModal 을 제공한다 — 소비자(problem-modal·history·command-palette)보다 먼저 -->
   <script src="/static/js/modal-a11y.js?v=__V__"></script>
+  <!-- 에디터 임시 저장 (editor 의 cmEditors·utils 의 fetchJsonOk 의존) -->
+  <script src="/static/js/draft.js?v=__V__"></script>
   <!-- 기능별 모듈 -->
   <script src="/static/js/theme.js?v=__V__"></script>
   <script src="/static/js/github.js?v=__V__"></script>
