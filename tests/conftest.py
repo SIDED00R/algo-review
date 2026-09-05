@@ -40,7 +40,7 @@ _DEMO_AWARE_MODULES = [
     # DEMO_MODE=true 환경에서 demo_seed.seed() 가 테스트 DB 에 행을 심고 마이그레이션이
     # 스킵된다.
     "server",
-    "routes.auth", "routes.execute", "routes.github_push", "routes.import_boj",
+    "routes.auth", "routes.execute", "routes.github_push",
     "routes.import_codeforces", "routes.import_github", "routes.pending_review",
     "routes.problem", "routes.recommend", "routes.report", "routes.rereview",
     "routes.review", "routes.solved", "routes.themes",

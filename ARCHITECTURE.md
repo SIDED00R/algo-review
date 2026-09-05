@@ -9,14 +9,14 @@
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
 │  modal-a11y                                                     │
-│  import-history · import-github · import-boj · import-codeforces│
+│  import-history · import-github · import-codeforces             │
 └────────────────────────┬────────────────────────────────────────┘
                          │ HTTP (fetch)
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Routes (routes/)                                       │
 │  auth · review · pending_review · rereview · github_push        │
 │  problem · execute · recommend · themes · history · solved      │
-│  stats · report · import_github · import_boj · import_codeforces│
+│  stats · report · import_github · import_codeforces             │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
@@ -139,7 +139,6 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/stats.py` | `GET /api/stats`, `GET /api/tier-history` | 통계 및 티어 이력 조회 |
 | `routes/report.py` | `GET /api/report` | 종합 분석 리포트 생성 |
 | `routes/import_github.py` | `POST /api/import-github` | BaekjoonHub 저장소 가져오기 |
-| `routes/import_boj.py` | `POST /api/import` | BOJ 제출 기록 크롤링 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
 | `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) |
@@ -179,7 +178,6 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `report.js` | 종합 분석 리포트 표시 |
 | `import-history.js` | 가져온 기록 목록 표시, 필터/페이징, 코드 보기, AI 리뷰 요청 |
 | `import-github.js` | BaekjoonHub GitHub import 버튼 핸들러 |
-| `import-boj.js` | BOJ 제출 기록 import 버튼 핸들러 |
 | `import-codeforces.js` | Codeforces import 버튼 핸들러 |
 
 ---
@@ -206,9 +204,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/execute.py` | `executor.runner.run_code` | EXECUTE_ENABLED 인 로컬 개발에서만 인프로세스 실행 |
 | `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | LLM 종합 리포트 생성 |
-| `routes/import_boj.py` | `clients.get_user_submissions` | BOJ 제출 목록 크롤링 |
-| `routes/import_boj.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
+| `routes/import_github.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_codeforces.py` | `clients.get_codeforces_user_submissions` | CF 제출 기록 조회 |
 | `routes/themes.py` | `themes.build_theme_response` | 플랫폼별 테마 문제 풀에서 푼 문제 제외 후 응답 생성 |
 | `themes.py` | `clients.search_cf_problems_by_tag` | 테마(CF 태그)별 대표 문제 풀 조회 |

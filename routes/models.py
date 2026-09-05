@@ -13,8 +13,6 @@ MAX_TITLE_LENGTH = 200
 MAX_TAGS = 30
 MAX_TAG_LENGTH = 100
 MAX_URL_LENGTH = 500
-# 가져오기 페이지 수 상한. 한 페이지가 제출 20건이므로 50페이지 = 1,000건이다.
-MAX_IMPORT_PAGES = 50
 
 
 def validate_code_length(value: str) -> str:
@@ -68,28 +66,6 @@ class ReviewRequest(BaseModel):
     @classmethod
     def statement_max_length(cls, v):
         return validate_statement_length(v)
-
-
-class ImportRequest(BaseModel):
-    boj_id: str
-    session_cookie: str | None = None
-    max_pages: int = 5
-
-    @field_validator("boj_id")
-    @classmethod
-    def boj_id_required(cls, v):
-        value = (v or "").strip()
-        if not value:
-            raise ValueError("BOJ 아이디를 입력해주세요.")
-        return value
-
-    @field_validator("max_pages")
-    @classmethod
-    def max_pages_bounds(cls, v):
-        # 9999("전체") 를 선택해도 요청당 최대 MAX_IMPORT_PAGES 페이지(약 1,000건)로 자른다.
-        # 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40) 슬롯을 페이지당 최대
-        # 15초 + 0.5초 동안 붙든다.
-        return max(1, min(v, MAX_IMPORT_PAGES))
 
 
 class GithubImportRequest(BaseModel):

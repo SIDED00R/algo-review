@@ -34,7 +34,7 @@ ghImportBtn.addEventListener('click', async () => {
       // DELETE /api/solved-history 는 플랫폼 구분 없이 전 행을 지운다 — 재수입은 GitHub
       // 저장소 경로뿐이라 직접 가져온 기록은 복구 경로가 없다.
       if (!confirm('가져온 기록을 전부 삭제하고 GitHub 저장소에서 다시 가져옵니다. ' +
-                   'BOJ·Codeforces 에서 직접 가져온 기록도 함께 삭제되며, ' +
+                   'Codeforces 에서 직접 가져온 기록도 함께 삭제되며, ' +
                    '그쪽은 다시 가져오기를 따로 실행해야 합니다. 계속할까요?')) return;
       try {
         // 응답을 확인한다 — 확인하지 않으면 데모(403)나 DB 정지(503)에서 삭제가 실패해도
