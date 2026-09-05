@@ -3,10 +3,9 @@ import logging
 
 import analyzer
 import db
-from config import settings
 from fastapi import APIRouter, HTTPException
-from routes.helpers import (merged_github_target, push_review_bundle, require_reviewable_code,
-                            require_platform, upstream_failure)
+from routes.helpers import (merged_github_target, push_review_bundle, require_openai_key,
+                            require_platform, require_reviewable_code, run_llm)
 from routes.problem_resolve import resolve_statement
 from demo_mode import IS_DEMO, DEMO_REVIEW_RESULT
 
@@ -18,10 +17,8 @@ def _run_review(platform: str, review: dict) -> dict:
     """대기 행의 코드로 AI 리뷰를 돌린다. 문제 메타는 저장된 행에 이미 있어 재조회하지 않는다."""
     if IS_DEMO:
         return DEMO_REVIEW_RESULT
-    if not settings.openai_api_key:
-        # 설정 누락은 서버 문제다 — review/report/solved 와 같은 500 으로 맞춘다.
-        raise HTTPException(status_code=500,
-                            detail="OPENAI_API_KEY가 설정되지 않았습니다. LLM을 쓸 수 있을 때 다시 시도해주세요.")
+    # 대기 행은 DB 에 남아 있어 나중에 다시 시도할 수 있다 — 다른 라우터에 없는 안내를 덧붙인다.
+    require_openai_key(" LLM을 쓸 수 있을 때 다시 시도해주세요.")
 
     problem_info = {
         "id": review["problem_id"], "platform": platform,
@@ -34,13 +31,7 @@ def _run_review(platform: str, review: dict) -> dict:
         db.get_stored_problem_statement(platform, review["problem_ref"]))
     # 저장된 코드에도 길이 상한을 적용한다 — 가져오기로 들어온 행은 요청 본문 검증을 거치지 않는다.
     require_reviewable_code(review["code"])
-    try:
-        return analyzer.analyze_code(problem_info, statement, review["code"])
-    except ValueError as e:
-        # analyzer 가 직접 만든 사용자용 안내는 그대로 보여준다.
-        raise HTTPException(status_code=502, detail=str(e))
-    except Exception as e:
-        raise upstream_failure("코드 분석 실패", e)
+    return run_llm("코드 분석 실패", analyzer.analyze_code, problem_info, statement, review["code"])
 
 
 def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool, str | None]:

@@ -1,9 +1,8 @@
 import db
 import analyzer
 from fastapi import APIRouter, HTTPException, Query
-from config import settings
 from demo_mode import IS_DEMO, demo_block
-from routes.helpers import require_platform, require_reviewable_code, upstream_failure
+from routes.helpers import require_openai_key, require_platform, require_reviewable_code, run_llm
 from routes.problem_resolve import resolve_problem_info, resolve_statement
 from routes.review_response import save_and_build_response
 
@@ -15,8 +14,7 @@ def review_imported(platform: str, problem_ref: str):
     if IS_DEMO:
         demo_block("가져온 기록 AI 리뷰는 데모 버전에서 지원되지 않습니다.")
     platform = require_platform(platform)
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
+    require_openai_key()
 
     # 조회-리뷰-삭제를 나누면 여러 요청이 전부 조회를 통과해 각자 유료 LLM 호출을 한다.
     # 삭제를 선점으로 써서 한 요청만 진행시킨다. 실패하면 아래에서 되돌린다.
@@ -35,7 +33,7 @@ def review_imported(platform: str, problem_ref: str):
 
     try:
         if not problem.get("code"):
-            raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 세션 쿠키로 다시 가져오기 해주세요.")
+            raise HTTPException(status_code=400, detail="저장된 코드가 없습니다. 코드를 포함해 다시 가져와 주세요.")
         require_reviewable_code(problem["code"])
 
         if platform == "codeforces":
@@ -57,12 +55,8 @@ def review_imported(platform: str, problem_ref: str):
         # 실패를 빈 본문으로 바꾼다.
         statement = resolve_statement(platform, problem_info)
 
-        try:
-            result = analyzer.analyze_code(problem_info, statement, problem["code"])
-        except ValueError as e:
-            raise HTTPException(status_code=502, detail=str(e))
-        except Exception as e:
-            raise upstream_failure("코드 분석 실패", e)
+        result = run_llm("코드 분석 실패", analyzer.analyze_code,
+                         problem_info, statement, problem["code"])
 
         # solved 기록의 제목·태그·식별자를 쓰되 빈 값으로 덮지 않는다 — CF 는 문제 조회에서
         # 받아오므로 solved 행이 비어 있으면 그걸 살려야 한다.

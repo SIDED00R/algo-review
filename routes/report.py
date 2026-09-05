@@ -1,8 +1,7 @@
 import db
 import analyzer
 from fastapi import APIRouter, HTTPException
-from config import settings
-from routes.helpers import require_platform, upstream_failure
+from routes.helpers import require_openai_key, require_platform, run_llm
 from demo_mode import IS_DEMO, DEMO_REPORT
 
 router = APIRouter()
@@ -16,8 +15,7 @@ def get_report(platform: str = "boj"):
     if IS_DEMO:
         return {"report": DEMO_REPORT}
 
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
+    require_openai_key()
 
     # tag_stats 와 history 는 같은 플랫폼이어야 짝이 맞는다 — analyzer.get_cumulative_analysis
     # 가 태그 통계와 최근 풀이 기록을 함께 프롬프트에 넣는다.
@@ -30,11 +28,6 @@ def get_report(platform: str = "boj"):
     history = [r for r in db.get_review_history(20, platform=platform)
                if r["efficiency"] != db.PENDING_EFFICIENCY][:10]
 
-    try:
-        report = analyzer.get_cumulative_analysis(tag_stats, history)
-    except ValueError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    except Exception as e:
-        raise upstream_failure("리포트 생성 실패", e)
+    report = run_llm("리포트 생성 실패", analyzer.get_cumulative_analysis, tag_stats, history)
 
     return {"report": report}

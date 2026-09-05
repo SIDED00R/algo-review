@@ -10,6 +10,7 @@ tag_stats() 는 BOJ 첫 제출에만 집계되므로, 플랫폼을 정하지 않
 import pytest
 
 import db
+from config import settings
 from routes import report
 
 _CF_KW = dict(
@@ -26,7 +27,7 @@ _BOJ_KW = dict(
 
 @pytest.fixture
 def minimal_client(monkeypatch, minimal_app):
-    monkeypatch.setattr(report.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(report.analyzer, "get_cumulative_analysis", lambda *a, **k: "리포트 본문")
     return minimal_app(report.router)
 

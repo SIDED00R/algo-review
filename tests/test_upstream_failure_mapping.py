@@ -18,6 +18,7 @@ from openai._base_client import BaseClient
 
 import db
 from clients import UpstreamUnavailable, codeforces
+from config import settings
 from routes import problem_resolve, report, review, solved
 
 _SECRET_BODY = {"error": {"message": "Invalid key sk-SECRET123 at https://internal-proxy.corp"}}
@@ -81,7 +82,7 @@ _REVIEW_BODY = {"platform": "boj", "problem_id": 1000,
 
 def test_review_does_not_echo_the_provider_body(monkeypatch, minimal_app):
     monkeypatch.setattr(review, "IS_DEMO", False)
-    monkeypatch.setattr(review.settings, "openai_api_key", "sk-test")
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
     monkeypatch.setattr(review, "resolve_problem_info", lambda *a, **k: {
         "id": 1000, "platform": "boj", "problem_ref": "1000", "title": "A+B",
         "tier": 1, "tier_name": "Bronze V", "tags": []})
@@ -100,7 +101,7 @@ def test_review_does_not_echo_the_provider_body(monkeypatch, minimal_app):
 def test_analyzer_user_message_still_reaches_the_user(monkeypatch, minimal_app):
     """원문 차단이 사용자용 안내까지 삼키면 안 된다 — analyzer 가 직접 만든 ValueError 는 통과."""
     monkeypatch.setattr(review, "IS_DEMO", False)
-    monkeypatch.setattr(review.settings, "openai_api_key", "sk-test")
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
     monkeypatch.setattr(review, "resolve_problem_info", lambda *a, **k: {
         "id": 1000, "platform": "boj", "problem_ref": "1000", "title": "A+B",
         "tier": 1, "tier_name": "Bronze V", "tags": []})
@@ -118,7 +119,7 @@ def test_report_does_not_echo_the_provider_body(monkeypatch, minimal_app):
     db.save_review(problem_id=1000, title="A+B", tier=1, tags=["math"], code="print(1)",
                    feedback="f", efficiency="good", platform="boj", problem_ref="1000",
                    tier_name="Bronze V")
-    monkeypatch.setattr(report.settings, "openai_api_key", "sk-test")
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
     monkeypatch.setattr(report.analyzer, "get_cumulative_analysis",
                         lambda *a, **k: (_ for _ in ()).throw(_openai_error()))
 
@@ -133,7 +134,7 @@ def test_review_imported_does_not_echo_the_provider_body(monkeypatch, minimal_ap
                            tags=["math"], code="print(1)", language="Python 3",
                            platform="boj", problem_ref="1000")
     monkeypatch.setattr(solved, "IS_DEMO", False)
-    monkeypatch.setattr(solved.settings, "openai_api_key", "sk-test")
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
     monkeypatch.setattr(solved, "resolve_statement", lambda *a, **k: "")
     monkeypatch.setattr(solved.analyzer, "analyze_code",
                         lambda *a, **k: (_ for _ in ()).throw(_openai_error()))
