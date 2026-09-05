@@ -65,9 +65,8 @@ def test_normal_code_still_runs():
 
 # ── 엔드포인트 게이트 ──
 #
-# 자식 프로세스가 앱과 같은 uid·같은 네트워크 네임스페이스에서 도는 한 메타데이터 서버와
-# /proc/1/environ 경로가 남는다. 앱 안에서 직접 실행하는 경로는 기본 비활성이고
-# 로컬 개발에서만 켠다(운영은 실행 서비스로 위임한다 — test_execute_delegation.py).
+# 앱은 코드를 직접 실행하지 않는다 — EXECUTOR_URL 로 위임하거나 403 이다
+# (위임 배선은 test_execute_delegation.py).
 
 _REQ = {"code": "print(1)", "language": "Python 3", "stdin": "", "timeout_sec": 5}
 
@@ -82,31 +81,21 @@ def _client():
     return TestClient(app)
 
 
-def test_endpoint_is_disabled_by_default(monkeypatch):
-    monkeypatch.setattr(execute_route.settings, "execute_enabled", False)
-    monkeypatch.setattr(execute_route, "run_code",
-                        lambda *a, **k: pytest.fail("게이트가 닫혀 있으면 실행하면 안 된다"))
+def test_endpoint_is_disabled_without_an_executor(monkeypatch):
+    monkeypatch.setattr(execute_route.settings, "executor_url", None)
+    monkeypatch.setattr(execute_route, "_delegate",
+                        lambda *a, **k: pytest.fail("위임 대상이 없으면 실행하면 안 된다"))
 
     resp = _client().post("/api/execute", json=_REQ)
 
     assert resp.status_code == 403
-    assert "EXECUTE_ENABLED" in resp.json()["detail"]
 
 
-def test_endpoint_runs_when_explicitly_enabled(monkeypatch):
-    monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
-
-    resp = _client().post("/api/execute", json=_REQ)
-
-    assert resp.status_code == 200
-    assert resp.json()["stdout"].strip() == "1"
-
-
-def test_demo_mode_blocks_even_when_enabled(monkeypatch):
-    """데모 가드가 게이트보다 먼저다 — 데모에 EXECUTE_ENABLED 가 켜져도 막힌다."""
+def test_demo_mode_blocks_even_with_an_executor(monkeypatch):
+    """데모 가드가 위임보다 먼저다 — 실행 서비스가 붙어 있어도 막힌다."""
     monkeypatch.setattr(execute_route, "IS_DEMO", True)
-    monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
-    monkeypatch.setattr(execute_route, "run_code",
+    monkeypatch.setattr(execute_route.settings, "executor_url", "https://executor.example")
+    monkeypatch.setattr(execute_route, "_delegate",
                         lambda *a, **k: pytest.fail("데모에서 실행하면 안 된다"))
 
     assert _client().post("/api/execute", json=_REQ).status_code == 403

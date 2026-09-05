@@ -30,11 +30,8 @@ def client(minimal_app):
 
 @pytest.fixture
 def delegating(monkeypatch):
-    """실행 서비스가 붙은 상태. 로컬 실행 경로는 실패로 막아 둔다."""
+    """실행 서비스가 붙은 상태."""
     monkeypatch.setattr(execute_route.settings, "executor_url", _URL)
-    monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
-    monkeypatch.setattr(execute_route, "run_code",
-                        lambda *a, **k: pytest.fail("위임 대상이 있으면 앱이 직접 실행하면 안 된다"))
     monkeypatch.setattr(execute_route, "_identity_token", lambda audience: f"tok:{audience}")
 
 

@@ -300,9 +300,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `OPENAI_TEMPERATURE` | 선택 | CF 번역 temperature (기본값: `0.3`) |
 | `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·CF 번역) 공통 타임아웃(초) (기본값: `15`) |
 | `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `1`) |
-| `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. 설정하면 `/api/execute` 는 직접 실행하지 않고 위임한다 — **운영이 쓰는 경로다** |
-| `EXECUTE_ENABLED` | 선택 | `true` 설정 시 앱 프로세스 안에서 직접 실행한다. **로컬 개발 전용이다** — 자식 프로세스가 앱과 같은 uid·네트워크 네임스페이스에서 돌아 메타데이터 서버와 `/proc/1/environ` 에 닿는다(자세한 내용은 `ARCHITECTURE.md` 보안 조치 1번) |
-| `COMPILE_TIMEOUT` | 선택 | C++ 컴파일 타임아웃(초). 앱의 로컬 실행 경로가 읽는다 — 실행 서비스는 `--clear-env-vars` 로 배포돼 이 값을 받지 못하고 `executor/runner.py` 의 기본값 30초를 쓴다 (기본값: 30) |
+| `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. `/api/execute` 는 이 서비스로 위임한다 — 비워 두면 403 이다 |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |
 | `DATABASE_URL` | 선택 | SQLAlchemy 접속 URL 직접 지정 (설정 시 아래 `DB_*` 무시) |
