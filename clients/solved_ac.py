@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # TIER_NAMES 의 정본은 constants.py 다 — 여기 두면 DB 레이어가 이 모듈을 import 하게 된다.
-from clients.utils import ProblemSearchError
+from clients.utils import BROWSER_USER_AGENT, ProblemSearchError
 from constants import TIER_NAMES
 
 logger = logging.getLogger("uvicorn.error")
@@ -12,7 +12,7 @@ logger = logging.getLogger("uvicorn.error")
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "User-Agent": BROWSER_USER_AGENT,
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     "Referer": "https://solved.ac/",
