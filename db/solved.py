@@ -61,14 +61,6 @@ def claim_solved_problem(platform: str, problem_ref: str) -> dict | None:
     return normalize_common_row(dict(row))
 
 
-def delete_solved_problem(platform: str, problem_ref: str) -> int:
-    """행을 지우고 **지운 개수**를 돌려준다. 0 이면 이미 없었다는 뜻이다."""
-    with session_scope(commit=True) as session:
-        return session.execute(delete(SolvedHistory).where(
-            SolvedHistory.platform == platform,
-            SolvedHistory.problem_ref == problem_ref)).rowcount
-
-
 def clear_solved_history():
     with session_scope(commit=True) as session:
         session.execute(delete(SolvedHistory))
