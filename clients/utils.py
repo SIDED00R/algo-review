@@ -1,5 +1,9 @@
 import re
 
+# 헤더 나머지는 사이트마다 다르므로 UA 만 공유한다.
+BROWSER_USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+
 
 class UpstreamUnavailable(ValueError):
     """외부 서비스에 **도달하지 못했다** — 요청자 입력 문제가 아니다.

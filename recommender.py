@@ -17,6 +17,29 @@ CF_RANGE_SAME_HIGH = 100
 CF_RANGE_HARD_HIGH = 500
 
 
+def _boj_bands(avg_tier: float) -> tuple[int, int, int, int]:
+    """(same_min, same_max, hard_min, hard_max) — 검색 밴드와 표시 문구가 같은 값을 쓴다."""
+    tier = int(avg_tier)
+    return (max(1, tier - TIER_RANGE_LOW),
+            min(30, tier + TIER_RANGE_SAME_HIGH),
+            min(30, tier + TIER_RANGE_HARD_LOW),
+            min(30, tier + TIER_RANGE_HARD_HIGH))
+
+
+def _cf_bands(avg_rating: float) -> tuple[int, int, int, int]:
+    """(same_min, same_max, hard_min, hard_max) — 검색 밴드와 표시 문구가 같은 값을 쓴다.
+
+    hard 구간은 same_max 다음 레이팅부터 시작한다 — 경계값이 양쪽에 걸리면 같은 문제가
+    중복 추천된다. (avg_rating 이 상한 근처면 same_max·hard_min 이 둘 다 3500 으로
+    클램프되어 경계가 겹칠 수 있다.)
+    """
+    rating = int(avg_rating)
+    return (max(800, rating - CF_RANGE_LOW),
+            min(3500, rating + CF_RANGE_SAME_HIGH),
+            min(3500, rating + CF_RANGE_SAME_HIGH + 1),
+            min(3500, rating + CF_RANGE_HARD_HIGH))
+
+
 def _score_tags(tag_data: list) -> list:
     if not tag_data:
         return []
@@ -71,11 +94,7 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
         return _get_cf_recommendations(weak_tags, extra_exclude=extra_exclude,
                                        avg_rating=avg_difficulty)
 
-    avg_tier = avg_difficulty
-    same_min = max(1,  int(avg_tier) - TIER_RANGE_LOW)
-    same_max = min(30, int(avg_tier) + TIER_RANGE_SAME_HIGH)
-    hard_min = min(30, int(avg_tier) + TIER_RANGE_HARD_LOW)
-    hard_max = min(30, int(avg_tier) + TIER_RANGE_HARD_HIGH)
+    same_min, same_max, hard_min, hard_max = _boj_bands(avg_difficulty)
 
     solved_ids = db.get_solved_problem_ids() | (extra_exclude or set())
 
@@ -128,12 +147,7 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
 
 def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = None, *,
                             avg_rating: float) -> list[dict]:
-    cf_same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
-    cf_same_max = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH)
-    # hard 구간은 same_max 다음 레이팅부터 시작 — 경계값이 양쪽에 걸려 같은 문제가 중복 추천되는 것을 방지
-    # (단 avg_rating이 상한 근처면 same_max·hard_min 둘 다 3500으로 클램프되어 경계가 겹칠 수 있음)
-    cf_hard_min = min(3500, int(avg_rating) + CF_RANGE_SAME_HIGH + 1)
-    cf_hard_max = min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)
+    cf_same_min, cf_same_max, cf_hard_min, cf_hard_max = _cf_bands(avg_rating)
 
     exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
 
@@ -154,13 +168,11 @@ def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = No
 
 
 def tier_range_description(avg_tier: float) -> str:
-    same_min = max(1,  int(avg_tier) - TIER_RANGE_LOW)
-    hard_max = min(30, int(avg_tier) + TIER_RANGE_HARD_HIGH)
+    same_min, _, _, hard_max = _boj_bands(avg_tier)
     return f"{TIER_NAMES.get(same_min, '?')} ~ {TIER_NAMES.get(hard_max, '?')}"
 
 
 def cf_rating_range_description(avg_rating: float) -> str:
-    """BOJ 의 tier_range_description 과 짝. 800/3500 클램프를 한 곳에만 둔다."""
-    same_min = max(800,  int(avg_rating) - CF_RANGE_LOW)
-    hard_max = min(3500, int(avg_rating) + CF_RANGE_HARD_HIGH)
+    """BOJ 의 tier_range_description 과 짝."""
+    same_min, _, _, hard_max = _cf_bands(avg_rating)
     return f"CF {same_min} ~ CF {hard_max}"

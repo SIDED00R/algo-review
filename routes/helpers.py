@@ -1,5 +1,7 @@
 """라우터 공용 헬퍼 — GitHub push(README 조립, 저장 폴더·커밋 메시지, 저장소 타깃 병합,
-번들 push)와 요청 검증(require_platform · require_language · upstream_failure).
+번들 push) · 요청 검증(require_platform · require_language · require_reviewable_code) ·
+상류 실패 매핑(upstream_failure · run_llm) · LLM 전제 검사(require_openai_key) ·
+평균 난이도 표기(average_difficulty).
 
 push_solution 은 파일별 PUT 이다(가져오기처럼 수백 건을 훑는 경로에서 한 문제가 실패해도
 나머지가 진행된다). push_review_bundle 은 README+코드를 한 커밋으로 묶는다(단건 등록은
@@ -11,6 +13,8 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 import db
 import clients as api_client
+from config import settings
+from constants import TIER_NAMES
 from routes.models import MAX_CODE_LENGTH, validate_platform
 
 logger = logging.getLogger("uvicorn.error")
@@ -32,12 +36,47 @@ def push_solution(repo: str, token: str, folder: str, file_stem: str,
 def upstream_failure(action: str, exc: Exception) -> HTTPException:
     """예외 원문을 응답에 싣지 않는다 — 타입명만 노출하고 세부는 로그로 보낸다.
 
-    openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로
-    **제공자 본문을 그대로** 싣는다. 서드파티 엔드포인트를 쓸 수 있어 본문 형태를
-    통제할 수 없고, `base_url` 이 내부 프록시면 그 주소도 함께 나간다.
+    openai SDK 의 `APIStatusError` 메시지에는 제공자 응답 본문이 그대로 들어간다.
     """
     logger.exception("%s", action)
     return HTTPException(status_code=502, detail=f"{action} ({type(exc).__name__})")
+
+
+def run_llm(action: str, call, *args, **kwargs):
+    """LLM 호출의 예외 매핑. analyzer 가 만든 사용자용 안내(ValueError)는 본문을 그대로
+    502 로 보내고, 그 밖의 예외는 upstream_failure 가 타입명만 노출한다.
+
+    HTTPException 을 먼저 통과시킨다 — 삼키면 호출부가 만든 400 이 502 로 바뀐다.
+    """
+    try:
+        return call(*args, **kwargs)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise upstream_failure(action, e)
+
+
+def require_openai_key(suffix: str = "") -> None:
+    """LLM 을 쓰는 라우터의 공통 전제. 설정 누락은 서버 문제라 500 이다."""
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500,
+                            detail="OPENAI_API_KEY가 설정되지 않았습니다." + suffix)
+
+
+def average_difficulty(platform: str) -> tuple[float, bool, str]:
+    """(평균 난이도, 등급 있는 기록 존재 여부, 표시 라벨).
+
+    두 번째 값이 False 면 평균은 추천용 기본값이라 화면에 그대로 쓰지 않는다.
+    """
+    if platform == "codeforces":
+        avg = db.get_average_cf_rating()
+        graded = db.has_cf_rating()
+        return avg, graded, f"CF {int(avg)}" if graded else "N/A"
+    avg = db.get_average_tier()
+    graded = db.has_graded_tier()
+    return avg, graded, TIER_NAMES.get(int(avg), "N/A") if graded else "N/A"
 
 
 def require_platform(value: str) -> str:

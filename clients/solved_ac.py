@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # TIER_NAMES 의 정본은 constants.py 다 — 여기 두면 DB 레이어가 이 모듈을 import 하게 된다.
-from clients.utils import ProblemSearchError
+from clients.utils import BROWSER_USER_AGENT, ProblemSearchError
 from constants import TIER_NAMES
 
 logger = logging.getLogger("uvicorn.error")
@@ -12,7 +12,7 @@ logger = logging.getLogger("uvicorn.error")
 SOLVED_AC_BASE = "https://solved.ac/api/v3"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "User-Agent": BROWSER_USER_AGENT,
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     "Referer": "https://solved.ac/",
@@ -234,112 +234,6 @@ def get_tag_key_by_name(tag_name: str) -> str:
     except Exception as e:
         logger.warning("solved.ac 태그 목록 조회 실패 (%s): %s", tag_name, e)
     return _remember_guess(key_lower, _FALLBACK_TTL_UNREACHABLE)
-
-
-class BojCrawlError(Exception):
-    """acmicpc 요청 자체가 실패했음(네트워크 오류·차단 등) — 정상 응답인데 결과가 없는 것과 구분한다."""
-
-
-def get_user_submissions(boj_id: str, max_pages: int = 5) -> list[dict]:
-    submissions = []
-    seen_ids = set()
-    top = None
-
-    for _ in range(max_pages):
-        params = {
-            "from_mine": "1",
-            "user_id": boj_id,
-            "result_id": "4",
-        }
-        if top is not None:
-            params["top"] = top
-
-        try:
-            resp = requests.get(
-                "https://www.acmicpc.net/status",
-                params=params,
-                headers=HEADERS,
-                timeout=15,
-            )
-            resp.raise_for_status()
-        except Exception as e:
-            # 첫 페이지 요청 자체가 실패 — 네트워크 오류·차단 등. "결과 없음"과 구분해 알린다.
-            if top is None:
-                raise BojCrawlError(f"BOJ 제출 목록 조회 실패: {e}") from e
-            break
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        tbody = soup.select_one("table.table-striped tbody")
-        if not tbody:
-            # 정상 응답이면 제출이 0건이어도 테이블 뼈대는 존재한다 — 아예 없다면 페이지 형식이
-            # 예상과 다르다(로그인 리다이렉트·차단 등). 첫 페이지에서만 실패로 본다.
-            if top is None:
-                raise BojCrawlError("BOJ 제출 목록 페이지 형식이 예상과 다릅니다.")
-            break
-
-        rows = tbody.select("tr[id^='solution-']")
-        if not rows:
-            break  # 결과 없음(정상) — 더 이상 페이지가 없거나 애초에 제출 기록이 없다.
-
-        min_id = None
-        for row in rows:
-            row_id = row.get("id", "")
-            try:
-                submission_id = int(row_id.replace("solution-", ""))
-            except ValueError:
-                continue
-
-            prob_link = row.select_one("a[href^='/problem/']")
-            if not prob_link:
-                continue
-            try:
-                problem_id = int(prob_link.get_text(strip=True))
-            except ValueError:
-                continue
-
-            tds = row.select("td")
-            language = tds[6].get_text(strip=True) if len(tds) > 6 else ""
-
-            if problem_id not in seen_ids:
-                submissions.append({
-                    "submission_id": submission_id,
-                    "problem_id": problem_id,
-                    "language": language,
-                })
-                seen_ids.add(problem_id)
-
-            if min_id is None or submission_id < min_id:
-                min_id = submission_id
-
-        if min_id is None:
-            break
-        top = min_id - 1
-        time.sleep(0.5)
-
-    return submissions
-
-
-def get_submission_code(submission_id: int, session_cookie: str) -> str | None:
-    url = f"https://www.acmicpc.net/source/{submission_id}"
-    cookies = {"OnlineJudge": session_cookie, "bojsession": session_cookie}
-    try:
-        resp = requests.get(url, headers=HEADERS, cookies=cookies, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        for sel in [
-            "textarea#code",
-            "textarea[name='source']",
-            "#source-code pre",
-            ".highlight pre",
-            "pre.prettyprint",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                return el.get_text()
-    except Exception as e:
-        logger.warning("BOJ 제출 코드 조회 실패 (submission_id=%s): %s", submission_id, e)
-    return None
 
 
 def _build_tier_key_map() -> dict[int, str]:

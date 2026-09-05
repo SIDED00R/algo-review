@@ -7,7 +7,7 @@
 > 데모는 실제 API 없이 샘플 데이터로 동작합니다. 모든 기능을 자유롭게 체험해보세요.
 
 현재 지원 범위:
-- `BOJ`: 코드 리뷰, 문제 추천, 통계, 제출 기록 import(acmicpc 서비스 종료로 현재 동작하지 않음)
+- `BOJ`: 코드 리뷰, 문제 추천, 통계
 - `Codeforces`: 코드 리뷰, 문제 추천, 통계, 제출 기록 import, 인앱 문제 뷰어
 
 ## 주요 기능
@@ -29,7 +29,6 @@
   - `임시 저장` 버튼으로 즉시 저장할 수 있고, 에디터를 비우면 그 임시 저장본도 지워집니다.
 - **기록 import**
   - `BaekjoonHub GitHub` 저장소 import
-  - `BOJ 제출 기록` import (acmicpc 서비스 종료로 현재 동작하지 않음)
   - `Codeforces handle` 기반 import
 - **지난 제출 불러오기 → 고쳐서 재제출**
   - 효율성 지적을 받은 코드를 리뷰 폼으로 다시 불러와 수정하고 재제출합니다. 새 제출은 회차로 쌓이고 과거 회차는 그대로 남습니다.
@@ -52,7 +51,7 @@
 
 ## 기존 기록의 문제 설명 백필
 
-`problem_statement` 는 나중에 추가된 컬럼이라 그 전 기록은 비어 있다. 남아 있는 소스에서 되살린다.
+일부 과거 기록은 `problem_statement` 가 비어 있다. 남아 있는 소스에서 되살린다.
 
 ```bash
 python backfill_statements.py                    # 전체 dry-run (아무것도 쓰지 않음)
@@ -66,8 +65,8 @@ python backfill_statements.py --apply             # 실제 기록
 | BOJ (`--platform boj`) | GitHub 저장소 README | acmicpc.net 이 종료돼 재수집이 불가하다. GitHub 에 push 했던 문제만 복구된다 |
 | CF (`--platform codeforces`) | codeforces.com 재수집 | 동작한다 |
 
-이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 사용자가 직접 붙여 넣었던
-원문은 저장된 적이 없어 복구할 수 없다 — 여기서 채우는 값은 "그 시절 스크래핑이 만들었을 본문"이다.
+이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 백필 대상 시기에는 사용자가
+붙여 넣은 원문이 저장되지 않았으므로 복구 대상이 아니다(현재는 `/api/review` 가 그 원문을 저장한다).
 
 ## 로컬 실행
 
@@ -204,7 +203,7 @@ gcloud run deploy algo-review-demo \
 
 ### 실행 전용 서비스 배포
 
-'예제 실행'은 앱이 아니라 격리된 실행 서비스가 담당합니다(이유는 `ARCHITECTURE.md` 보안 조치 1·11번).
+'예제 실행'은 앱이 아니라 격리된 실행 서비스가 담당합니다(이유는 `ARCHITECTURE.md` 보안 경계 1·11번).
 
 ```bash
 gcloud run deploy algo-executor   --source executor   --region asia-northeast3   --no-allow-unauthenticated   --service-account algo-executor-run@PROJECT.iam.gserviceaccount.com   --network executor-net --subnet executor-subnet --vpc-egress all-traffic   --clear-env-vars --memory 512Mi --cpu 1 --concurrency 1 --max-instances 5 --timeout 120
@@ -251,7 +250,6 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 ├── .dockerignore
 ├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo + executor)
 ├── LICENSE                 # MIT
-├── assets/                 # 데모 GIF (미사용)
 │
 ├── clients/                # 외부 API 클라이언트 (플랫폼별 분리) — 파일별 책임은 ARCHITECTURE.md 참조
 │
@@ -271,7 +269,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
     └── js/                 # UI 기능별 모듈 — 파일별 책임은 ARCHITECTURE.md 참조
 ```
 
-> 파일별 단일 책임, 엔드포인트 목록, 레이어 다이어그램, 호출관계, 보안 조치 내역은
+> 파일별 단일 책임, 엔드포인트 목록, 레이어 다이어그램, 호출관계, 보안 경계는
 > [ARCHITECTURE.md](./ARCHITECTURE.md)를 참조하세요.
 
 ## 기술 스택
@@ -301,9 +299,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `OPENAI_TEMPERATURE` | 선택 | CF 번역 temperature (기본값: `0.3`) |
 | `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·CF 번역) 공통 타임아웃(초) (기본값: `15`) |
 | `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `1`) |
-| `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. 설정하면 `/api/execute` 는 직접 실행하지 않고 위임한다 — **운영이 쓰는 경로다** |
-| `EXECUTE_ENABLED` | 선택 | `true` 설정 시 앱 프로세스 안에서 직접 실행한다. **로컬 개발 전용이다** — 자식 프로세스가 앱과 같은 uid·네트워크 네임스페이스에서 돌아 메타데이터 서버와 `/proc/1/environ` 에 닿는다(자세한 내용은 `ARCHITECTURE.md` 보안 조치 1번) |
-| `COMPILE_TIMEOUT` | 선택 | C++ 컴파일 타임아웃(초). 앱의 로컬 실행 경로가 읽는다 — 실행 서비스는 `--clear-env-vars` 로 배포돼 이 값을 받지 못하고 `executor/runner.py` 의 기본값 30초를 쓴다 (기본값: 30) |
+| `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. `/api/execute` 는 이 서비스로 위임한다 — 비워 두면 403 이다 |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |
 | `DATABASE_URL` | 선택 | SQLAlchemy 접속 URL 직접 지정 (설정 시 아래 `DB_*` 무시) |

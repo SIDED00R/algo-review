@@ -1,13 +1,10 @@
 from clients.solved_ac import (
-    BojCrawlError,
     get_problems_bulk,
     get_problem_info,
     get_problem_statement,
     get_boj_problem_sections,
     search_problems_by_tag,
     get_tag_key_by_name,
-    get_user_submissions,
-    get_submission_code,
 )
 from clients.codeforces import (
     normalize_codeforces_problem_ref,
@@ -39,10 +36,8 @@ from clients.utils import (
 )
 
 __all__ = [
-    "BojCrawlError",
     "get_problems_bulk", "get_problem_info", "get_problem_statement",
     "get_boj_problem_sections", "search_problems_by_tag", "get_tag_key_by_name",
-    "get_user_submissions", "get_submission_code",
     "get_codeforces_problem_info",
     "get_codeforces_problem_statement", "get_cf_problem_sections", "scrape_cf_problem",
     "tex_markers_to_markdown",

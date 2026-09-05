@@ -6,7 +6,6 @@ from llm_client import choice_text, get_client, require_choice
 
 _MAX_TOKENS = settings.openai_max_tokens or 2000
 _TEMPERATURE = settings.openai_temperature
-_API_TIMEOUT = settings.openai_timeout
 
 # 번역 입력 상한. 출력만 제한하는 _MAX_TOKENS 와 달리 **입력** 토큰 비용을 막는다.
 # CF 본문 한 섹션이 이 길이를 넘는 경우는 거의 없다.
@@ -70,7 +69,6 @@ def translate_cf_text(text: str, title: str) -> str:
         ],
         max_tokens=_MAX_TOKENS,
         temperature=_TEMPERATURE,
-        timeout=_API_TIMEOUT,
     )
     require_choice(resp)
     if resp.choices[0].finish_reason == "length":

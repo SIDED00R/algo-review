@@ -7,7 +7,6 @@ from llm_client import choice_text, get_client, require_choice
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
-_API_TIMEOUT = settings.openai_timeout
 
 
 # JSON 의 유효한 이스케이프 하나, 또는 그 밖의 백슬래시 하나.
@@ -121,7 +120,6 @@ efficiency 기준:
         ],
         response_format={"type": "json_object"},
         max_tokens=_MAX_TOKENS_REVIEW,
-        timeout=_API_TIMEOUT,
     )
 
     require_choice(response)
@@ -175,7 +173,6 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
         model=GPT_MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=_MAX_TOKENS_REPORT,
-        timeout=_API_TIMEOUT,
     )
 
     # 인덱싱보다 먼저 확인한다. 순서가 바뀌면 빈 응답에서 IndexError 가 난다.

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 
 import db
+from config import settings
 from routes import problem_resolve
 from routes import solved as solved_route
 
@@ -28,7 +29,7 @@ _RESULT = {
 @pytest.fixture
 def minimal_client(monkeypatch, minimal_app):
     monkeypatch.setattr(solved_route, "IS_DEMO", False)
-    monkeypatch.setattr(solved_route.settings, "openai_api_key", "sk-test")
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test")
     return minimal_app(solved_route.router)
 
 

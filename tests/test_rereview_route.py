@@ -6,6 +6,7 @@ GitHub 설정 테이블이 비어 있으므로 push 는 항상 pushed=false 로 
 import pytest
 
 import db
+from config import settings
 from routes import problem_resolve, rereview
 
 
@@ -45,7 +46,7 @@ def test_reviewed_row_skips_llm_and_reports_push_failure(minimal_client, monkeyp
 
 def test_pending_row_is_filled_by_review(minimal_client, monkeypatch):
     _save(db.PENDING_EFFICIENCY)
-    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(rereview, "resolve_statement", lambda *a, **k: "문제 본문")
     monkeypatch.setattr(rereview.analyzer, "analyze_code", lambda *a, **k: {
         "efficiency": "ok", "complexity": "O(N)", "better_algorithm": None,
@@ -63,7 +64,7 @@ def test_pending_row_is_filled_by_review(minimal_client, monkeypatch):
 def test_pending_row_without_api_key_returns_500(minimal_client, monkeypatch):
     """설정 누락은 서버 문제다 — review·report·solved 와 같은 500 을 쓴다."""
     _save(db.PENDING_EFFICIENCY)
-    monkeypatch.setattr(rereview.settings, "openai_api_key", "")
+    monkeypatch.setattr(settings, "openai_api_key", "")
 
     r = minimal_client.post("/api/rereview/boj/1000")
     assert r.status_code == 500
@@ -80,7 +81,7 @@ def test_stored_statement_reaches_the_llm(minimal_client, monkeypatch):
     """
     stored = "【문제】 두 정수 A와 B를 입력받아 A+B를 출력한다."
     _save(db.PENDING_EFFICIENCY, problem_statement=stored)
-    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(problem_resolve.api_client, "get_problem_statement",
                         lambda pid: pytest.fail("저장된 본문이 있으면 스크래핑하면 안 된다"))
     seen = {}
@@ -152,7 +153,7 @@ def test_llm_result_lands_on_the_round_that_was_reviewed(minimal_client, monkeyp
     """
     at_time("2026-01-01T00:00:00")
     _save(db.PENDING_EFFICIENCY, code="코드 A")
-    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(rereview, "resolve_statement", lambda *a, **k: "문제 본문")
 
     pushed_code = {}
@@ -188,7 +189,7 @@ def test_a_round_filled_meanwhile_is_reported_as_conflict(minimal_client, monkey
     at_time("2026-01-01T00:00:00")
     _save(db.PENDING_EFFICIENCY, code="코드 A")
     target = db.get_reviews_by_problem("boj", "1000")[0]["id"]
-    monkeypatch.setattr(rereview.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(rereview, "resolve_statement", lambda *a, **k: "문제 본문")
 
     def _fake_analyze(problem_info, statement, code):

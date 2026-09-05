@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import db
+from config import settings
 from routes import github_push, pending_review, review
 
 _CODE = {"platform": "boj", "problem_id": 1000, "code": "print(1)"}
@@ -53,7 +54,7 @@ def test_language_check_runs_before_any_external_work(monkeypatch):
     """거절이 늦으면 이미 유료 호출·스크래핑을 한 뒤가 된다."""
     called = []
     monkeypatch.setattr(review, "IS_DEMO", False)
-    monkeypatch.setattr(review.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(review, "resolve_problem_info",
                         lambda *a, **k: called.append("resolve") or {})
 

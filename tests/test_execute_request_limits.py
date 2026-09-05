@@ -1,4 +1,4 @@
-"""ExecuteRequest 의 입력 상한 — ARCHITECTURE.md 가 보안 조치 #6 으로 문서화한 통제.
+"""ExecuteRequest 의 입력 상한 — ARCHITECTURE.md 가 보안 경계 #6 으로 문서화한 통제.
 
 timeout 은 **거부가 아니라 clamp** 다 — 999 를 보내면 조용히 10 이 된다. 조용한 동작일수록
 고정해 두지 않으면 바뀌어도 드러나지 않는다.

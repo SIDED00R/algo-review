@@ -1,8 +1,8 @@
 """/api/execute 의 위임 계약.
 
-운영에서 앱은 코드를 직접 실행하지 않는다 — 격리된 실행 서비스로 넘긴다. "위임한다" 를
-반환값으로만 확인하면 앱이 몰래 로컬 실행해도 통과하므로, 로컬 실행 경로를 실패로 심어
-배선을 태운다.
+앱은 코드를 직접 실행하지 않는다 — 격리된 실행 서비스로 넘긴다. "위임한다" 를 반환값으로만
+확인하면 무엇이 어디로 나갔는지 알 수 없으므로, 전송 인자(URL·본문·Authorization)를 직접
+확인해 배선을 태운다.
 """
 import pytest
 import requests
@@ -30,11 +30,8 @@ def client(minimal_app):
 
 @pytest.fixture
 def delegating(monkeypatch):
-    """실행 서비스가 붙은 상태. 로컬 실행 경로는 실패로 막아 둔다."""
+    """실행 서비스가 붙은 상태."""
     monkeypatch.setattr(execute_route.settings, "executor_url", _URL)
-    monkeypatch.setattr(execute_route.settings, "execute_enabled", True)
-    monkeypatch.setattr(execute_route, "run_code",
-                        lambda *a, **k: pytest.fail("위임 대상이 있으면 앱이 직접 실행하면 안 된다"))
     monkeypatch.setattr(execute_route, "_identity_token", lambda audience: f"tok:{audience}")
 
 

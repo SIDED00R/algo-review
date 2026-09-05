@@ -4,8 +4,7 @@
 옆에서 임의 코드를 돌리면 자식이 앱과 같은 uid·같은 네트워크 네임스페이스에 있어
 메타데이터 서버(→ SA 토큰)와 `/proc/1/environ`(→ 앱 환경변수 전체)에 도달한다.
 
-로컬 개발은 실행 서비스를 띄우지 않아도 되도록 `EXECUTE_ENABLED=true` 인프로세스 경로를
-남겨둔다. 둘 다 없으면 403 이다.
+`EXECUTOR_URL` 이 없으면 403 이다.
 """
 import logging
 import threading
@@ -16,7 +15,6 @@ from fastapi import APIRouter, HTTPException, Request
 
 from config import settings
 from demo_mode import IS_DEMO, demo_block
-from executor.runner import UnsupportedLanguage, run_code
 from routes.models import ExecuteRequest
 
 router = APIRouter()
@@ -132,12 +130,4 @@ def execute_code(req: ExecuteRequest, request: Request):
     _enforce_rate_limit(_client_ip(request))
     if settings.executor_url:
         return _delegate(settings.executor_url.rstrip("/"), req)
-    if settings.execute_enabled:
-        try:
-            return run_code(req.language, req.code, req.stdin, req.timeout_sec,
-                            compile_timeout=settings.compile_timeout)
-        except UnsupportedLanguage as e:
-            raise HTTPException(status_code=400, detail=str(e)) from None
-    raise HTTPException(
-        status_code=403,
-        detail="코드 실행이 비활성화되어 있습니다. 로컬에서 EXECUTE_ENABLED=true 로 실행해주세요.")
+    raise HTTPException(status_code=403, detail="코드 실행이 비활성화되어 있습니다.")

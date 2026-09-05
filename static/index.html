@@ -302,46 +302,6 @@
       <div id="gh-import-result" aria-live="polite"></div>
 
       <div class="card">
-        <details>
-          <summary>
-            <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
-            <h2>BOJ 직접 가져오기</h2>
-          </summary>
-          <p class="desc"><strong>acmicpc.net 서비스 종료로 현재 동작하지 않습니다.</strong></p>
-          <p class="desc">BOJ 아이디를 입력하면 맞은 제출 기록을 자동으로 가져옵니다.
-            세션 쿠키를 입력하면 코드까지 저장할 수 있습니다 (선택 사항).</p>
-
-          <div class="form-row">
-            <label class="label" for="import-boj-id">BOJ 아이디</label>
-            <input id="import-boj-id" type="text" placeholder="예) tourist" />
-          </div>
-
-          <div class="form-row">
-            <label class="label" for="import-cookie">세션 쿠키 (선택 · 코드 저장 시 필요)</label>
-            <input id="import-cookie" type="password" placeholder="OnlineJudge 쿠키 값" />
-            <p class="hint">
-              F12 → Application → Cookies → www.acmicpc.net → <b>OnlineJudge</b> 값 복사.
-              코드를 저장해야 나중에 AI 리뷰 요청이 가능합니다.
-            </p>
-          </div>
-
-          <div class="form-row">
-            <label class="label" for="import-pages">가져올 범위 (페이지당 약 20개)</label>
-            <select id="import-pages">
-              <option value="3">최근 ~60개 (3페이지)</option>
-              <option value="5">최근 ~100개 (5페이지)</option>
-              <option value="10">최근 ~200개 (10페이지)</option>
-              <option value="20">최근 ~400개 (20페이지)</option>
-              <option value="9999" selected>최근 1,000개 (최대)</option>
-            </select>
-          </div>
-
-          <button id="import-btn" class="btn-primary">가져오기</button>
-        </details>
-      </div>
-      <div id="import-result" aria-live="polite"></div>
-
-      <div class="card">
         <details open>
           <summary>
             <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
@@ -536,7 +496,6 @@
   <script src="/static/js/history.js?v=__V__"></script>
   <script src="/static/js/import-history.js?v=__V__"></script>
   <script src="/static/js/import-github.js?v=__V__"></script>
-  <script src="/static/js/import-boj.js?v=__V__"></script>
   <script src="/static/js/import-codeforces.js?v=__V__"></script>
   <script src="/static/js/report.js?v=__V__"></script>
   <!-- 지난 제출 불러오기 (utils·editor·tabs 의존) -->

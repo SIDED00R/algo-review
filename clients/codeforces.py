@@ -9,14 +9,14 @@ from urllib.parse import urlencode, urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from clients.utils import ProblemSearchError, UpstreamUnavailable
+from clients.utils import BROWSER_USER_AGENT, ProblemSearchError, UpstreamUnavailable
 
 logger = logging.getLogger("uvicorn.error")
 
 CODEFORCES_API_BASE = "https://codeforces.com/api"
 
 CODEFORCES_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "User-Agent": BROWSER_USER_AGENT,
     "Accept-Language": "en-US,en;q=0.9",
 }
 
@@ -234,17 +234,24 @@ def _extract_cf_sections(tree) -> dict:
     }
 
 
+def _fetch_cf_tree(problem_ref: str):
+    """CF 문제 페이지 → (lxml 트리, url, contest_id, index). 실패는 예외 전파.
+
+    호출마다 새 트리를 만든다 — cf_xpath_text 가 트리를 in-place 로 바꾸므로 공유할 수 없다.
+    """
+    from lxml import etree
+
+    contest_id, index = normalize_codeforces_problem_ref(problem_ref)
+    url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
+    resp = requests.get(url, headers=CODEFORCES_HEADERS, timeout=15)
+    resp.raise_for_status()
+    return etree.fromstring(resp.content, etree.HTMLParser()), url, contest_id, index
+
+
 def get_cf_problem_sections(problem_ref: str) -> dict | None:
     """실패 시 None — 호출부가 빈 섹션으로 착각해 기존 README 본문을 지우지 않도록 구분한다."""
     try:
-        from lxml import etree
-
-        contest_id, index = normalize_codeforces_problem_ref(problem_ref)
-        url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
-        resp = requests.get(url, headers=CODEFORCES_HEADERS, timeout=15)
-        resp.raise_for_status()
-
-        tree = etree.fromstring(resp.content, etree.HTMLParser())
+        tree, _url, _contest_id, _index = _fetch_cf_tree(problem_ref)
         return _extract_cf_sections(tree)
     except Exception as e:
         logger.warning("CF 문제 섹션 수집 실패 (%s): %s", problem_ref, e)
@@ -253,15 +260,7 @@ def get_cf_problem_sections(problem_ref: str) -> dict | None:
 
 def scrape_cf_problem(problem_ref: str) -> dict:
     """CF 문제 페이지에서 제목/제한/본문/예제/노트를 raw(미번역)로 추출. 형식 오류 시 ValueError."""
-    from lxml import etree
-
-    contest_id, index = normalize_codeforces_problem_ref(problem_ref)
-
-    url = f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
-    resp = requests.get(url, timeout=15, headers=CODEFORCES_HEADERS)
-    resp.raise_for_status()
-
-    tree = etree.fromstring(resp.content, etree.HTMLParser())
+    tree, url, contest_id, index = _fetch_cf_tree(problem_ref)
 
     def _limit_value(xpath_expr: str) -> str:
         nodes = tree.xpath(xpath_expr)
@@ -384,8 +383,6 @@ def _install_snapshot(fresh: tuple[list[dict], dict]) -> None:
     `_get_cf_problemset_snapshot` 의 빠른 경로는 락을 잡지 않으므로, `_snapshot` 을 먼저
     공개하면 그 사이 들어온 스레드가 아직 None 인 `_lookup` 을 받아
     `AttributeError: 'NoneType' object has no attribute 'get'` 로 죽는다.
-    창이 열리는 시점이 하필 "프로세스당 한 번, 수 초짜리 다운로드 직후" 라
-    콜드 스타트에 요청이 몰리는 정확히 그 순간이다.
     """
     global _snapshot, _lookup
     _lookup = _build_lookup(fresh[0])

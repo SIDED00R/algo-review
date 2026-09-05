@@ -61,14 +61,6 @@ def claim_solved_problem(platform: str, problem_ref: str) -> dict | None:
     return normalize_common_row(dict(row))
 
 
-def delete_solved_problem(platform: str, problem_ref: str) -> int:
-    """행을 지우고 **지운 개수**를 돌려준다. 0 이면 이미 없었다는 뜻이다."""
-    with session_scope(commit=True) as session:
-        return session.execute(delete(SolvedHistory).where(
-            SolvedHistory.platform == platform,
-            SolvedHistory.problem_ref == problem_ref)).rowcount
-
-
 def clear_solved_history():
     with session_scope(commit=True) as session:
         session.execute(delete(SolvedHistory))
@@ -170,7 +162,7 @@ def get_solved_cf_refs() -> set:
 
 def get_solved_problem_ids() -> set:
     with session_scope() as session:
-        # BOJ 전용이다 — 호출처 넷이 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
+        # BOJ 전용이다 — 호출처가 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
         # CF 행의 problem_id 에 실제 값이 들어가면 그 번호의 BOJ 문제가 조용히 제외된다.
         ids = set(session.scalars(
             select(Review.problem_id).where(Review.platform == "boj").distinct()).all())

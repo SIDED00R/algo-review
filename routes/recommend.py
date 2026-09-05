@@ -1,10 +1,8 @@
-import db
 import recommender
 from clients import ProblemSearchError
 from fastapi import APIRouter, Query
 
-from constants import TIER_NAMES
-from routes.helpers import require_platform
+from routes.helpers import average_difficulty, require_platform
 from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
 
 router = APIRouter()
@@ -36,19 +34,15 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
                 # `?exclude=4a` 가 저장된 `4A` 와 매칭되지 않으면 제외가 조용히 무효가 된다.
                 extra_exclude.add(raw.upper())
 
+    avg, has_avg, tier_name = average_difficulty(platform)
     if platform == "codeforces":
-        avg_rating = db.get_average_cf_rating()
         avg_tier = 0
-        has_avg = db.has_cf_rating()
-        tier_name = f"CF {int(avg_rating)}" if has_avg else "N/A"
-        tier_range = recommender.cf_rating_range_description(avg_rating)
+        tier_range = recommender.cf_rating_range_description(avg)
     else:
-        avg_tier = db.get_average_tier()
-        has_avg = db.has_graded_tier()
-        tier_name = TIER_NAMES.get(int(avg_tier), "N/A") if has_avg else "N/A"
-        tier_range = recommender.tier_range_description(avg_tier)
+        avg_tier = avg
+        tier_range = recommender.tier_range_description(avg)
 
-    # 응답에 싣는 값. 추천 밴드는 아래에서 원래 평균값(BOJ avg_tier / CF avg_rating)으로
+    # 응답에 싣는 값. 추천 밴드는 아래에서 원래 평균값(BOJ 평균 티어 / CF 평균 레이팅)으로
     # 계산한다.
     display_avg_tier = avg_tier if has_avg else 0
 
@@ -67,7 +61,7 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
         # 위에서 구한 평균 난이도를 넘긴다.
         recs = recommender.get_recommendations(
             weak_tags[:3], platform=platform, extra_exclude=extra_exclude,
-            avg_difficulty=avg_rating if platform == "codeforces" else avg_tier)
+            avg_difficulty=avg)
     except ProblemSearchError as e:
         recs, error = [], str(e)
 

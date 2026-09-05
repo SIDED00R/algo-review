@@ -183,3 +183,47 @@ def test_sample_without_output_is_preserved():
         {"input": "1", "output": "ok"},
         {"input": "2", "output": ""},
     ]
+
+
+# ── 전송 계층 (_fetch_cf_tree) ──
+
+_PROBLEM_PAGE = """<html><body><div id="pageContent"><div></div><div></div>
+  <div><div></div><div>
+    <div class="header"><div class="title">A. Watermelon</div>
+      <div class="time-limit"><div class="property-title">time limit</div>1 second</div>
+      <div class="memory-limit"><div class="property-title">memory limit</div>256 MB</div></div>
+    <div>Pete and Billy bought a watermelon of weight $$$w$$$.</div>
+    <div><div class="section-title">Input</div>The first line contains $$$w$$$.</div>
+    <div><div class="section-title">Output</div>Print YES or NO.</div>
+    <div class="sample-test"><div class="input"><pre>8</pre></div>
+      <div class="output"><pre>YES</pre></div></div>
+  </div></div></div></body></html>"""
+
+
+class _PageResponse:
+    content = _PROBLEM_PAGE.encode()
+
+    def raise_for_status(self):
+        return None
+
+
+def test_sections_and_full_scrape_read_the_same_page(monkeypatch):
+    """두 진입점이 전송 계층을 공유한다 — 갈리면 한쪽만 조용히 다른 본문을 본다."""
+    from clients import codeforces
+
+    urls = []
+
+    def fake_get(url, headers=None, timeout=None):
+        urls.append(url)
+        return _PageResponse()
+
+    monkeypatch.setattr(codeforces.requests, "get", fake_get)
+
+    sections = codeforces.get_cf_problem_sections("4A")
+    full = codeforces.scrape_cf_problem("4A")
+
+    assert urls == ["https://codeforces.com/problemset/problem/4/A"] * 2
+    assert sections == {"description": full["statement"],
+                        "input": full["input"], "output": full["output"]}
+    assert full["title"] == "A. Watermelon"
+    assert full["url"] == urls[0]
