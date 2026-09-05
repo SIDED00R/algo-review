@@ -1,8 +1,7 @@
 """제출 코드를 자식 프로세스로 실행한다.
 
-실행 전용 서비스(`executor/main.py`)와 로컬 개발의 인프로세스 경로(`routes/execute.py`)가
-이 모듈 하나를 공유한다. 앱 모듈을 import 하지 않는다 — 실행 서비스 이미지에는 앱 코드가
-들어가지 않는다.
+실행 전용 서비스(`executor/main.py`)가 쓴다. 앱 모듈을 import 하지 않는다 — 실행 서비스
+이미지에는 앱 코드가 들어가지 않는다.
 """
 import os
 import signal
@@ -22,8 +21,8 @@ MAX_OUTPUT_BYTES = 64 * 1024
 MAX_TIMEOUT_SEC = 10
 COMPILE_TIMEOUT_SEC = int(os.getenv("COMPILE_TIMEOUT", "30"))
 
-# 자식에게 넘길 환경변수 화이트리스트. 실행 서비스에는 비밀이 없지만, 로컬 인프로세스
-# 경로는 앱 프로세스의 환경을 그대로 물려주게 되므로 여기서 끊는다.
+# 자식에게 넘길 환경변수 화이트리스트. 이 필터가 있어야 어떤 호스트에서 돌든 부모 프로세스의
+# 환경이 제출 코드로 새지 않는다.
 _SAFE_ENV_KEYS = {"PATH", "HOME", "TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "SYSTEMDRIVE", "LANG", "LC_ALL"}
 
 _TRUNCATED_NOTICE = f"\n[출력이 {MAX_OUTPUT_BYTES // 1024}KB 에서 잘렸습니다]"
@@ -205,8 +204,7 @@ def _run_cpp(code: str, stdin: bytes, timeout: int, compile_timeout: int) -> dic
         return _execute([exe], stdin, timeout, tmpdir)
 
 
-def run_code(language: str, code: str, stdin: str = "", timeout_sec: int = 5,
-             compile_timeout: int | None = None) -> dict:
+def run_code(language: str, code: str, stdin: str = "", timeout_sec: int = 5) -> dict:
     """언어별 실행. 상한(타임아웃·stdin 크기)은 여기서 강제한다 — 호출부를 믿지 않는다."""
     timeout = max(1, min(int(timeout_sec), MAX_TIMEOUT_SEC))
     payload = stdin.encode("utf-8")[:MAX_STDIN_BYTES]
@@ -215,7 +213,7 @@ def run_code(language: str, code: str, stdin: str = "", timeout_sec: int = 5,
     if "python" in lang or "pypy" in lang:
         result = _run_python(code, payload, timeout)
     elif "c++" in lang or "cpp" in lang or "gnu" in lang:
-        result = _run_cpp(code, payload, timeout, compile_timeout or COMPILE_TIMEOUT_SEC)
+        result = _run_cpp(code, payload, timeout, COMPILE_TIMEOUT_SEC)
     else:
         raise UnsupportedLanguage(f"지원하지 않는 언어: {language}")
     result["time_ms"] = int((time.time() - start) * 1000)

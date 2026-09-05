@@ -117,7 +117,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 의 정본은 `constants.py` 다. `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
-| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), 예외 두 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) |
+| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), 브라우저 UA 단일 출처(`BROWSER_USER_AGENT` — solved.ac·CF 헤더가 공유), 예외 두 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
 ### API 라우터 (`routes/`)
@@ -130,7 +130,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
-| `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. 앱 안에서 직접 실행하는 경로는 로컬 개발 전용이다 |
+| `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
 | `routes/drafts.py` | `GET /api/drafts/{key}`, `POST /api/drafts/{key}` | 에디터 임시 저장본 조회/저장. 없는 저장본은 404 가 아니라 빈 값이다 — 프론트가 '아직 없음' 과 '조회 실패' 를 구분해야 한다 |
@@ -141,7 +141,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/import_github.py` | `POST /api/import-github` | BaekjoonHub 저장소 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
-| `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) |
+| `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) · 요청 검증(`require_platform`·`require_language`·`require_reviewable_code`) · 상류 실패 매핑(`upstream_failure`·`run_llm`) · LLM 전제 검사(`require_openai_key`) · 평균 난이도 표기(`average_difficulty`) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
 
 ### 프론트엔드 스타일 (`static/css/`)
@@ -201,7 +201,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
-| `routes/stats.py` | `db.get_average_tier` | BOJ 평균 티어 계산 |
+| `routes/stats.py`·`routes/recommend.py` | `helpers.average_difficulty` | 평균 난이도 조회 + 표시 라벨(내부에서 `db.get_average_tier`/`get_average_cf_rating`) |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | LLM 종합 리포트 생성 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
 | `routes/import_github.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
@@ -346,7 +346,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 마지막 응답이 이긴다 | 목록·토글에서 요청을 연달아 보내면 늦게 온 이전 응답이 새 화면을 덮는다. 칩은 B 가 활성인데 제목은 A 인 상태가 된다 | `problem-modal.js` 의 세대 토큰 규약을 `themes`·`stats`·`history`·`report` 에 같이 적용한다. `setLoading` 이 버튼을 `disabled` 로 만들면 **프로그래매틱 `click()` 은 명세상 이벤트를 발생시키지 않으므로**(재요청이 조용히 무시된다) 핸들러 함수를 직접 부른다 |
 | 판정 토큰의 JS 소비 | `--eff-*` 사용처를 CSS 만 훑어 검사하면 절반을 못 본다 — 통계 바와 티어 차트 색은 JS 가 `getComputedStyle` 로 읽는다 | 데이터 시각화용 `--bar-*`/`--chart-line` 을 `--eff-*` 별칭으로 분리하고(초기값 동일이라 화면 무변경), 불변식 테스트가 CSS 와 JS 를 **둘 다** 훑는다 |
 | 상속되는 font-weight | `.mono` 가 weight 를 지정하지 않으면 부모(`.summary-value` = 600)를 상속한다. 웹폰트는 400/500 만 로드하므로 브라우저가 **합성 볼드**를 그린다. 규칙 블록 단위로 검사하는 테스트는 두 선언이 다른 블록에 있으면 못 잡는다 | `.mono` 에 weight 를 못박는다. 상속으로 결합되는 문제는 블록 단위 정적 검사의 구조적 한계이므로 computed style 실측이 필요하다 |
-| 예외 원문의 응답 노출 | openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로 **제공자 본문을 그대로** 싣는다(실측). `.env.example` 이 호환 서드파티 엔드포인트를 1급 대안으로 안내하므로 본문 형태를 통제할 수 없고, `base_url` 이 내부 프록시면 그 주소도 함께 나간다 | 라우터는 `upstream_failure()` 로 타입명만 노출하고 세부는 로그로 보낸다. LLM 이 직접 만든 사용자용 안내(`ValueError`)는 그대로 통과시킨다 |
+| 예외 원문의 응답 노출 | openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로 **제공자 본문을 그대로** 싣는다(실측). `.env.example` 이 호환 서드파티 엔드포인트를 1급 대안으로 안내하므로 본문 형태를 통제할 수 없다(제공자가 본문에 자기 주소를 실으면 그것도 함께 나간다) | 라우터는 `upstream_failure()` 로 타입명만 노출하고 세부는 로그로 보낸다. LLM 이 직접 만든 사용자용 안내(`ValueError`)는 그대로 통과시킨다 |
 | 상류 장애의 상태코드 | 연결 실패를 입력 오류와 같은 예외 타입으로 치환하면 라우터가 400 으로 매핑한다 — 사용자는 "연결 실패 (ConnectTimeout)" 를 400 과 함께 보고 **자기 입력을 고치려 한다** | `UpstreamUnavailable` 을 따로 두고 502 로 매핑한다. `ValueError` 상속이라 기존 `except ValueError` 는 그대로 동작한다 |
 | 캐시 비우고 다시 받기 | `lru_cache.cache_clear()` 는 **먼저 버리고 나중에 받는다**. 재다운로드가 실패하면 정상 스냅샷까지 잃고, 그 뒤 그 기능 전부가 요청마다 재시도한다. `lru_cache` 는 사용자 함수 실행 중 락을 잡지 않아 **동시 miss 를 합치지도 못한다** | 새로 받아 **성공했을 때만 교체**하고, 갱신 구간을 락으로 감싼다(`_try_refresh_snapshot`) |
 | 부분 실패 정책 | 같은 예외에 소비처마다 정책이 반대면 한쪽이 틀린 것이다 — 테마는 밴드별로 부분 성공을 살리는데 추천은 첫 실패에서 던져 이미 성공한 태그의 결과까지 버렸다 | 태그별로 격리하고 **전부 실패했을 때만** 실패로 본다 |

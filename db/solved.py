@@ -162,7 +162,7 @@ def get_solved_cf_refs() -> set:
 
 def get_solved_problem_ids() -> set:
     with session_scope() as session:
-        # BOJ 전용이다 — 호출처 넷이 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
+        # BOJ 전용이다 — 호출처가 전부 "이미 푼 BOJ 문제 번호 제외" 용도다.
         # CF 행의 problem_id 에 실제 값이 들어가면 그 번호의 BOJ 문제가 조용히 제외된다.
         ids = set(session.scalars(
             select(Review.problem_id).where(Review.platform == "boj").distinct()).all())

@@ -203,7 +203,7 @@ gcloud run deploy algo-review-demo \
 
 ### 실행 전용 서비스 배포
 
-'예제 실행'은 앱이 아니라 격리된 실행 서비스가 담당합니다(이유는 `ARCHITECTURE.md` 보안 조치 1·11번).
+'예제 실행'은 앱이 아니라 격리된 실행 서비스가 담당합니다(이유는 `ARCHITECTURE.md` 보안 경계 1·11번).
 
 ```bash
 gcloud run deploy algo-executor   --source executor   --region asia-northeast3   --no-allow-unauthenticated   --service-account algo-executor-run@PROJECT.iam.gserviceaccount.com   --network executor-net --subnet executor-subnet --vpc-egress all-traffic   --clear-env-vars --memory 512Mi --cpu 1 --concurrency 1 --max-instances 5 --timeout 120
@@ -269,7 +269,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
     └── js/                 # UI 기능별 모듈 — 파일별 책임은 ARCHITECTURE.md 참조
 ```
 
-> 파일별 단일 책임, 엔드포인트 목록, 레이어 다이어그램, 호출관계, 보안 조치 내역은
+> 파일별 단일 책임, 엔드포인트 목록, 레이어 다이어그램, 호출관계, 보안 경계는
 > [ARCHITECTURE.md](./ARCHITECTURE.md)를 참조하세요.
 
 ## 기술 스택
