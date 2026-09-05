@@ -19,11 +19,10 @@ function tierFilterOptionsHtml() {
 
 function tierClass(tier) {
   if (tier === 0) return '';
-  if (tier <= 5) return 'tier-bronze';
-  if (tier <= 10) return 'tier-silver';
-  if (tier <= 15) return 'tier-gold';
-  if (tier <= 20) return 'tier-platinum';
-  if (tier <= 25) return 'tier-diamond';
+  // TIER_GROUPS 는 티어 오름차순이다 — 상한을 처음 넘지 않는 그룹이 그 티어의 그룹이다.
+  for (const [key, [, hi]] of Object.entries(TIER_GROUPS)) {
+    if (key !== 'unrated' && tier <= hi) return `tier-${key}`;
+  }
   return 'tier-ruby';
 }
 
