@@ -229,20 +229,19 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 ---
 
-## 보안 조치 내역
+## 보안 경계
 
-| # | 위치 | 조치 내용 |
+| # | 위치 | 무엇을 막는가 |
 |---|------|----------|
 | 1 | `routes/execute.py` · `executor/` | 임의 코드 실행을 **앱 밖으로 분리**했다. 앱은 실행하지 않고 `EXECUTOR_URL` 로 위임한다. 앱 프로세스 안에서 돌리면 `_SAFE_ENV_KEYS` 필터·`cwd` 격리·`-I` 를 다 걸어도 ① 네트워크 egress → GCE 메타데이터 서버 → 런타임 SA 토큰, ② `/proc/1/environ` → 앱 환경변수 전체(`USER` 가 `CMD` 앞이라 uvicorn 도 같은 uid 로 뜬다)가 남고, 둘 다 컨테이너 안에선 막을 수 없다(네트워크 차단은 `NET_ADMIN` 필수). 그래서 신뢰 경계를 밖에 세웠다 — 아래 11번. `EXECUTOR_URL` 이 없으면 `/api/execute` 는 403 이다. `tests/test_execute_isolation.py`(게이트·격리) 와 `tests/test_execute_delegation.py`(위임 배선) 가 함께 고정 |
-| 2 | `db/` | SQLAlchemy ORM 전환으로 raw SQL f-string 제거 — 쿼리가 전부 파라미터 바인딩되어 SQL injection 표면 소멸 |
+| 2 | `db/` | 쿼리는 SQLAlchemy ORM 으로만 만든다 — 전부 파라미터 바인딩되어 SQL injection 표면이 없다 |
 | 3 | `routes/auth.py` | OAuth 실패 시 예외 메시지 redirect URL 노출 제거, 서버 로그만 기록 |
 | 4 | `server.py` | `CORSMiddleware` 추가 (환경변수 `CORS_ORIGINS`로 허용 출처 설정) |
 | 5 | `server.py` | 전역 예외 핸들러 — DB 연결 실패(`OperationalError`)는 503 + 안내, 그 외 미처리 예외는 500 generic(내부 상세 비노출) + traceback 로깅 |
 | 6 | `routes/models.py` | `ExecuteRequest` validator: 코드 50,000자, 입력 10,000자, timeout 1~10초 제한 |
-| 7 | `.github/workflows/deploy.yml` | 접근 정책을 **코드가 정본**으로 갖는다 — 앱·데모는 `--allow-unauthenticated`(공개 운영 결정, #138), 실행 서비스만 `--no-allow-unauthenticated`. 명시하지 않으면 배포가 기존 IAM 을 "보존" 하므로, 콘솔에서 바뀐 상태가 배포로 되돌아가지 않는다 |
+| 7 | `.github/workflows/deploy.yml` | 접근 정책을 **코드가 정본**으로 갖는다 — 앱·데모는 `--allow-unauthenticated`(공개 운영 결정), 실행 서비스만 `--no-allow-unauthenticated`. 명시하지 않으면 배포가 기존 IAM 을 "보존" 하므로, 콘솔에서 바뀐 상태가 배포로 되돌아가지 않는다 |
 | 8 | `routes/helpers.py` | `merged_github_target` 은 저장소·토큰을 **짝으로만** 받는다. 한쪽만 override 하면 나머지가 저장된 값으로 폴백해, 요청자가 고른 저장소에 저장된 토큰(`scope=repo`)으로 커밋된다 |
 | 9 | `routes/models.py` | `PushReviewRequest` 의 경로·README 로 나가는 필드에 상한 — title/tier_name/language 200자, tags 30개×100자, url 은 `http(s)` 500자. 없으면 요청 1건으로 수 MB README 를 커밋하거나 경로 길이 한계를 넘긴다 |
-| 10 | `routes/models.py` | `max_pages` 상한 50. 이 라우터는 동기라 요청 하나가 anyio 스레드풀(기본 40) 슬롯을 페이지당 최대 15.5초 붙든다 — 상한이 크면 요청 몇 건으로 `/health` 까지 막힌다 |
 | 11 | `executor/` · `.github/workflows/deploy.yml` | 실행 전용 Cloud Run 서비스 `algo-executor`. 이미지에 앱 코드·DB·시크릿이 없고(`--clear-env-vars`), 런타임 SA `algo-executor-run` 에는 **IAM 역할이 하나도 없다** — 제출 코드가 메타데이터 서버에서 토큰을 받아도 그 토큰으로 할 수 있는 일이 없다. NAT 없는 서브넷으로 Direct VPC egress(`--vpc-egress all-traffic`)를 걸어 외부 통신을 끊고, `--no-allow-unauthenticated` + 앱 SA 에만 `run.invoker` 로 호출자를 앱으로 제한한다 |
 | 12 | `executor/runner.py` | 실행 자원 상한 — 스트림당 출력 64KB(넘는 바이트는 읽어서 버린다: 파이프를 비워야 자식이 막히지 않는다), stdin 64KB, 실행 10초, 그리고 **프로세스 그룹째 종료**(`start_new_session` + `killpg`). 직접 자식만 죽이면 제출 코드가 남긴 손자가 인스턴스 수명 동안 CPU 를 계속 쓴다. `tests/test_executor_runner.py` 가 넷을 실측으로 고정 |
 | 13 | `routes/execute.py` | `/api/execute` 는 인증이 없는 공개 엔드포인트다 — `X-Forwarded-For` 첫 항목 당 분당 30회로 제한한다(`request.client` 는 GFE 다). Cloud Run 은 클라이언트가 보낸 `X-Forwarded-For` 를 버리지 않으므로 이 키는 요청자가 정할 수 있다 — 그래서 헤더가 무엇이든 성립하는 전역 분당 120회 상한을 함께 건다. 실행 서비스의 `--max-instances 5` 가 비용 상한이고, 이 전역 상한이 그 비용 상한을 지킨다 |
@@ -253,7 +252,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 GitHub OAuth 토큰(`scope=repo`)을 DB 에 저장하고 공개 엔드포인트가 그 토큰으로 커밋한다.
 
 따라서 **서비스에 접근할 수 있는 사람 = 그 토큰을 쓸 수 있는 사람**이다. 접근 통제를 앱이
-아니라 **Cloud Run IAM** 이 담당한다(위 7번). 운영 서비스는 현재 공개이므로(#138) URL 을 아는
+아니라 **Cloud Run IAM** 이 담당한다(위 7번). 운영 서비스는 현재 공개이므로 URL 을 아는
 누구나 아래를 할 수 있다:
 
 - `GET /auth/github/repos` — 비공개 저장소 이름 전량 조회
@@ -303,7 +302,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 못 읽은 임시 저장본 | 조회가 실패했는데(온디맨드 DB 정지 등) 자동 저장을 켜면 **첫 타이핑이 읽지 못한 저장본을 덮어쓴다** — 실패한 순간이 곧 유실이다 | 조회 성공 시에만 `loaded` 를 세우고, 그때만 자동 저장한다. 실패한 자리는 '임시 저장' 버튼(수동)으로만 쓴다 |
 | 문자열 수준 테스트 | 빌드 스텝이 없어 JS/CSS 배선은 문자열 검사가 유일한 방어선이다. 정확 문자열은 공백·인용부호에 깨지고, 느슨한 부분문자열은 `ArrowRightX` 같은 오타를 통과시킨다. **결함을 설명하는 주석에 그 결함의 코드 형태가 적혀 있어** 거짓 빨강도 난다 | 정규식으로 쓰고, 규칙을 찾는 검사는 주석을 제거한 사본을 본다(`tests/test_frontend_invariants.py`) |
 | CSS 형제 결합자 | 인접(`+`)은 DOM 구조 기준이라 `display:none` 형제도 인접을 끊는다 — 가져오기 목록은 행마다 코드 패널 div 를 형제로 끼워 넣으므로 그 탭에서만 구분선이 겹친다 | 목록 행에는 일반 형제(`~`)를 쓴다 |
-| 오버레이 높이 | 모달 박스에 `max-height` 가 없으면 콘텐츠만큼 자라서 내부 `overflow-y:auto` 와 `overflow:hidden` 이 전부 무효가 되고(`scrollHeight == clientHeight`) 헤더가 화면 밖으로 나간다. 긴 CF 문제문에서 10,000px 이상 실측 | `.pm-box` 에 상한을 두고 자식은 `min-height:0` 만 갖는다. 자식에 상한을 나눠 주면 헤더 높이를 매직넘버로 빼야 한다 |
+| 오버레이 높이 | 모달 박스에 `max-height` 가 없으면 콘텐츠만큼 자라서 내부 `overflow-y:auto` 와 `overflow:hidden` 이 전부 무효가 되고(`scrollHeight == clientHeight`) 헤더가 화면 밖으로 나간다 | `.pm-box` 에 상한을 두고 자식은 `min-height:0` 만 갖는다. 자식에 상한을 나눠 주면 헤더 높이를 매직넘버로 빼야 한다 |
 | role="button" 안의 링크 | 행 전체를 버튼으로 만들면 `keydown` 의 `preventDefault` 가 자식 앵커의 기본 활성화까지 취소한다 — 마우스는 `stopPropagation` 으로 막혀 정상인데 **키보드만 링크가 죽는다**(WCAG 2.1.1) | `makeRowActivatable` 이 click·keydown 양쪽에서 `e.target.closest('a, button')` 을 걸러낸다 |
 | 늦은 응답 경쟁 | `/api/problem/cf/{ref}` 는 스크래핑 + 섹션 4개 번역이라 수 초~십수 초다. A 를 열고 닫은 뒤 B 를 열면 A 의 응답이 B 의 제목·본문·samples·sections 를 덮어, 예제 실행이 B 에 A 의 예제를 돌리고 push 가 B 의 ref 와 A 의 sections 를 함께 보낸다 | `await` 직후 `if (_currentProblem?.ref !== ref) return;`. 예제 실행은 같은 목적으로 세대 토큰(`_runToken`)을 쓴다 |
 | JS 구문 게이트 | `node --check static/js/*.js` 는 **첫 파일만** 검사한다 — Node 는 스크립트를 하나만 받고 나머지 위치 인자는 `argv` 가 된다 | `scripts/check_js.sh` 가 파일별로 돌린다 |
@@ -320,7 +319,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 예외 메시지의 쿼리스트링 | Codeforces 서명 호출은 `apiKey`·`apiSig` 를 **쿼리스트링**에 넣는다. requests 계열 예외 메시지는 요청 URL 전문을 포함하므로, `raise_for_status()` 뿐 아니라 **`requests.get` 자체가 던지는** `ConnectTimeout`/`ConnectionError` 도 키를 싣는다(urllib3 `MaxRetryError` 를 감싼다). 그 예외가 `detail=f"...{e}"` 를 타면 인증 없는 공개 엔드포인트가 운영자 키를 익명 요청자에게 돌려준다 | `_codeforces_api_request` 가 **함수를 나가는 모든 예외**를 원문 없는 `ValueError` 로 치환하고, 라우터는 500 detail 에 타입명만 싣는다. `tests/test_codeforces_credentials.py` 가 전송 예외 4종을 고정 |
 | `json.dumps(None)` | 문자열 필드의 `None` 은 NOT NULL 컬럼에서 `IntegrityError` 로 **요란하게** 죽지만, 리스트 필드는 `json.dumps(None)` → `"null"` 이 되어 예외 없이 통과하고 읽을 때 `json.loads` → `None` 이 되어 API 가 `"strengths": null` 을 내보낸다 | 정규화를 생산자(`normalize_review_result`) 한 곳에서 끝내고 문자열·리스트를 함께 다룬다. 저장 함수 둘은 dict 를 직접 받는 공개 경로라 각자 한 번 더 막는다 |
 | JSON 모드가 보장하지 않는 것 | `response_format={"type":"json_object"}` 는 Gemini 호환 엔드포인트에서 **문자열 값 안의 이스케이프까지 강제하지 않는다**. 모델이 복잡도를 LaTeX 로 적으면 `$O(N \log N)$` 이 그대로 실려 `\l` 에서 `Invalid \escape` 가 난다. `finish_reason` 은 `stop` 이라 토큰 초과 가드에도 걸리지 않고, 모델이 LaTeX 를 쓸 때만 터지므로 **간헐적**이다(동일 프롬프트 20회 중 5회) | `parse_review_json` 이 파싱 실패 시 이스케이프되지 않은 백슬래시만 이중화해 재파싱한다 — 유효한 이스케이프를 먼저 소비하지 않으면 `C:\\Users` 의 정상 백슬래시까지 망가진다. 프롬프트로도 수식을 일반 텍스트로 요구한다(피드백은 KaTeX 렌더 대상이 아니다) |
-| 검색 실패 vs 빈 결과 | 외부 검색이 전면 실패했는데 빈 목록을 돌려주면 호출부가 "조건에 맞는 문제 없음" 과 구분할 수 없다. 운영에서 solved.ac 가 Cloud Run 을 403 으로 막는 동안 `/api/recommend` 는 빈 추천을 주고 UI 는 **사용자를 탓했다** — 같은 응답에 평균 티어와 취약 태그가 채워져 있는데도 | 검색기가 `ProblemSearchError` 를 던지고, 라우터가 `themes` 응답이 이미 쓰던 `error` 필드 계약으로 내려보낸다. 프론트는 `error` 가 있으면 그 이유를 보인다 |
+| 검색 실패 vs 빈 결과 | 외부 검색이 전면 실패했는데 빈 목록을 돌려주면 호출부가 "조건에 맞는 문제 없음" 과 구분할 수 없다 — 같은 응답에 평균 티어와 취약 태그가 채워져 있어도 UI 는 사용자의 기록이 부족한 것으로 안내한다 | 검색기가 `ProblemSearchError` 를 던지고, 라우터가 `themes` 응답이 이미 쓰던 `error` 필드 계약으로 내려보낸다. 프론트는 `error` 가 있으면 그 이유를 보인다 |
 | 마이그레이션 실패 은닉 | "온디맨드 DB 정지 때도 기동은 계속한다" 는 의도로 `except Exception` 을 쓰면 잘못된 리비전·DDL 오류·다중 인스턴스 `upgrade head` 경합까지 warning 한 줄로 덮는다. 새 컬럼이 없는 스키마로 서비스하다 나중에 원인 불명 500 이 난다 | `except OperationalError` 로 좁힌다 — **연결 실패만** 흘려보낸다 |
 | 데이터 공백으로 분기 | "BOJ 태그 통계가 비면 CF" 같은 추론은 두 플랫폼을 함께 쓰는 사용자에게서 무너진다 — BOJ 기록이 하나라도 있으면 CF 리포트를 볼 수 없다 | `stats` 와 같이 **명시 쿼리 파라미터**로 받는다. 형제 API 가 파라미터를 쓰는데 하나만 추론하고 있으면 그 자체가 신호다 |
 | 같은 제약, 다른 엔드포인트 | 빈 `language` 는 확장자를 `.txt` 로 만들어 rereview 가 **영구 거부**하는 파일을 저장소에 남긴다. 사용자가 폼에서 언어를 고르는 세 엔드포인트가 같은 하류 제약을 공유한다 | 규칙을 `require_language()` 한 곳에 두고 셋이 호출한다. `/api/review-imported` 는 부르지 않는다 — 그 경로의 language 는 가져오기 원본에서 오므로 요청자가 고칠 수단이 없고, 400 으로 막으면 리뷰 자체가 불가능해진다. `require_platform()` 도 같은 이유로 한 곳에 둔다 |
@@ -339,11 +338,11 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 표시값과 기본값 | 추천 난이도의 기본값(평균 티어 10.0)을 그대로 화면에 쓰면 기록이 하나도 없는 사용자에게 "Silver I" 가 뜬다 | 기본값을 주는 함수와 "그 값이 실측인가" 를 알려주는 함수를 나눈다(`has_graded_tier`). 밴드 설명(`tier_range`)은 실제 적용된 파라미터라 감추지 않는다 |
 | 세대 토큰의 범위 | "모달이 열려 있는가" 만 보는 가드는 **그 사이 다른 문제를 연 경우**를 막지 못한다 — 늦은 응답이 다른 문제의 화면을 덮는다 | 시작 시점의 세대를 잡아 `await` 뒤에 비교한다. 목록 로더의 클로저도 같다 — 늦게 끝난 호출이 자기 스냅샷을 다시 그리면 새로 불러온 목록이 되돌아간다 |
 | 진행 중 상태의 소유자 | 진행 중을 버튼 노드에만 두면 검색·정렬·페이지 이동이 목록을 innerHTML 로 교체할 때 사라진다 — 유료 호출이 두 번 나간다 | 진행 중인 키를 모듈 스코프 집합에 두고, 렌더가 그 집합을 보고 그린다 |
-| flex 자동 최소 크기 | `overflow: hidden` 인 flex 자식은 자동 최소 크기가 0 이라 안쪽 `min-height` 아래로 무한 축소되고, 그 차이를 잘라낸다(좁은 화면에서 260px 에디터가 35px) | 래퍼에도 같은 `min-height` 를 준다. `flex-wrap` 이 없는 헤더도 같은 계열이다 — 좁은 화면에서 닫기 버튼이 화면 밖으로 나간다 |
+| flex 자동 최소 크기 | `overflow: hidden` 인 flex 자식은 자동 최소 크기가 0 이라 안쪽 `min-height` 아래로 무한 축소되고, 그 차이를 잘라낸다 | 래퍼에도 같은 `min-height` 를 준다. `flex-wrap` 이 없는 헤더도 같은 계열이다 — 좁은 화면에서 닫기 버튼이 화면 밖으로 나간다 |
 | 폴더명이 되는 외부 문자열 | 제목의 `/` 는 저장소 폴더 깊이를 한 단계 늘려, 4세그먼트 규약으로 트리를 읽는 재가져오기 파서가 그 문제를 조용히 빠뜨린다 | 경로 **구분자**만 치환한다(`safe_path_segment`). `?` `#` 등은 URL 인코딩이 처리하므로 폴더명을 바꾸지 않는다 — 바꾸면 이미 올라간 폴더와 어긋난다 |
 | 로컬에서 건너뛰는 게이트 | `check_js.sh` 의 구문 검사는 node 가 없으면 건너뛴다. 편집 스크립트가 개행 이스케이프를 실제 개행으로 바꾸면 그 파일 전체가 SyntaxError 인데 로컬 게이트가 전부 초록이다 | 같은 사고를 파이썬에서도 잡는다 — 줄을 넘는 따옴표 문자열을 검사한다(`test_no_unterminated_string_literals`) |
 | 브랜치 재추측 | GET 으로 main→master 폴백을 해서 기본 브랜치를 알아낸 뒤 PATCH 에서 다시 main 부터 추측하면, master 저장소에서 실패 PATCH 를 낭비하고 폴백 조건(422)에 없는 응답(404)이 오면 **tree·commit 을 이미 만든 상태에서** 예외가 난다 | 알아낸 브랜치를 변수로 잡아 끝까지 쓴다. `tests/test_github_push_branch.py` 가 두 저장소 형태를 고정 |
-| 차트 재진입 | `destroy()` 후 `await` 를 거쳐 `new Chart` 를 하면, 겹친 두 호출이 **둘 다** 진입 시점에 인스턴스를 `null` 로 보고 destroy 를 건너뛴다. 뒤늦은 `new Chart` 가 `Canvas is already in use` 를 던지고, 그 예외를 catch 가 안내문 자리에 그대로 표시해 **Chart.js 영문 메시지가 사용자 화면에 뜬다** | 세대 토큰을 둔다. 테마 토글은 재조회 대신 색만 갱신한다(`recolorTierChart`) — 재조회는 이 경쟁의 상시 발생원이었다 |
+| 차트 재진입 | `destroy()` 후 `await` 를 거쳐 `new Chart` 를 하면, 겹친 두 호출이 **둘 다** 진입 시점에 인스턴스를 `null` 로 보고 destroy 를 건너뛴다. 뒤늦은 `new Chart` 가 `Canvas is already in use` 를 던지고, 그 예외를 catch 가 안내문 자리에 그대로 표시해 **Chart.js 영문 메시지가 사용자 화면에 뜬다** | 세대 토큰을 둔다. 테마 토글은 재조회 대신 색만 갱신한다(`recolorTierChart`) |
 | 마지막 응답이 이긴다 | 목록·토글에서 요청을 연달아 보내면 늦게 온 이전 응답이 새 화면을 덮는다. 칩은 B 가 활성인데 제목은 A 인 상태가 된다 | `problem-modal.js` 의 세대 토큰 규약을 `themes`·`stats`·`history`·`report` 에 같이 적용한다. `setLoading` 이 버튼을 `disabled` 로 만들면 **프로그래매틱 `click()` 은 명세상 이벤트를 발생시키지 않으므로**(재요청이 조용히 무시된다) 핸들러 함수를 직접 부른다 |
 | 판정 토큰의 JS 소비 | `--eff-*` 사용처를 CSS 만 훑어 검사하면 절반을 못 본다 — 통계 바와 티어 차트 색은 JS 가 `getComputedStyle` 로 읽는다 | 데이터 시각화용 `--bar-*`/`--chart-line` 을 `--eff-*` 별칭으로 분리하고(초기값 동일이라 화면 무변경), 불변식 테스트가 CSS 와 JS 를 **둘 다** 훑는다 |
 | 상속되는 font-weight | `.mono` 가 weight 를 지정하지 않으면 부모(`.summary-value` = 600)를 상속한다. 웹폰트는 400/500 만 로드하므로 브라우저가 **합성 볼드**를 그린다. 규칙 블록 단위로 검사하는 테스트는 두 선언이 다른 블록에 있으면 못 잡는다 | `.mono` 에 weight 를 못박는다. 상속으로 결합되는 문제는 블록 단위 정적 검사의 구조적 한계이므로 computed style 실측이 필요하다 |

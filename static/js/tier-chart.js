@@ -32,8 +32,7 @@ function hexToRgba(hex, alpha) {
 
 let tierChartInstance = null;
 
-// 기본 안내 문구는 index.html 이 정본이다 — 여기에 복제하면 둘이 갈린다. 처음 덮어쓰기
-// 전에 한 번 붙잡아 두고, 인자 없이 부르면 그것으로 되돌린다 — 되돌리지 않으면
+// 기본 안내 문구는 index.html 이 정본이다 — 여기에 복제하면 둘이 갈린다. 되돌리지 않으면
 // 라이브러리 안내문이 "기록 없음" 자리에 그대로 남는다.
 let _defaultEmptyText = null;
 

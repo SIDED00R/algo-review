@@ -383,8 +383,6 @@ def _install_snapshot(fresh: tuple[list[dict], dict]) -> None:
     `_get_cf_problemset_snapshot` 의 빠른 경로는 락을 잡지 않으므로, `_snapshot` 을 먼저
     공개하면 그 사이 들어온 스레드가 아직 None 인 `_lookup` 을 받아
     `AttributeError: 'NoneType' object has no attribute 'get'` 로 죽는다.
-    창이 열리는 시점이 하필 "프로세스당 한 번, 수 초짜리 다운로드 직후" 라
-    콜드 스타트에 요청이 몰리는 정확히 그 순간이다.
     """
     global _snapshot, _lookup
     _lookup = _build_lookup(fresh[0])

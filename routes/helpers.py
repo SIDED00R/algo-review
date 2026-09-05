@@ -36,9 +36,7 @@ def push_solution(repo: str, token: str, folder: str, file_stem: str,
 def upstream_failure(action: str, exc: Exception) -> HTTPException:
     """예외 원문을 응답에 싣지 않는다 — 타입명만 노출하고 세부는 로그로 보낸다.
 
-    openai SDK 의 `APIStatusError` 메시지는 `Error code: 401 - {제공자 응답 본문}` 형태로
-    **제공자 본문을 그대로** 싣는다. 서드파티 엔드포인트를 쓸 수 있어 본문 형태를
-    통제할 수 없고, `base_url` 이 내부 프록시면 그 주소도 함께 나간다.
+    openai SDK 의 `APIStatusError` 메시지에는 제공자 응답 본문과 `base_url` 이 들어간다.
     """
     logger.exception("%s", action)
     return HTTPException(status_code=502, detail=f"{action} ({type(exc).__name__})")

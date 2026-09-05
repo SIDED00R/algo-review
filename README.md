@@ -51,7 +51,7 @@
 
 ## 기존 기록의 문제 설명 백필
 
-`problem_statement` 는 나중에 추가된 컬럼이라 그 전 기록은 비어 있다. 남아 있는 소스에서 되살린다.
+일부 과거 기록은 `problem_statement` 가 비어 있다. 남아 있는 소스에서 되살린다.
 
 ```bash
 python backfill_statements.py                    # 전체 dry-run (아무것도 쓰지 않음)
@@ -66,7 +66,7 @@ python backfill_statements.py --apply             # 실제 기록
 | CF (`--platform codeforces`) | codeforces.com 재수집 | 동작한다 |
 
 이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 사용자가 직접 붙여 넣었던
-원문은 저장된 적이 없어 복구할 수 없다 — 여기서 채우는 값은 "그 시절 스크래핑이 만들었을 본문"이다.
+원문은 저장되지 않으므로 복구 대상이 아니다.
 
 ## 로컬 실행
 
@@ -250,7 +250,6 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 ├── .dockerignore
 ├── .github/workflows/deploy.yml  # main 머지 시 Cloud Run 자동 배포 (prod + demo + executor)
 ├── LICENSE                 # MIT
-├── assets/                 # 데모 GIF (미사용)
 │
 ├── clients/                # 외부 API 클라이언트 (플랫폼별 분리) — 파일별 책임은 ARCHITECTURE.md 참조
 │
