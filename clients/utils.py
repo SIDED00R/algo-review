@@ -1,6 +1,6 @@
 import re
 
-# 두 사이트 모두 기본 UA 를 차단한다. 헤더 나머지는 사이트마다 다르므로 UA 만 공유한다.
+# 헤더 나머지는 사이트마다 다르므로 UA 만 공유한다.
 BROWSER_USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                       "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
 

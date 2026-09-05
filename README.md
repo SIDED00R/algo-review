@@ -65,8 +65,8 @@ python backfill_statements.py --apply             # 실제 기록
 | BOJ (`--platform boj`) | GitHub 저장소 README | acmicpc.net 이 종료돼 재수집이 불가하다. GitHub 에 push 했던 문제만 복구된다 |
 | CF (`--platform codeforces`) | codeforces.com 재수집 | 동작한다 |
 
-이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 사용자가 직접 붙여 넣었던
-원문은 저장되지 않으므로 복구 대상이 아니다.
+이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 백필 대상 시기에는 사용자가
+붙여 넣은 원문이 저장되지 않았으므로 복구 대상이 아니다(현재는 `/api/review` 가 그 원문을 저장한다).
 
 ## 로컬 실행
 

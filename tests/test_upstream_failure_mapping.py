@@ -173,3 +173,18 @@ def test_codeforces_client_side_failure_stays_a_value_error(monkeypatch):
     with pytest.raises(ValueError) as caught:
         codeforces._codeforces_api_request("problemset.problems")
     assert not isinstance(caught.value, UpstreamUnavailable)
+
+
+def test_run_llm_lets_an_httpexception_through():
+    """호출부가 만든 4xx 를 run_llm 이 삼키면 입력 오류가 상류 장애(502)로 뒤바뀐다."""
+    from fastapi import HTTPException
+
+    from routes.helpers import run_llm
+
+    def boom():
+        raise HTTPException(status_code=400, detail="저장된 코드가 없습니다.")
+
+    with pytest.raises(HTTPException) as caught:
+        run_llm("코드 분석 실패", boom)
+    assert caught.value.status_code == 400
+    assert caught.value.detail == "저장된 코드가 없습니다."
