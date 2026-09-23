@@ -1,6 +1,6 @@
 """code_drafts 테이블 CRUD — 에디터 임시 저장본.
 
-키 하나가 에디터 자리 하나다(메인 리뷰 탭 `main`, 문제 뷰어 `codeforces:{ref}`).
+키 하나가 에디터 자리 하나다(문제 뷰어 `codeforces:{ref}`).
 빈 코드는 저장하지 않고 행을 지운다.
 """
 from sqlalchemy.exc import IntegrityError

@@ -526,10 +526,18 @@ def test_draft_controls_exist_for_every_editor(html, js):
         "상태·버튼 조회 규약이 바뀌었다"
     # 저장 시각은 UTC 다 — 변환 없이 그리면 자정 근처에서 어긋난다.
     assert "parseStoredTime(" in src, "저장 시각을 변환 없이 그린다"
-    for editor_id in ("code-input", "pm-code"):
-        assert f"'{editor_id}':" in src, f"{editor_id} 가 임시 저장 배선에서 빠졌다"
-        assert f'id="{editor_id}-draft-status"' in html, f"{editor_id} 상태 요소가 없다"
-        assert f'id="{editor_id}-draft-btn"' in html, f"{editor_id} 임시 저장 버튼이 없다"
+    assert "'pm-code':" in src, "pm-code 가 임시 저장 배선에서 빠졌다"
+    assert 'id="pm-code-draft-status"' in html, "pm-code 상태 요소가 없다"
+    assert 'id="pm-code-draft-btn"' in html, "pm-code 임시 저장 버튼이 없다"
+
+
+def test_the_review_tab_editor_is_not_drafted(html, js):
+    """코드 리뷰 탭 에디터는 임시 저장·복원하지 않는다 — 새 리뷰를 쓸 때 이전 코드가 남는다."""
+    src = js["draft.js"]
+    assert "'code-input'" not in src, "코드 리뷰 탭 에디터가 임시 저장 배선에 있다"
+    assert not re.search(r"bindDraft\(\s*['\"]code-input['\"]", "\n".join(js.values())), \
+        "코드 리뷰 탭 에디터를 임시 저장에 붙인다"
+    assert "code-input-draft" not in html, "코드 리뷰 탭에 임시 저장 버튼·상태가 남아 있다"
 
 
 def test_problem_modal_has_a_height_ceiling(css):

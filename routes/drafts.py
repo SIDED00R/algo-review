@@ -7,7 +7,7 @@ from routes.models import DraftSaveRequest
 
 router = APIRouter()
 
-# 키 하나가 에디터 자리 하나다 — 메인 리뷰 탭은 `main`, 문제 뷰어는 `codeforces:{ref}`.
+# 키 하나가 에디터 자리 하나다 — 문제 뷰어는 `codeforces:{ref}`.
 # 이 값이 그대로 PK 가 된다.
 _KEY_PATTERN = re.compile(r"^[A-Za-z0-9:_-]{1,80}$")
 
