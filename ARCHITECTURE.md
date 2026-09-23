@@ -106,7 +106,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
-| `db/drafts.py` | code_drafts 테이블 CRUD — 에디터 임시 저장본. 키 하나가 에디터 자리 하나다(`main` · `codeforces:{ref}`). 빈 코드는 저장하지 않고 행을 지운다 |
+| `db/drafts.py` | code_drafts 테이블 CRUD — 에디터 임시 저장본. 키 하나가 에디터 자리 하나다(문제 뷰어 `codeforces:{ref}`). 빈 코드는 저장하지 않고 행을 지운다 |
 | `db/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 | `db/paging.py` | 목록 API 페이지네이션 경계(`paging_bounds`, 상한 100)와 검색 술어(`search_filter`) — 리뷰 기록·가져온 기록 공용 |
 | `migrations/` | Alembic 환경(`env.py`) + 리비전(`versions/`) |
@@ -167,7 +167,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
 | `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다. `escapeCloses: false` 는 Esc 닫기만 끈다(에디터가 든 모달용) |
-| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 메인 리뷰 탭은 로드 시 `main` 에 붙고, 문제 뷰어는 열 때 `codeforces:{ref}` 에 붙는다 |
+| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 문제 뷰어만 열 때 `codeforces:{ref}` 에 붙는다. 코드 리뷰 탭 에디터는 저장하지 않는다 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |

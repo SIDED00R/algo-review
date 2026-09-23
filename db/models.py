@@ -97,7 +97,7 @@ class ApiCache(Base):
 class CodeDraft(Base):
     __tablename__ = "code_drafts"
 
-    # 키 하나가 에디터 자리 하나다 — 메인 리뷰 탭은 'main', 문제 뷰어는 'codeforces:{ref}'.
+    # 키 하나가 에디터 자리 하나다 — 문제 뷰어는 'codeforces:{ref}'.
     draft_key: Mapped[str] = mapped_column(Text, primary_key=True)
     code: Mapped[str] = mapped_column(Text, nullable=False)
     # 복원할 때 되돌릴 언어 선택 값이다.

@@ -1,5 +1,5 @@
 // 에디터 임시 저장 — 작성 중인 코드를 서버(`/api/drafts/{key}`)에 자동 저장하고 다시 열 때 복원한다.
-// 키 하나가 에디터 자리 하나다: 메인 리뷰 탭은 `main`, 문제 뷰어는 문제마다 `codeforces:{ref}`.
+// 문제 뷰어 에디터만 저장한다. 키는 문제마다 `codeforces:{ref}` 다. 코드 리뷰 탭 에디터는 저장하지 않는다.
 (function () {
   // 입력이 멎고 이만큼 뒤에 저장한다.
   const DEBOUNCE_MS = 1500;
@@ -8,7 +8,6 @@
 
   // 에디터마다 언어 select 가 다르다. 언어도 함께 저장해 복원 때 되돌린다.
   const LANG_SELECT = {
-    'code-input': 'code-language',
     'pm-code': 'pm-language',
   };
 
@@ -166,7 +165,5 @@
       ?.addEventListener('click', () => saveDraft(editorId, true));
   });
 
-  // 메인 리뷰 탭 에디터는 자리가 하나뿐이라 여기서 붙인다.
   // 문제 뷰어는 문제마다 키가 달라 problem-modal.js 가 열 때 붙인다.
-  bindDraft('code-input', 'main');
 })();
