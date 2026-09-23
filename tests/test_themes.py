@@ -5,7 +5,7 @@ import themes
 
 def test_partial_band_failure_preserves_previously_cached_bands(monkeypatch):
     theme = themes.find_theme("dp")
-    key = f"themes:boj:{theme['id']}"
+    key = themes._pool_cache_key("boj", theme)
 
     full = [[{"id": 1}], [{"id": 2}], [{"id": 3}]]
     monkeypatch.setattr(themes, "_fetch_boj_pool", lambda tag: full)
@@ -50,3 +50,28 @@ def test_band_count_change_skips_merge(monkeypatch):
     four = [[{"id": 9}], [{"id": 8}], [{"id": 7}], [{"id": 6}]]   # 밴드 4개로 늘어난 배포
     monkeypatch.setattr(themes, "_fetch_boj_pool", lambda tag: four)
     assert themes.get_theme_problem_pool("boj", theme) == four, "밴드가 3개로 잘렸다"
+
+
+def test_response_caps_same_difficulty_at_two(monkeypatch):
+    """밴드 안에서 풀이 수 상위가 한 난이도에 몰려도 같은 난이도는 2개까지만 담는다."""
+    theme = themes.find_theme("dp")
+    band = [{"id": f"{i}A", "title": "t", "rating": 800} for i in range(5)] + [
+        {"id": "9B", "title": "t", "rating": 900},
+        {"id": "9C", "title": "t", "rating": 1000},
+    ]
+    monkeypatch.setattr(themes, "get_theme_problem_pool", lambda platform, t: [band, [], []])
+    monkeypatch.setattr(themes, "_solved_set", lambda platform: {"0A"})
+
+    ids = [p["id"] for p in themes.build_theme_response("codeforces", theme)["problems"]]
+    # 푼 0A 를 뺀 뒤 800 은 앞에서부터 2개(1A·2A)만 남는다.
+    assert ids == ["1A", "2A", "9B", "9C"]
+
+
+def test_cf_pool_keeps_other_difficulties_beyond_crowded_top(monkeypatch):
+    """풀은 난이도별 상한으로 담는다 — 한 난이도가 풀이 수 상위를 채워도 다른 난이도가 풀에 남는다."""
+    crowded = [{"id": f"{i}A", "title": "t", "rating": 800} for i in range(30)]
+    other = [{"id": "99B", "title": "t", "rating": 1100}]
+    monkeypatch.setattr(themes, "search_cf_problems_by_tag", lambda *a, **k: crowded + other)
+
+    easy = themes._fetch_cf_pool("dp")[0]
+    assert [p["id"] for p in easy] == ["0A", "1A", "2A", "3A", "4A", "99B"]

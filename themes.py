@@ -20,7 +20,8 @@ THEMES = [
 
 
 PER_BAND = 8               # 응답에 담는 밴드당 문제 수 (테마당 최대 24개)
-POOL_PER_BAND = 20         # 캐시하는 밴드당 풀 크기 — 푼 문제 제외 후에도 PER_BAND를 채울 여유분
+PER_DIFFICULTY = 2         # 응답에 담는 같은 난이도(CF rating / BOJ tier) 문제 수 상한
+POOL_PER_DIFFICULTY = 5    # 캐시하는 같은 난이도 풀 크기 — 푼 문제 제외 후에도 PER_DIFFICULTY를 채울 여유분
 CACHE_TTL_SEC = 24 * 3600  # 대표 문제 목록은 하루면 충분
 
 # 난이도 밴드 (쉬움/보통/어려움) — 밴드별 최다 풀이 순 상위를 뽑는다.
@@ -36,8 +37,20 @@ def find_theme(theme_id: str) -> dict | None:
     return next((t for t in THEMES if t["id"] == theme_id), None)
 
 
+def _cap_per_difficulty(problems: list[dict], diff_field: str, cap: int) -> list[dict]:
+    """입력 순서를 유지하며 같은 난이도 값은 앞에서부터 cap개까지만 남긴다."""
+    counts: dict = {}
+    kept = []
+    for p in problems:
+        d = p[diff_field]
+        if counts.get(d, 0) < cap:
+            counts[d] = counts.get(d, 0) + 1
+            kept.append(p)
+    return kept
+
+
 def _fetch_boj_pool(boj_tag: str) -> list[list[dict]]:
-    """밴드당 solved.ac 검색 1회(최다 풀이순) — 상위 POOL_PER_BAND개씩."""
+    """밴드당 solved.ac 검색 1회(최다 풀이순) — 난이도별 상위 POOL_PER_DIFFICULTY개씩."""
     bands = []
     for lo, hi in BOJ_BANDS:
         # 실패한 밴드는 빈 밴드로 둔다 — 아래 get_theme_problem_pool 이 만료 캐시로
@@ -46,7 +59,7 @@ def _fetch_boj_pool(boj_tag: str) -> list[list[dict]]:
             found = search_problems_by_tag(boj_tag, lo, hi, exclude_ids=set())
         except ProblemSearchError:
             found = []
-        bands.append(found[:POOL_PER_BAND])
+        bands.append(_cap_per_difficulty(found, "tier", POOL_PER_DIFFICULTY))
     return bands
 
 
@@ -65,12 +78,12 @@ def _fetch_cf_pool(cf_tag: str) -> list[list[dict]]:
             for p in pool
             if lo <= p["rating"] <= hi
         ]
-        bands.append(in_band[:POOL_PER_BAND])
+        bands.append(_cap_per_difficulty(in_band, "rating", POOL_PER_DIFFICULTY))
     return bands
 
 
 def _pool_cache_key(platform: str, theme: dict) -> str:
-    return f"themes:{platform}:{theme['id']}"
+    return f"themes:v2:{platform}:{theme['id']}"
 
 
 def theme_pool_is_fresh(platform: str, theme: dict) -> bool:
@@ -125,7 +138,7 @@ def _solved_set(platform: str) -> set:
 
 
 def build_theme_response(platform: str, theme: dict) -> dict:
-    """풀에서 푼 문제를 제외하고 밴드당 PER_BAND개씩, 난이도 오름차순으로 응답을 만든다."""
+    """풀에서 푼 문제를 제외하고 같은 난이도 PER_DIFFICULTY개·밴드당 PER_BAND개씩, 난이도 오름차순으로 응답을 만든다."""
     resp = {"theme": {"id": theme["id"], "label": theme["label"]}, "platform": platform}
 
     bands = get_theme_problem_pool(platform, theme)
@@ -139,7 +152,8 @@ def build_theme_response(platform: str, theme: dict) -> dict:
 
     problems = []
     for band in bands:
-        problems.extend([p for p in band if p["id"] not in solved][:PER_BAND])
+        unsolved = [p for p in band if p["id"] not in solved]
+        problems.extend(_cap_per_difficulty(unsolved, diff_field, PER_DIFFICULTY)[:PER_BAND])
     problems.sort(key=lambda p: p[diff_field])
 
     resp["problems"] = problems
