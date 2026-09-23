@@ -77,7 +77,7 @@ function _cacheThemeProblems(key, data) {
   // 실패 응답(error 필드)은 캐시하지 않는다 — 다음 시도에서 다시 서버로.
   if (data.error) return;
   _themeProblemsCache.set(key, data);
-  _lsSet(`themes:problems:v1:${key}`, data);
+  _lsSet(`themes:problems:v2:${key}`, data);
 }
 
 // 요청 세대 토큰 — 테마 A 를 고른 직후 B 를 누르면 A 의 늦은 응답이 B 의 렌더를 덮어
@@ -92,7 +92,7 @@ async function loadThemeProblems({ force = false } = {}) {
   if (!force) {
     const mem = _themeProblemsCache.get(key);
     if (mem) { renderThemeProblems(result, mem); return; }
-    const ls = _lsGet(`themes:problems:v1:${key}`, _LS_PROBLEMS_TTL_MS);
+    const ls = _lsGet(`themes:problems:v2:${key}`, _LS_PROBLEMS_TTL_MS);
     if (ls) {
       _themeProblemsCache.set(key, ls);
       renderThemeProblems(result, ls);
@@ -181,7 +181,7 @@ async function prefetchThemeData() {
   await ensureThemeList();
   for (const t of _themeList) {
     const key = `${themesPlatform}:${t.id}`;
-    if (_themeProblemsCache.has(key) || _lsGet(`themes:problems:v1:${key}`, _LS_PROBLEMS_TTL_MS)) continue;
+    if (_themeProblemsCache.has(key) || _lsGet(`themes:problems:v2:${key}`, _LS_PROBLEMS_TTL_MS)) continue;
     try {
       _cacheThemeProblems(key, await _fetchThemeProblems(themesPlatform, t.id));
     } catch { /* 프리페치 실패는 무시 — 탭 진입 시 재시도 */ }
