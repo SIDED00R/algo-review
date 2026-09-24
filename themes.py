@@ -21,7 +21,7 @@ THEMES = [
 
 PER_BAND = 8               # 응답에 담는 밴드당 문제 수 (테마당 최대 24개)
 PER_DIFFICULTY = 2         # 응답에 담는 같은 난이도(CF rating / BOJ tier) 문제 수 상한
-POOL_PER_DIFFICULTY = 5    # 캐시하는 같은 난이도 풀 크기 — 푼 문제 제외 후에도 PER_DIFFICULTY를 채울 여유분
+POOL_PER_DIFFICULTY = 20   # 캐시하는 같은 난이도 풀 크기 — 푼 문제 제외 후에도 PER_DIFFICULTY를 채울 여유분
 CACHE_TTL_SEC = 24 * 3600  # 대표 문제 목록은 하루면 충분
 
 # 난이도 밴드 (쉬움/보통/어려움) — 밴드별 최다 풀이 순 상위를 뽑는다.

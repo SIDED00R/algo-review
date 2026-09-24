@@ -69,9 +69,24 @@ def test_response_caps_same_difficulty_at_two(monkeypatch):
 
 def test_cf_pool_keeps_other_difficulties_beyond_crowded_top(monkeypatch):
     """풀은 난이도별 상한으로 담는다 — 한 난이도가 풀이 수 상위를 채워도 다른 난이도가 풀에 남는다."""
-    crowded = [{"id": f"{i}A", "title": "t", "rating": 800} for i in range(30)]
+    cap = themes.POOL_PER_DIFFICULTY
+    crowded = [{"id": f"{i}A", "title": "t", "rating": 800} for i in range(cap + 10)]
     other = [{"id": "99B", "title": "t", "rating": 1100}]
     monkeypatch.setattr(themes, "search_cf_problems_by_tag", lambda *a, **k: crowded + other)
 
     easy = themes._fetch_cf_pool("dp")[0]
-    assert [p["id"] for p in easy] == ["0A", "1A", "2A", "3A", "4A", "99B"]
+    assert [p["id"] for p in easy] == [f"{i}A" for i in range(cap)] + ["99B"]
+
+
+def test_boj_pool_survives_a_user_who_solved_the_most_popular(monkeypatch):
+    """많이 푼 사용자는 난이도별 풀이 수 상위를 이미 풀었다 — 풀이 그보다 깊어야 그 난이도가 남는다."""
+    theme = themes.find_theme("math")
+    band = [{"id": 1000 + i, "title": "t", "tier": 3} for i in range(30)]
+    monkeypatch.setattr(themes, "search_problems_by_tag", lambda *a, **k: band)
+    pool = themes._fetch_boj_pool(theme["boj_tag"])
+
+    monkeypatch.setattr(themes, "get_theme_problem_pool", lambda platform, t: pool)
+    monkeypatch.setattr(themes, "_solved_set", lambda platform: {1000 + i for i in range(10)})
+
+    ids = [p["id"] for p in themes.build_theme_response("boj", theme)["problems"]]
+    assert ids[:2] == [1010, 1011]
