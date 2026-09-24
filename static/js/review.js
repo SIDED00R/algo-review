@@ -3,14 +3,9 @@ const problemIdInput = document.getElementById('problem-id');
 const problemIdHelp = document.getElementById('problem-id-help');
 
 function syncProblemInputUI() {
-  const platform = platformSelect.value || 'boj';
-  if (platform === 'codeforces') {
-    problemIdInput.placeholder = '예) 4A 또는 4/A';
-    problemIdHelp.textContent = 'Codeforces: contestId + index 형식. 예) 4A, 4/A';
-  } else {
-    problemIdInput.placeholder = '예) 1000';
-    problemIdHelp.textContent = '백준: 숫자만 입력하세요. 예) 1000';
-  }
+  const spec = platformSpec(platformSelect.value);
+  problemIdInput.placeholder = spec.placeholder;
+  problemIdHelp.textContent = spec.help;
 }
 
 platformSelect.addEventListener('change', syncProblemInputUI);
@@ -38,14 +33,15 @@ function currentCodeAndLanguage() {
 // 입력 폼 전체를 현재 값으로 읽어 요청 본문을 만든다 — 리뷰 요청과 대기 push 가 공유한다.
 function currentReviewPayload() {
   const platform = platformSelect.value || 'boj';
+  const spec = platformSpec(platform);
   const problemId = document.getElementById('problem-id').value.trim();
   const problemStatement = document.getElementById('problem-statement').value.trim();
   const payload = {
     platform, ...currentCodeAndLanguage(),
     problem_statement: problemStatement || null,
   };
-  if (platform === 'codeforces') payload.problem_ref = problemId;
-  else payload.problem_id = Number(problemId);
+  // BOJ 만 정수 problem_id 를 보낸다. 문자열 식별자를 쓰는 플랫폼은 problem_ref 다.
+  payload[spec.refField] = spec.refField === 'problem_id' ? Number(problemId) : problemId;
   return payload;
 }
 
@@ -130,7 +126,7 @@ function renderPendingPushFallback(container) {
 }
 
 function renderReview(container, d) {
-  const tc = tierClass(d.tier);
+  const tc = difficultyClass(d.platform, d.tier);
   const tagsHtml = d.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
   const strengthsHtml = (d.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('') || '<li>-</li>';
   const weaknessesHtml = (d.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('') || '<li>-</li>';
@@ -197,7 +193,9 @@ function renderReview(container, d) {
     msg.textContent = '';
     msg.className = 'action-msg';
     try {
-      const cfSections = _currentProblem?.ref === d.problem_ref ? _currentProblem.sections : null;
+      // 뷰어가 받아 둔 본문 섹션은 같은 플랫폼의 같은 문제일 때만 쓴다.
+      const viewerSections = (_currentProblem?.platform === d.platform && _currentProblem?.ref === d.problem_ref)
+        ? _currentProblem.sections : null;
       const pastedStatement = document.getElementById('problem-statement')?.value?.trim() || '';
       const data = await fetchJsonOk('/api/push-review', {
         method: 'POST',
@@ -211,11 +209,11 @@ function renderReview(container, d) {
           code,
           language,
           url: d.problem_url,
-          ...(d.platform === 'codeforces' ? {
+          ...(platformSpec(d.platform).viewer ? {
             // 붙여넣은 본문이 먼저다 — 서버 resolve_statement 와 같은 우선순위여야 한다.
-            description: pastedStatement || cfSections?.statement || '',
-            input_desc: cfSections?.input || '',
-            output_desc: cfSections?.output || '',
+            description: pastedStatement || viewerSections?.statement || '',
+            input_desc: viewerSections?.input || '',
+            output_desc: viewerSections?.output || '',
           } : {}),
         }),
       }, 'push 실패');

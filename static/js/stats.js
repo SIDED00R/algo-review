@@ -51,7 +51,7 @@ function renderStats(container, data) {
     return;
   }
 
-  const isCf = data.platform === 'codeforces';
+  const spec = platformSpec(data.platform);
 
   let barsHtml = data.tag_stats.slice(0, 15).map(s => {
     const poorRatio = s.total_count > 0 ? s.poor_count / s.total_count : 0;
@@ -68,8 +68,7 @@ function renderStats(container, data) {
   }).join('');
 
   let historyHtml = data.history.map(r => {
-    const tc = isCf ? '' : tierClass(r.tier);
-    const tierLabel = tierBadgeHtml(tc, escapeHtml(r.tier_name));
+    const tierLabel = tierBadgeHtml(difficultyClass(data.platform, r.tier), escapeHtml(r.tier_name));
     return `<tr>
       <td><a href="${escapeHtml(problemUrl(r))}" target="_blank" rel="noopener noreferrer">${escapeHtml(problemLabel(r))}. ${escapeHtml(r.title)}</a></td>
       <td>${tierLabel}</td>
@@ -78,10 +77,10 @@ function renderStats(container, data) {
     </tr>`;
   }).join('');
 
-  const levelLabel = isCf ? '평균 레이팅' : '평균 레벨';
-  const levelValue = isCf
+  const levelLabel = spec.avgLabel;
+  const levelValue = spec.avgMono
     ? `<span class="mono">${escapeHtml(data.avg_tier_name)}</span>`
-    : tierBadgeHtml(tierClass(Math.floor(data.avg_tier)), escapeHtml(data.avg_tier_name));
+    : tierBadgeHtml(difficultyClass(data.platform, Math.floor(data.avg_tier)), escapeHtml(data.avg_tier_name));
 
   container.innerHTML = `
     <div class="result-card">

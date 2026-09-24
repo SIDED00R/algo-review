@@ -2,7 +2,7 @@ import re
 
 from pydantic import BaseModel, Field, field_validator
 
-from constants import is_supported_platform, normalize_platform
+from constants import is_supported_platform, normalize_platform, unsupported_platform
 
 
 MAX_CODE_LENGTH = 50_000
@@ -37,7 +37,7 @@ def validate_platform(value: str) -> str:
     """
     platform = normalize_platform(value)
     if not is_supported_platform(platform):
-        raise ValueError("지원하지 않는 플랫폼입니다. 'boj' 또는 'codeforces'만 가능합니다.")
+        raise unsupported_platform(platform)
     return platform
 
 

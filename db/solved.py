@@ -151,12 +151,13 @@ def get_solved_history(q: str = "", platform: str = "", tier_min: int | None = N
     return {"problems": problems, "total": total or 0}
 
 
-def get_solved_cf_refs() -> set:
+def get_solved_refs(platform: str) -> set:
+    """리뷰·가져온 기록에 있는 그 플랫폼의 problem_ref 집합."""
     with session_scope() as session:
         refs = set(session.scalars(
-            select(Review.problem_ref).where(Review.platform == "codeforces").distinct()).all())
+            select(Review.problem_ref).where(Review.platform == platform).distinct()).all())
         refs |= set(session.scalars(
-            select(SolvedHistory.problem_ref).where(SolvedHistory.platform == "codeforces")).all())
+            select(SolvedHistory.problem_ref).where(SolvedHistory.platform == platform)).all())
     return refs
 
 

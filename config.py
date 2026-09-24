@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # OpenAI 호환 엔드포인트를 제공하는 다른 제공자(예: Gemini)로 갈아끼울 때 지정한다.
     # 비워 두면 OpenAI 기본 엔드포인트를 쓴다 — 되돌리려면 이 값만 지우면 된다.
     openai_base_url: str | None = None
-    # model / max_tokens 는 리뷰(analyzer)와 번역(cf_translator)의 기본값이 다르므로
+    # model / max_tokens 는 리뷰(analyzer)와 번역(statement_translator)의 기본값이 다르므로
     # None 으로 두고 각 호출부에서 폴백한다(env 설정 시 양쪽 모두 그 값을 쓴다).
     openai_model: str | None = None
     openai_max_tokens: int | None = None

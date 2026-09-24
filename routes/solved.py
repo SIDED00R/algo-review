@@ -2,7 +2,8 @@ import db
 import analyzer
 from fastapi import APIRouter, HTTPException, Query
 from demo_mode import IS_DEMO, demo_block
-from routes.helpers import require_openai_key, require_platform, require_reviewable_code, run_llm
+from routes.helpers import (require_openai_key, require_platform, require_reviewable_code, run_llm,
+                            unsupported_platform_400)
 from routes.problem_resolve import resolve_problem_info, resolve_statement
 from routes.review_response import save_and_build_response
 
@@ -39,7 +40,7 @@ def review_imported(platform: str, problem_ref: str):
         if platform == "codeforces":
             # 조회 실패를 400/500 으로 매핑하는 공용 해석기를 쓴다(직접 호출하면 ValueError 가 500 으로만 샌다).
             problem_info = resolve_problem_info("codeforces", None, problem_ref)
-        else:
+        elif platform == "boj":
             problem_id = problem["problem_id"]
             problem_info = {
                 "id": problem_id,
@@ -50,6 +51,8 @@ def review_imported(platform: str, problem_ref: str):
                 "tier_name": problem["tier_name"],   # normalize_common_row 가 항상 채운다
                 "tags": problem["tags"],
             }
+        else:
+            raise unsupported_platform_400(platform)
 
         # 수집 함수는 예외 대신 실패 문자열을 반환한다 — 리뷰·재리뷰와 같은 해석기를 써서
         # 실패를 빈 본문으로 바꾼다.

@@ -2,6 +2,7 @@ import time
 
 import db
 from clients import ProblemSearchError, search_cf_problems_by_tag, search_problems_by_tag
+from constants import unsupported_platform
 
 # 테마별 문제 둘러보기 — 알고리즘 분야별 대표 문제를 플랫폼(Codeforces/백준)별 네이티브 난이도로 제공한다.
 # cf_tag 는 Codeforces problemset 태그명(공백 포함), boj_tag 는 solved.ac 태그 키.
@@ -101,8 +102,10 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
 
     if platform == "boj":
         fresh = _fetch_boj_pool(theme["boj_tag"])
-    else:
+    elif platform == "codeforces":
         fresh = _fetch_cf_pool(theme["cf_tag"])
+    else:
+        raise unsupported_platform(platform)
 
     bands = fresh
     # 부분 실패일 때만 만료 캐시를 본다.
@@ -132,14 +135,26 @@ def _solved_set(platform: str) -> set:
     now = time.monotonic()
     if hit is not None and now - hit[1] < _SOLVED_TTL_SEC:
         return hit[0]
-    fresh = db.get_solved_problem_ids() if platform == "boj" else db.get_solved_cf_refs()
+    if platform == "boj":
+        fresh = db.get_solved_problem_ids()
+    elif platform == "codeforces":
+        fresh = db.get_solved_refs("codeforces")
+    else:
+        raise unsupported_platform(platform)
     _solved_cache[platform] = (fresh, now)
     return fresh
+
+
+# 응답 정렬·같은 난이도 상한에 쓰는 난이도 필드. 플랫폼마다 문제 dict 의 키가 다르다.
+_DIFF_FIELD = {"boj": "tier", "codeforces": "rating"}
 
 
 def build_theme_response(platform: str, theme: dict) -> dict:
     """풀에서 푼 문제를 제외하고 같은 난이도 PER_DIFFICULTY개·밴드당 PER_BAND개씩, 난이도 오름차순으로 응답을 만든다."""
     resp = {"theme": {"id": theme["id"], "label": theme["label"]}, "platform": platform}
+    if platform not in _DIFF_FIELD:
+        raise unsupported_platform(platform)
+    diff_field = _DIFF_FIELD[platform]
 
     bands = get_theme_problem_pool(platform, theme)
     if bands is None:
@@ -148,7 +163,6 @@ def build_theme_response(platform: str, theme: dict) -> dict:
         return resp
 
     solved = _solved_set(platform)
-    diff_field = "tier" if platform == "boj" else "rating"
 
     problems = []
     for band in bands:

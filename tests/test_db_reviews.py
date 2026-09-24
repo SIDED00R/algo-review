@@ -172,7 +172,7 @@ def test_update_pending_review_does_not_recount_reviewed_problem(at_time):
 def test_pending_excluded_from_cf_tag_stats():
     mk_review(problem_id=1, platform="codeforces", problem_ref="1A", tags=["math"],
               efficiency=db.PENDING_EFFICIENCY, tier_name="Codeforces 800")
-    assert db.get_cf_tag_stats() == []
+    assert db.get_platform_tag_stats("codeforces") == []
 
 
 def test_pending_counts_as_solved_but_not_in_poor_ratio():
@@ -397,7 +397,7 @@ def test_codeforces_weakness_matches_the_codeforces_stats_page(at_time):
     mk_review(problem_id=0, problem_ref="4A", platform="codeforces", tags=["dp"],
               efficiency="good", tier=0, tier_name="Codeforces 800")
 
-    stats = {s["tag"]: s for s in db.get_cf_tag_stats()}
+    stats = {s["tag"]: s for s in db.get_platform_tag_stats("codeforces")}
     weakness = {row["tag"]: row for row in db.get_tag_weakness_data("codeforces")}
     expected = stats["dp"]["poor_count"] / stats["dp"]["total_count"]
     assert weakness["dp"]["poor_ratio"] == expected

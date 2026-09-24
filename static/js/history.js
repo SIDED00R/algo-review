@@ -113,7 +113,7 @@ function renderProblemList(container, problems, hasAny = true) {
 
   const frag = document.createDocumentFragment();
   problems.forEach(p => {
-    const tc = tierClass(p.tier);
+    const tc = difficultyClass(p.platform, p.tier);
     const lastEff = p.last_efficiency;
     const div = document.createElement('div');
     div.className = 'row';
@@ -158,7 +158,7 @@ async function openReviewModal(platform, problemRef) {
     if (!reviews.length) throw new Error('기록이 없습니다.');
 
     const first = reviews[0];
-    const tc = tierClass(first.tier);
+    const tc = difficultyClass(first.platform, first.tier);
     const tagsHtml = (first.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
     // 제출 원장 — 회차·날짜·복잡도·판정을 모노로 정렬한다.

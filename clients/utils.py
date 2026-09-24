@@ -36,11 +36,14 @@ _D_LANG_RE = re.compile(r"(?:^|\s)d(?:\s|$)")
 
 def get_problem_url(platform: str, problem_ref: str | int) -> str:
     from clients.codeforces import normalize_codeforces_problem_ref
+    from constants import unsupported_platform
     platform = (platform or "boj").lower()
     if platform == "codeforces":
         contest_id, index = normalize_codeforces_problem_ref(str(problem_ref))
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
-    return f"https://boj.kr/{problem_ref}"
+    if platform == "boj":
+        return f"https://boj.kr/{problem_ref}"
+    raise unsupported_platform(platform)
 
 
 def get_file_extension(language: str) -> str:

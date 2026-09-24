@@ -156,7 +156,22 @@ def test_tier_chart_consumes_the_server_order_without_re_deriving_it(js):
 
 def test_pasted_statement_wins_over_the_viewer_cache(js):
     """서버 resolve_statement 와 같은 우선순위여야 LLM 리뷰와 README 가 갈리지 않는다."""
-    assert re.search(r"description:\s*pastedStatement\s*\|\|\s*cfSections", js["review.js"])
+    assert re.search(r"description:\s*pastedStatement\s*\|\|\s*viewerSections", js["review.js"])
+
+
+def test_platform_branches_go_through_the_platform_table(js):
+    """플랫폼별 분기는 utils.js 의 PLATFORMS 표를 거친다.
+
+    파일마다 `=== 'codeforces'` 로 갈리면 else 쪽이 BOJ 로 굳어, 새 플랫폼이 boj.kr 링크와
+    BOJ 티어 배지로 조용히 그려진다. 표에 없는 플랫폼은 platformSpec 이 throw 한다.
+    """
+    literal_compare = re.compile(r"platform\s*[!=]==?\s*['\"](?:boj|codeforces)['\"]")
+    for name, src in js.items():
+        if name == "utils.js":
+            continue
+        assert not literal_compare.search(src), f"{name} 이 플랫폼 문자열을 직접 비교한다"
+    assert re.search(r"function\s+platformSpec\s*\(", js["utils.js"])
+    assert re.search(r"throw new Error\(`지원하지 않는 플랫폼", js["utils.js"])
 
 
 def test_markdown_rendering_falls_back_when_the_cdn_is_blocked(js):
