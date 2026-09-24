@@ -14,7 +14,7 @@ from fastapi import HTTPException
 import db
 import clients as api_client
 from config import settings
-from constants import TIER_NAMES, unsupported_platform
+from constants import TIER_NAMES, lc_difficulty_label, unsupported_platform
 from routes.models import MAX_CODE_LENGTH, validate_platform
 
 logger = logging.getLogger("uvicorn.error")
@@ -78,6 +78,12 @@ def average_difficulty(platform: str) -> tuple[float, bool, str]:
         avg = db.get_average_tier("boj")
         graded = db.has_graded_tier("boj")
         return avg, graded, TIER_NAMES.get(int(avg), "N/A") if graded else "N/A"
+    if platform == "leetcode":
+        graded = db.has_graded_tier("leetcode")
+        # 등급 있는 기록이 없을 때의 추천 기본값은 Medium(2) — get_average_tier 의 기본값 10.0 은 BOJ 척도다.
+        avg = db.get_average_tier("leetcode") if graded else 2.0
+        # half-up — 프런트 배지(Math.round)와 같은 규칙이다(round() 는 2.5 를 2 로 낸다).
+        return avg, graded, lc_difficulty_label(int(avg + 0.5)) if graded else "N/A"
     raise unsupported_platform(platform)
 
 
@@ -146,6 +152,11 @@ def require_problem_ref(platform: str, problem_ref) -> str:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from None
         return f"{contest_id}{index}"
+    if platform == "leetcode":
+        try:
+            return api_client.normalize_leetcode_problem_ref(ref)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from None
     raise unsupported_platform_400(platform)
 
 
@@ -170,6 +181,11 @@ def build_solution_target(platform: str, problem_ref, title: str, tier_name: str
     elif platform == "codeforces":
         folder = f"Codeforces/{problem_ref}. {name}"
         msg = f"[Codeforces] {problem_ref}. {name}"
+    elif platform == "leetcode":
+        # tier_name 은 "LeetCode Easy" — 마지막 단어가 난이도 폴더가 된다.
+        difficulty = safe_path_segment((tier_name.split() or ["Unrated"])[-1])
+        folder = f"LeetCode/{difficulty}/{problem_ref}. {name}"
+        msg = f"[LeetCode] {problem_ref}. {name}"
     else:
         raise unsupported_platform(platform)
     return folder, msg
@@ -261,6 +277,8 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
             sections = api_client.get_boj_problem_sections(int(problem_ref))
         elif platform == "codeforces":
             sections = api_client.get_cf_problem_sections(problem_ref)
+        elif platform == "leetcode":
+            sections = api_client.get_lc_problem_sections(problem_ref)
         else:
             raise unsupported_platform(platform)
         if not sections or not any(sections.values()):

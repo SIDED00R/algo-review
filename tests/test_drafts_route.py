@@ -50,7 +50,7 @@ def test_keys_are_independent(client):
 
 def test_malformed_key_is_rejected(client):
     """키는 그대로 PK 가 된다 — 임의 문자열을 받으면 표가 쓰레기로 찬다."""
-    for bad in ("문제", "a" * 81, "main!"):
+    for bad in ("문제", "a" * 121, "main!"):
         assert client.get(f"/api/drafts/{bad}").status_code == 400
         assert client.post(f"/api/drafts/{bad}", json={"code": "x"}).status_code == 400
 

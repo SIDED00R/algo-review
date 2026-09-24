@@ -86,7 +86,7 @@ def test_stored_statement_reaches_the_llm(minimal_client, monkeypatch):
                         lambda pid: pytest.fail("저장된 본문이 있으면 스크래핑하면 안 된다"))
     seen = {}
 
-    def fake_analyze(info, statement, code):
+    def fake_analyze(info, statement, code, language=""):
         seen["statement"] = statement
         return {"efficiency": "ok", "complexity": "O(N)", "better_algorithm": None,
                 "feedback": "피드백", "strengths": [], "weaknesses": []}
@@ -158,7 +158,7 @@ def test_llm_result_lands_on_the_round_that_was_reviewed(minimal_client, monkeyp
 
     pushed_code = {}
 
-    def _fake_analyze(problem_info, statement, code):
+    def _fake_analyze(problem_info, statement, code, language=""):
         # LLM 호출 중에 사용자가 같은 문제를 다시 대기 등록한다.
         at_time("2026-01-02T00:00:00")
         _save(db.PENDING_EFFICIENCY, code="코드 B")
@@ -192,7 +192,7 @@ def test_a_round_filled_meanwhile_is_reported_as_conflict(minimal_client, monkey
     monkeypatch.setattr(settings, "openai_api_key", "test-key")
     monkeypatch.setattr(rereview, "resolve_statement", lambda *a, **k: "문제 본문")
 
-    def _fake_analyze(problem_info, statement, code):
+    def _fake_analyze(problem_info, statement, code, language=""):
         db.update_pending_review("boj", "1000", {
             "efficiency": "good", "complexity": "O(N)", "better_algorithm": "",
             "feedback": "먼저 도착한 리뷰", "strengths": [], "weaknesses": [],

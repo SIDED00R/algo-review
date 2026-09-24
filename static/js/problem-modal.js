@@ -33,7 +33,23 @@ function bindProblemClicks(rootEl) {
 }
 
 // 뷰어 언어 select 값 → 리뷰 폼의 언어 select 값.
-const PM_LANGUAGE_NAMES = { python3: 'Python 3', cpp: 'GNU C++17' };
+const PM_LANGUAGE_NAMES = { python3: 'Python 3', cpp: 'GNU C++17', mysql: 'MySQL' };
+
+// 예제 실행 영역(실행 버튼·결과·커스텀 예제). stdin/stdout 예제가 있는 응답에서만 보인다.
+function setSampleUiVisible(visible) {
+  for (const sel of ['#pm-run-btn', '#pm-test-results', '#problem-modal .pm-custom-section']) {
+    document.querySelector(sel).classList.toggle('hidden', !visible);
+  }
+}
+
+// 본문이 HTML 한 덩어리로 오는 응답(LeetCode). 서버가 번역한 HTML 을 정화해 그린다.
+function renderHtmlStatement(data) {
+  if (!data.content_html_ko) {
+    return '<div class="alert alert-info">유료(Premium) 문제라 본문을 가져올 수 없습니다. 문제 링크에서 확인하세요.</div>';
+  }
+  const notice = data.translated ? '' : '<p class="hint">번역에 실패해 원문을 표시합니다.</p>';
+  return `${notice}<div class="pm-section-card pm-html">${sanitizeHtml(data.content_html_ko)}</div>`;
+}
 
 let _currentProblem = null;
 // 예제 실행 세대. 실행 중 모달을 닫거나 다른 문제를 열면 결과 노드가 사라지므로,
@@ -68,7 +84,9 @@ async function openProblemModal(platform, ref, title, tierName) {
   // 진행 중인 예제 실행을 무효화하고 버튼을 되돌린다.
   _runToken++;
   resetRunButton();
-  // 숨기지 않는다 — 예제 실행이 실패하거나(컴파일 오류·시간 초과) 실행 서비스가
+  // 응답을 받기 전에는 예제 실행 영역을 숨긴다 — 예제가 없는 플랫폼에서 버튼이 잠깐 보였다 사라진다.
+  setSampleUiVisible(false);
+  // 리뷰 버튼은 숨기지 않는다 — 예제 실행이 실패하거나(컴파일 오류·시간 초과) 실행 서비스가
   // 응답하지 않을 때도 리뷰로는 넘어갈 수 있어야 한다.
   const pmReviewBtnReset = document.getElementById('pm-review-btn');
   pmReviewBtnReset.textContent = '코드 리뷰 진행';
@@ -84,15 +102,34 @@ async function openProblemModal(platform, ref, title, tierName) {
     // 나중에 연 문제의 본문·samples·sections 를 덮는다.
     if (_currentProblem?.ref !== ref) return;
 
-    _currentProblem.samples  = data.samples;
+    // 예제는 stdin/stdout 응답(CF)에만 있다. 없는 응답은 실행 영역을 숨긴 채 둔다.
+    const hasSamples = Array.isArray(data.samples);
+    _currentProblem.samples  = hasSamples ? data.samples : [];
     _currentProblem.sections = data.statement_sections_ko || {};
+    setSampleUiVisible(hasSamples);
 
-    document.getElementById('pm-title').textContent = `${ref}. ${data.title}`;
-    document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
+    // SQL 언어는 SQL 을 받는 플랫폼에서만 고를 수 있고, Database 문제면 기본값이다.
+    const langSel = document.getElementById('pm-language');
+    langSel.querySelector('option[value="mysql"]').hidden = !spec.sqlViewer;
+    if (data.category === 'Database') langSel.value = 'mysql';
+    else if (langSel.value === 'mysql') langSel.value = 'python3';
+    langSel.dispatchEvent(new Event('change'));   // editor.js 가 CodeMirror 모드를 바꾼다
+
+    // 식별자가 slug 인 플랫폼은 응답의 번호(problem_id)를 제목에 쓴다. CF 응답에는 없어 ref 그대로다.
+    document.getElementById('pm-title').textContent = `${data.problem_id ?? ref}. ${data.title}`;
     const pUrl = problemUrl({ platform, problem_ref: ref, problem_url: data.url });
     document.getElementById('pm-link').innerHTML =
       `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer">문제 링크 열기</a>`;
     document.getElementById('pm-loading').classList.add('hidden');
+
+    const stmtEl = document.getElementById('pm-statement');
+    if (!data.statement_sections_ko) {
+      document.getElementById('pm-meta').textContent = [data.difficulty, data.category].filter(Boolean).join(' · ');
+      stmtEl.innerHTML = renderHtmlStatement(data);
+      stmtEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
 
     const samplesHtml = data.samples.map((s, i) => `
       <div class="pm-sample">
@@ -130,7 +167,6 @@ async function openProblemModal(platform, ref, title, tierName) {
       })
       .join('');
 
-    const stmtEl = document.getElementById('pm-statement');
     stmtEl.innerHTML = sectionsHtml + samplesHtml;
     stmtEl.classList.remove('hidden');
     if (typeof renderMathInElement !== 'undefined') {

@@ -7,7 +7,16 @@ DB 레이어와 외부 클라이언트는 레이어 다이어그램에서 형제
 고쳐 조용히 어긋난다.
 """
 
-PLATFORMS = ("codeforces", "boj")
+PLATFORMS = ("codeforces", "boj", "leetcode")
+
+# LeetCode 난이도. reviews.tier 에 1~3 으로 저장하고 tier_name 은 아래 라벨을 쓴다.
+LC_DIFFICULTY_NAMES = {1: "Easy", 2: "Medium", 3: "Hard"}
+
+
+def lc_difficulty_label(tier: int) -> str:
+    """저장·파싱되는 LeetCode 난이도 표준 라벨: 'LeetCode Easy'. 범위 밖은 'LeetCode Unrated'."""
+    return f"LeetCode {LC_DIFFICULTY_NAMES.get(tier, 'Unrated')}"
+
 
 TIER_NAMES = {
     0: "Unrated",

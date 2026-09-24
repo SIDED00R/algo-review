@@ -90,3 +90,46 @@ def test_boj_pool_survives_a_user_who_solved_the_most_popular(monkeypatch):
 
     ids = [p["id"] for p in themes.build_theme_response("boj", theme)["problems"]]
     assert ids[:2] == [1010, 1011]
+
+
+def test_theme_list_is_per_platform():
+    ids = {p: [t["id"] for t in themes.get_theme_list(p)] for p in ("boj", "codeforces", "leetcode")}
+    assert "sql" in ids["leetcode"]
+    assert "sql" not in ids["boj"] and "sql" not in ids["codeforces"]
+    assert ids["boj"] == ids["codeforces"]
+
+
+def test_lc_pool_buckets_three_difficulties_and_the_response_caps_at_band_size(monkeypatch):
+    pool = [{"id": f"p{i}", "problem_id": i, "title": "t", "tier": 1 + i % 3, "tier_name": "x", "url": "u"}
+            for i in range(60)]
+    monkeypatch.setattr(themes, "search_lc_problems_by_tag", lambda *a, **k: pool)
+    bands = themes._fetch_lc_pool("database")
+    assert [len(b) for b in bands] == [20, 20, 20]
+
+    monkeypatch.setattr(themes, "get_theme_problem_pool", lambda platform, t: bands)
+    monkeypatch.setattr(themes, "_solved_set", lambda platform: {"p0"})
+    resp = themes.build_theme_response("leetcode", themes.find_theme("sql"))
+    # LeetCode 는 밴드 하나가 난이도 하나라 같은 난이도 상한이 밴드 크기(8)다.
+    assert sorted(p["tier"] for p in resp["problems"]) == [1] * 8 + [2] * 8 + [3] * 8
+    assert "p0" not in [p["id"] for p in resp["problems"]]
+
+
+def test_sql_theme_exists_only_where_the_platform_has_it(minimal_app):
+    from routes import themes as themes_route
+    client = minimal_app(themes_route.router)
+    assert client.get("/api/themes/sql/problems", params={"platform": "boj"}).status_code == 404
+    assert [t["id"] for t in client.get("/api/themes", params={"platform": "leetcode"}).json()["themes"]][-1] == "sql"
+    assert "sql" not in [t["id"] for t in client.get("/api/themes", params={"platform": "boj"}).json()["themes"]]
+    assert client.get("/api/themes", params={"platform": "atcoder"}).status_code == 400
+
+
+def test_warmup_skips_themes_the_platform_does_not_have(monkeypatch):
+    import asyncio
+    import warmup
+    seen = []
+    monkeypatch.setattr(warmup, "WARMUP_DELAY_SEC", 0)
+    monkeypatch.setattr(themes, "theme_pool_is_fresh",
+                        lambda platform, theme: seen.append((platform, theme["id"])) or True)
+    asyncio.run(warmup.warm_theme_caches())
+    assert ("leetcode", "sql") in seen
+    assert ("boj", "sql") not in seen and ("codeforces", "sql") not in seen

@@ -7,10 +7,11 @@ router = APIRouter()
 
 
 @router.get("/api/themes")
-def get_themes(response: Response):
-    # 테마 목록은 정적이라 브라우저 캐시를 허용한다.
+def get_themes(response: Response, platform: str = "codeforces"):
+    # 테마 목록은 정적이라 브라우저 캐시를 허용한다(플랫폼이 쿼리에 있어 URL 별로 갈린다).
     response.headers["Cache-Control"] = "public, max-age=3600"
-    themes = DEMO_THEME_LIST if IS_DEMO else theme_service.get_theme_list()
+    platform = require_platform(platform or "codeforces")
+    themes = DEMO_THEME_LIST if IS_DEMO else theme_service.get_theme_list(platform)
     return {"themes": themes}
 
 
@@ -29,6 +30,6 @@ def get_theme_problems(theme_id: str, response: Response, platform: str = "codef
         return data
 
     theme = theme_service.find_theme(theme_id)
-    if theme is None:
+    if theme is None or not theme_service.theme_supports(platform, theme):
         raise HTTPException(status_code=404, detail="존재하지 않는 테마입니다.")
     return theme_service.build_theme_response(platform, theme)

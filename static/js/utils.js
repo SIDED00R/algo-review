@@ -41,6 +41,14 @@ function tierBadgeHtml(cls, name) {
   return `<span class="tier-badge ${cls}">${name}</span>`;
 }
 
+// LeetCode 난이도(tier 1~3) → 배지 클래스
+const LC_DIFFICULTY_CLASSES = { 1: 'lc-easy', 2: 'lc-medium', 3: 'lc-hard' };
+const LC_TIER_BY_NAME = { easy: 1, medium: 2, hard: 3 };
+
+function lcDifficultyClass(tier) {
+  return LC_DIFFICULTY_CLASSES[tier] || '';
+}
+
 // 플랫폼 표 — 라벨·문제 번호 입력 규약·URL·난이도 배지·인앱 뷰어 지원 여부를 한 곳에 둔다.
 // 렌더 지점은 `platform === 'codeforces'` 로 갈리지 않고 이 표를 읽는다. 없는 플랫폼은
 // throw 한다 — else 로 BOJ 에 떨어지면 새 플랫폼이 boj.kr 링크와 BOJ 티어 배지로 조용히 그려진다.
@@ -53,6 +61,8 @@ const PLATFORMS = {
     help: '백준: 숫자만 입력하세요. 예) 1000',
     avgLabel: '평균 레벨',
     avgMono: false,
+    // 서버 라벨(TIER_NAMES[int(avg)])과 같은 내림이어야 배지 색과 글자가 맞는다.
+    avgTier: avg => Math.floor(avg),
     problemLabel: p => String(p.problem_id ?? p.problem_ref ?? ''),
     problemUrl: p => `https://boj.kr/${p.problem_id ?? p.problem_ref}`,
     difficultyClass: tier => tierClass(tier),
@@ -65,6 +75,7 @@ const PLATFORMS = {
     help: 'Codeforces: contestId + index 형식. 예) 4A, 4/A',
     avgLabel: '평균 레이팅',
     avgMono: true,
+    avgTier: avg => Math.floor(avg),
     problemLabel: p => p.problem_ref,
     // 파싱 실패 시에도 BOJ 로 흘려보내지 않는다.
     problemUrl: p => cfRefToUrl(p.problem_ref) || 'https://codeforces.com/problemset',
@@ -72,6 +83,27 @@ const PLATFORMS = {
     difficultyClass: () => '',
     viewerUrl: ref => `/api/problem/cf/${ref}`,
     viewerBadgeClass: tierName => cfRatingClass(Number(String(tierName).replace(/[^0-9]/g, ''))),
+    sqlViewer: false,
+  },
+  leetcode: {
+    label: 'LeetCode',
+    viewer: true,
+    refField: 'problem_ref',
+    placeholder: '예) 175, two-sum 또는 문제 URL',
+    help: 'LeetCode: 번호, slug, 문제 URL 중 하나. 예) 175, two-sum',
+    avgLabel: '평균 난이도',
+    avgMono: false,
+    // 서버 라벨(lc_difficulty_label(int(avg + 0.5)))과 같은 half-up 반올림 — 2.5 는 양쪽 다 Hard 다.
+    avgTier: avg => Math.round(avg),
+    // problem_ref 는 slug 라 화면에는 번호를 쓴다. 번호가 없는 행(뷰어에서 넘어온 폼)은 slug 다.
+    problemLabel: p => String(p.problem_id || p.problem_ref || ''),
+    problemUrl: p => `https://leetcode.com/problems/${encodeURIComponent(p.problem_ref)}/`,
+    difficultyClass: tier => lcDifficultyClass(tier),
+    viewerUrl: slug => `/api/problem/lc/${encodeURIComponent(slug)}`,
+    // 카드의 data-tier 는 "Easy" 또는 "LeetCode Easy" 다.
+    viewerBadgeClass: tierName =>
+      lcDifficultyClass(LC_TIER_BY_NAME[String(tierName).replace(/^LeetCode\s+/i, '').toLowerCase()]),
+    sqlViewer: true,
   },
 };
 
@@ -242,6 +274,15 @@ function renderMarkdown(text) {
   return DOMPurify.sanitize(marked.parse(raw));
 }
 
+/** 외부에서 온 HTML 조각(문제 본문)을 안전한 HTML 로. DOMPurify 가 막히면 평문으로 폴백한다. */
+function sanitizeHtml(html) {
+  const raw = html || '';
+  if (typeof DOMPurify === 'undefined') {
+    return `<pre class="code-block">${escapeHtml(raw)}</pre>`;
+  }
+  return DOMPurify.sanitize(raw);
+}
+
 /** div 를 버튼처럼 쓰는 곳에 role·tabindex·키보드 핸들러를 함께 건다. */
 function makeRowActivatable(el, onActivate) {
   el.setAttribute('role', 'button');
@@ -282,6 +323,9 @@ const _LANG_PATTERNS = [
   // 5) 여러 언어가 공유하는 마커
   ['JavaScript', /\bconsole\s*\.\s*log\b|\brequire\s*\(|\bdocument\s*\./],
   ['Python 3', /\bdef\s+\w+\s*\(|\bprint\s*\(|\binput\s*\(|\brange\s*\(|\bimport\s+\w/],
+  // 6) SQL 은 마지막 — 다른 언어의 문자열 안에 든 SELECT 가 먼저 잡히지 않게. 대소문자를 패턴에
+  //    적는다(테스트 파서가 플래그를 옮기지 않는다).
+  ['MySQL', /\b(?:SELECT|select)\b[\s\S]*?\b(?:FROM|from)\b/],
 ];
 
 function detectLanguage(code) {

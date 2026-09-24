@@ -54,9 +54,10 @@
     'Java': 'text/x-java', 'Kotlin': 'text/x-kotlin',
     'JavaScript': 'javascript', 'TypeScript': 'application/typescript',
     'Rust': 'rust', 'Go': 'go', 'Swift': 'swift', 'Ruby': 'ruby',
+    'MySQL': 'text/x-mysql',
     '': 'python',
   };
-  const PM_LANG_MAP = { python3: 'python', cpp: 'text/x-c++src' };
+  const PM_LANG_MAP = { python3: 'python', cpp: 'text/x-c++src', mysql: 'text/x-mysql' };
 
   window.cmEditors = {};
 

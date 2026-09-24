@@ -103,6 +103,29 @@ class CodeforcesImportRequest(BaseModel):
         return max(1, min(v, 1000))
 
 
+class LeetcodeImportRequest(BaseModel):
+    username: str
+    count: int = 20
+    # 브라우저 쿠키 LEETCODE_SESSION. 비우면 서버 설정값을, 그것도 없으면 공개 API(코드 없음)를 쓴다.
+    session: str | None = None
+    github_repo: str | None = None
+    github_token: str | None = None
+
+    @field_validator("username")
+    @classmethod
+    def username_required(cls, v):
+        value = (v or "").strip()
+        if not value:
+            raise ValueError("LeetCode 사용자 이름을 입력해주세요.")
+        return value
+
+    @field_validator("count")
+    @classmethod
+    def count_bounds(cls, v):
+        # 제출마다 코드 조회 1회라 상한을 낮게 둔다.
+        return max(1, min(v, 100))
+
+
 class SetRepoRequest(BaseModel):
     repo: str
 

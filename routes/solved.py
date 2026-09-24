@@ -59,7 +59,8 @@ def review_imported(platform: str, problem_ref: str):
         statement = resolve_statement(platform, problem_info)
 
         result = run_llm("코드 분석 실패", analyzer.analyze_code,
-                         problem_info, statement, problem["code"])
+                         problem_info, statement, problem["code"],
+                         language=problem.get("language", ""))
 
         # solved 기록의 제목·태그·식별자를 쓰되 빈 값으로 덮지 않는다 — CF 는 문제 조회에서
         # 받아오므로 solved 행이 비어 있으면 그걸 살려야 한다.

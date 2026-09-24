@@ -93,6 +93,16 @@
   border-radius: var(--r); padding: var(--s-3); margin-bottom: var(--s-3); }
 .pm-section-card h3 { font-size: var(--fs-label); color: var(--fg-dim);
   letter-spacing: .02em; margin-bottom: var(--s-2); }
+
+/* HTML 본문(LeetCode) — 태그가 그대로 오므로 산문·코드 블록 간격을 여기서 준다. */
+.pm-html { font-size: var(--fs-md); line-height: 1.7; word-break: break-word; }
+.pm-html p { margin-bottom: var(--s-2); }
+.pm-html pre { border: 1px solid var(--line); border-radius: var(--r); padding: var(--s-3);
+  overflow-x: auto; font-family: var(--font-mono); font-size: var(--fs-sm); line-height: 1.6;
+  white-space: pre; margin: var(--s-2) 0; }
+.pm-html code { font-family: var(--font-mono); font-size: var(--fs-sm); }
+.pm-html ul, .pm-html ol { padding-left: var(--s-5); margin-bottom: var(--s-2); }
+.pm-html img { max-width: 100%; }
 .pm-sample { margin-top: var(--s-4); }
 .pm-sample-title { font-size: var(--fs-label); font-weight: 600; color: var(--fg-dim);
   letter-spacing: .02em; margin-bottom: var(--s-1); }

@@ -42,4 +42,15 @@ def get_stats(platform: str | None = "boj"):
             "history": history,
         }
 
+    if platform == "leetcode":
+        avg_tier, graded, avg_tier_name = average_difficulty("leetcode")
+        return {
+            "platform": "leetcode",
+            "avg_tier": avg_tier if graded else 0,
+            "avg_tier_name": avg_tier_name,
+            "total_reviews": total_reviews,
+            "tag_stats": db.get_platform_tag_stats("leetcode"),
+            "history": history,
+        }
+
     raise unsupported_platform_400(platform)

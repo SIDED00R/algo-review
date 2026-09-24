@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     codeforces_api_key: str | None = None
     codeforces_api_secret: str | None = None
 
+    # --- LeetCode ---
+    # 내 제출 코드 가져오기에만 쓰는 브라우저 로그인 쿠키(LEETCODE_SESSION). 공개 문제 조회에는 필요 없다.
+    leetcode_session: str | None = None
+
     # --- 기타 ---
     cors_origins: str = "http://localhost:8080"
     demo_mode: bool = False

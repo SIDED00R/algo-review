@@ -4,25 +4,27 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js — 20개)                                │
+│  Browser (static/js/*.js — 21개)                                │
 │  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
-│  modal-a11y                                                     │
+│  modal-a11y · draft                                             │
 │  import-history · import-github · import-codeforces             │
+│  import-leetcode                                                │
 └────────────────────────┬────────────────────────────────────────┘
                          │ HTTP (fetch)
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Routes (routes/)                                       │
 │  auth · review · pending_review · rereview · github_push        │
-│  problem · execute · recommend · themes · history · solved      │
-│  stats · report · import_github · import_codeforces             │
+│  problem · problem_leetcode · execute · recommend · themes      │
+│  history · solved · stats · report · drafts                     │
+│  import_github · import_codeforces · import_leetcode            │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
 │  Service Layer  │             │  External Clients (clients/)      │
 │  analyzer.py    │             │  solved_ac · codeforces           │
-│  recommender.py │             │  github · utils                   │
+│  recommender.py │             │  leetcode · github · utils        │
 │ statement_      │             └──────────────┬────────────────────┘
 │   translator.py │                            │
 │  themes.py      │                            │
@@ -31,7 +33,7 @@
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
 │  DB Layer (db/) — SQLAlchemy │       │  External APIs                   │
 │  models · connection         │       │  solved.ac · Codeforces          │
-│  reviews · solved · cache    │       │  GitHub · OpenAI                 │
+│  reviews · solved · cache    │       │  LeetCode · GitHub · OpenAI      │
 │  github_settings · migrate   │       └──────────────────────────────────┘
 │  normalize · paging          │
 └────────┬────────────────────┘
@@ -62,8 +64,8 @@
 | 파일 | 단일 책임 |
 |------|----------|
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /`(index.html 서빙 + `__V__` 자산 캐시 버전 치환), `GET /health`, 전역 예외 핸들러 |
-| `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/CORS 등 |
-| `constants.py` | 플랫폼 화이트리스트·티어 이름·`normalize_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
+| `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/LeetCode 세션/CORS 등 |
+| `constants.py` | 플랫폼 화이트리스트·티어 이름·LeetCode 난이도 라벨(`lc_difficulty_label`)·`normalize_platform()`·`unsupported_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
 | `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`statement_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 | `timestamps.py` | 저장 시각의 단일 규약 — 항상 오프셋 있는 UTC 로 저장(`utc_now_iso`), 읽을 때 오프셋 없는 값은 UTC 로 해석(`parse_stored`) |
@@ -72,9 +74,9 @@
 ### 서비스 레이어
 | 파일 | 단일 책임 |
 |------|----------|
-| `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json`)·정규화(`normalize_review_result`). 클라이언트는 `llm_client` 를 쓴다 |
-| `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
-| `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
+| `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json`)·정규화(`normalize_review_result`). 제출 언어가 SQL 이면 쿼리 리뷰 프롬프트를 쓴다(`build_review_prompts` — JSON 키는 동일). 클라이언트는 `llm_client` 를 쓴다 |
+| `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 — 밴드는 BOJ 티어 / CF 레이팅 / LeetCode 난이도(1~3) |
+| `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준/LeetCode) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시. 테마 목록은 플랫폼별이다(`SQL (Database)` 는 LeetCode 전용) |
 | `statement_translator.py` | 문제 본문 한국어 번역(출처·HTML 보존 여부는 호출자가 지정). `llm_client` 를 쓴다 — CF 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
 
 ### 데모 인프라
@@ -107,7 +109,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `db/solved.py` | solved_history 테이블 CRUD |
 | `db/github_settings.py` | github_settings 테이블 CRUD |
 | `db/cache.py` | api_cache 테이블 CRUD — 외부 API 파생 페이로드 TTL 캐시 (`cache_get`/`cache_get_stale`/`cache_set`) |
-| `db/drafts.py` | code_drafts 테이블 CRUD — 에디터 임시 저장본. 키 하나가 에디터 자리 하나다(문제 뷰어 `codeforces:{ref}`). 빈 코드는 저장하지 않고 행을 지운다 |
+| `db/drafts.py` | code_drafts 테이블 CRUD — 에디터 임시 저장본. 키 하나가 에디터 자리 하나다(문제 뷰어 `{platform}:{ref}`). 빈 코드는 저장하지 않고 행을 지운다 |
 | `db/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 | `db/paging.py` | 목록 API 페이지네이션 경계(`paging_bounds`, 상한 100)와 검색 술어(`search_filter`) — 리뷰 기록·가져온 기록 공용 |
 | `migrations/` | Alembic 환경(`env.py`) + 리비전(`versions/`) |
@@ -117,8 +119,9 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 |------|----------|
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 의 정본은 `constants.py` 다. `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
+| `clients/leetcode.py` | LeetCode 공개 GraphQL(문제 목록 스냅샷·본문·태그 검색) + 세션 쿠키로 내 제출 코드. 문제 식별자는 titleSlug, 번호는 스냅샷으로 대응. 스냅샷은 42 요청이라 `api_cache` 에 하루 저장한다 — clients 에서 `db` 를 부르는 유일한 곳(지연 import) |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
-| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension`), 브라우저 UA 단일 출처(`BROWSER_USER_AGENT` — solved.ac·CF 헤더가 공유), 예외 두 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) |
+| `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension` — SQL 계열은 `.sql`), 브라우저 UA 단일 출처(`BROWSER_USER_AGENT` — solved.ac·CF·LeetCode 헤더가 공유), 예외 세 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) · `ProblemNotFound`(형식은 맞지만 없는 문제 → 404) |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
 ### API 라우터 (`routes/`)
@@ -131,10 +134,11 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
-| `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}` 키로 쓴다 |
+| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. 예제 실행 없음(함수 시그니처·SQL). 유료 문제는 본문 없이 |
+| `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
-| `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
+| `routes/themes.py` | `GET /api/themes?platform=`, `GET /api/themes/{theme_id}/problems` | 플랫폼별 테마 목록 + 테마 문제 조회 (푼 문제 제외). 그 플랫폼에 없는 테마는 404 |
 | `routes/drafts.py` | `GET /api/drafts/{key}`, `POST /api/drafts/{key}` | 에디터 임시 저장본 조회/저장. 없는 저장본은 404 가 아니라 빈 값이다 — 프론트가 '아직 없음' 과 '조회 실패' 를 구분해야 한다 |
 | `routes/history.py` | `GET /api/reviews/grouped`, `GET /api/reviews/problem/{platform}/{ref}` | 리뷰 기록 조회 |
 | `routes/solved.py` | `/api/solved-history/*`, `POST /api/review-imported/*` | 가져온 기록 관리 + AI 리뷰 요청 |
@@ -142,6 +146,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/report.py` | `GET /api/report` | 종합 분석 리포트 생성 |
 | `routes/import_github.py` | `POST /api/import-github` | BaekjoonHub 저장소 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
+| `routes/import_leetcode.py` | `POST /api/import-leetcode` | LeetCode AC 기록 가져오기 — 세션 쿠키(요청 > `.env`)가 있으면 코드까지, 없으면 공개 최근 AC 목록 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
 | `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) · 요청 검증(`require_platform`·`require_language`·`require_reviewable_code`) · 상류 실패 매핑(`upstream_failure`·`run_llm`) · LLM 전제 검사(`require_openai_key`) · 평균 난이도 표기(`average_difficulty`) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
@@ -152,7 +157,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 
 | 파일 | 단일 책임 |
 |------|----------|
-| `css/tokens.css` | 리셋 + 디자인 토큰. 크롬은 무채색이고 유채색은 데이터(티어·CF 등급·효율 판정)에만 쓴다는 규칙의 정의 지점. 데이터 색 32쌍은 테마별 전경/배경/경계를 짝으로 두고 전부 4.5:1 이상을 만족한다 |
+| `css/tokens.css` | 리셋 + 디자인 토큰. 크롬은 무채색이고 유채색은 데이터(티어·CF 등급·효율 판정)에만 쓴다는 규칙의 정의 지점. 데이터 색 38쌍은 테마별 전경/배경/경계를 짝으로 두고 전부 4.5:1 이상을 만족한다 |
 | `css/base.css` | 요소 기본값, 타이포 스케일, 전역 `:focus-visible` 링, `prefers-reduced-motion` |
 | `css/components.css` | 버튼·폼·배지·태그·알림·스피너·코드블록·표·제출 원장(`.ledger`)·페이지네이션 |
 | `css/layout.css` | 헤더/탭바, 콘텐츠 성격별 컨테이너 3종(`.measure-work` / `.measure-list` / `.measure-prose`), 목록 행, 반응형 |
@@ -161,7 +166,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `utils.js` | 공통 유틸 — 순수 함수(tierClass, cfRatingClass, tierBadgeHtml, escapeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk) |
+| `utils.js` | 공통 유틸 — 플랫폼 표(`PLATFORMS`·`platformSpec`: 라벨·입력 규약·URL·난이도 배지·뷰어 여부를 한 곳에), 순수 함수(tierClass, cfRatingClass, lcDifficultyClass, tierBadgeHtml, escapeHtml, sanitizeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk). 다른 JS 는 플랫폼 문자열을 직접 비교하지 않는다(불변식 테스트) |
 | `editor.js` | CodeMirror 에디터 초기화 및 관리 |
 | `load-submission.js` | 지난 제출을 리뷰 폼에 채워 편집 가능한 상태로 만든다. 진입점 넷(메인 탭 버튼·리뷰 기록 모달·⌘K 팔레트·문제 풀기 모달의 '코드 리뷰 진행')이 이 파일의 `fillReviewForm` 을 쓴다 |
 | `command-palette.js` | ⌘K 팔레트 — 탭 이동 + 문제 검색 → 회차 선택 → 불러오기 |
@@ -169,11 +174,11 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
 | `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다. `escapeCloses: false` 는 Esc 닫기만 끈다(에디터가 든 모달용) |
-| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 문제 뷰어만 열 때 `codeforces:{ref}` 에 붙는다. 코드 리뷰 탭 에디터는 저장하지 않는다 |
+| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 문제 뷰어만 열 때 `{platform}:{ref}` 에 붙는다. 코드 리뷰 탭 에디터는 저장하지 않는다 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
-| `problem-modal.js` | CF 문제 모달 (조회, 샘플 실행, 리뷰 이동) |
+| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(stdin/stdout 예제가 있는 응답에서만), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다 |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
@@ -181,6 +186,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `import-history.js` | 가져온 기록 목록 표시, 필터/페이징, 코드 보기, AI 리뷰 요청 |
 | `import-github.js` | BaekjoonHub GitHub import 버튼 핸들러 |
 | `import-codeforces.js` | Codeforces import 버튼 핸들러 |
+| `import-leetcode.js` | LeetCode import 버튼 핸들러 |
 
 ---
 
@@ -192,6 +198,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `server.py` | `warmup.warm_theme_caches` | lifespan 기동 시 테마 캐시 예열 백그라운드 태스크 시작 (데모 제외) |
 | `warmup.py` | `themes.theme_pool_is_fresh` · `themes.get_theme_problem_pool` | 플랫폼×테마를 돌며 신선도를 먼저 보고 **신선하지 않은 것만** 예열한다. 하루 첫 인스턴스 외에는 외부 호출이 0이다 |
 | `routes/problem_resolve.py` | `clients.get_codeforces_problem_info` | CF 문제 메타데이터 조회 |
+| `routes/problem_resolve.py` | `clients.get_leetcode_problem_info` | LeetCode 문제 메타데이터 조회 (번호·slug·URL → slug) |
 | `routes/problem_resolve.py` | `clients.get_problem_info` | BOJ 문제 메타데이터 조회 |
 | `routes/review.py` | `analyzer.analyze_code` | LLM 코드 분석 (모델은 `OPENAI_MODEL`, 기본 gpt-4o — `.env.example` 은 Gemini 호환 엔드포인트도 안내한다) |
 | `routes/review.py` | `db.save_review` | 리뷰 결과 저장 |
@@ -202,6 +209,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `statement_translator.translate_statement` | CF 본문 OpenAI 한국어 번역 |
 | `routes/problem.py` | `routes.problem_cache.run_deduplicated` · `cache_set` | 응답 캐시 조회·동시 요청 병합·저장 |
+| `routes/problem_leetcode.py` | `clients.scrape_lc_problem` · `statement_translator.translate_statement(html=True)` · `routes.problem_cache` | LeetCode 본문 조회·HTML 보존 번역·캐시 |
+| `routes/import_leetcode.py` | `clients.get_leetcode_user_submissions` | LeetCode AC 제출 조회(세션 쿠키 유무에 따라 코드 포함 여부) |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
 | `routes/stats.py`·`routes/recommend.py` | `helpers.average_difficulty` | 평균 난이도 조회 + 표시 라벨(내부에서 `db.get_average_tier`/`get_average_cf_rating`) |
@@ -212,18 +221,19 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/themes.py` | `themes.build_theme_response` | 플랫폼별 테마 문제 풀에서 푼 문제 제외 후 응답 생성 |
 | `themes.py` | `clients.search_cf_problems_by_tag` | 테마(CF 태그)별 대표 문제 풀 조회 |
 | `themes.py` | `clients.search_problems_by_tag` | 테마(solved.ac 태그)별 대표 문제 풀 조회 |
+| `themes.py` · `recommender.py` | `clients.search_lc_problems_by_tag` | LeetCode 스냅샷에서 태그·난이도로 검색(유료 제외, 풀이 수순) |
 | `themes.py` | `db.cache_get` / `db.cache_set` / `db.cache_get_stale` | 테마 문제 풀 DB 캐시 조회/저장, 외부 API 실패 시 만료 캐시 폴백 |
 | `recommender.py` | `db.get_tag_weakness_data` | 태그 취약점 점수 데이터 조회 |
 | `recommender.py` | `clients.search_problems_by_tag` | solved.ac 태그 검색 |
 | `routes/auth.py` | `clients.exchange_github_code` | GitHub OAuth 토큰 교환 |
 | `routes/auth.py` | `db.save_github_settings` | GitHub 토큰 저장 |
-| `problem-modal.js` | `GET /api/problem/cf/{ref}` | CF 문제 내용 조회 |
+| `problem-modal.js` | `GET /api/problem/cf/{ref}` · `GET /api/problem/lc/{slug}` | 문제 내용 조회 (플랫폼 표의 `viewerUrl`) |
 | `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
 | `review.js` | `POST /api/review/pending` | 리뷰 실패 시 리뷰 없이 GitHub 등록 |
 | `history.js` | `POST /api/rereview/{platform}/{ref}` | 대기 기록의 AI 리뷰 실행 + README 갱신 |
 | `recommend.js` | `GET /api/recommend` | 문제 추천 요청 |
-| `themes.js` | `GET /api/themes` | 테마 목록 요청 (localStorage 24h 캐시) |
+| `themes.js` | `GET /api/themes?platform=` | 플랫폼별 테마 목록 요청 (localStorage 24h 캐시, 플랫폼별 키) |
 | `themes.js` | `GET /api/themes/{theme_id}/problems` | 플랫폼별 테마 문제 요청 (메모리/localStorage 30분 캐시) |
 | `import-history.js` | `GET /api/solved-history` | 가져온 기록 목록 조회 |
 | `load-submission.js` | `GET /api/reviews/problem/{platform}/{ref}` | 지난 제출 코드·언어·문제 설명 조회 |
@@ -259,7 +269,7 @@ GitHub OAuth 토큰(`scope=repo`)을 DB 에 저장하고 공개 엔드포인트�
 누구나 아래를 할 수 있다:
 
 - `GET /auth/github/repos` — 비공개 저장소 이름 전량 조회
-- `POST /api/push-review` · `/api/import-codeforces` — 저장된 토큰으로 임의 저장소에 커밋
+- `POST /api/push-review` · `/api/import-codeforces` · `/api/import-leetcode` — 저장된 토큰으로 임의 저장소에 커밋
 - `DELETE /auth/github` · `POST /auth/github/repo` — 연결 해제 / 대상 저장소 변경
 - `GET /api/reviews/problem/...` — 저장된 소스코드·리뷰 전문 열람
 - `/api/report` · `/api/problem/cf/...` — 무제한 유료 LLM 호출
@@ -280,6 +290,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 지점 | 내용 | 방어 |
 |------|------|------|
 | `routes/problem_resolve.py` `resolve_statement` | 요청에 `problem_statement` 가 있으면 **무조건** 그것을 쓴다. 이전 문제의 붙여넣은 본문이 폼에 남아 있으면 다른 문제를 그 본문으로 리뷰한다 | `load-submission.js` 가 값이 없어도 `''` 를 조건 없이 대입한다. `tests/test_load_submission_wiring.py` 가 이 코드의 존재를 고정 |
+| LeetCode 행의 `problem_id`·`tier` | `problem_id` 는 LeetCode 번호(1, 175 …)라 BOJ 번호와 겹치고, `tier` 1~3 은 BOJ 티어 1~3(Bronze) 과 겹친다. 플랫폼 필터 없는 조회에 흘러들면 BOJ 통계·추천 제외 목록이 오염된다. `tier_name` 이 비면 `db/normalize.resolve_tier_name` 이 `Bronze V` 로 되돌린다 | BOJ 전용 조회(`get_solved_problem_ids`·`get_cached_problem_info`·`get_average_tier`·`get_tier_history`)는 전부 `platform == "boj"` 를 건다. LeetCode 저장 경로는 항상 `lc_difficulty_label` 로 `tier_name` 을 채운다(`tests/test_helpers_leetcode.py`·`test_import_leetcode_route.py`) |
 | `reviews.language` | 자유 문자열이다 — import 경로가 CF/BOJ 원문(`"GNU G++17 7.3.0"`)을 그대로 저장한다. `select.value` 에 없는 값을 넣으면 조용히 실패해 빈 select 가 된다 | `submissionLanguageOption()` 이 option 존재를 확인하고, 없으면 `detectLanguage(code)` 로 재추론한다(반환 도메인이 option value 와 같다) |
 | 탭 전환 | 전환 로직을 복제하면 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛴다 | `activateTab()` 한 곳만 둔다. 배선 테스트가 다른 JS 에 `.tab-content` 토글이 없음을 확인 |
 | 본문 수집 함수 | `get_problem_statement()`·`get_codeforces_problem_statement()` 는 예외를 던지지 않고 **실패 문자열**을 반환한다. 그대로 넘기면 프롬프트의 문제 설명 자리에 `"크롤링 실패: 404 …"` 가 들어간다. BOJ 는 acmicpc.net 종료로 수집이 상시 실패한다 | LLM 에 본문을 넘기는 **세 경로 전부**(`review`·`rereview`·`review-imported`)가 `resolve_statement()` 를 쓴다 — `is_scrape_failure()` 로 걸러 빈 본문을 준다. 백필도 저장 직전에 같은 검사를 한다(저장하면 그 문제의 리뷰가 영구히 오염된다). **수집 함수를 직접 부르는 경로를 새로 만들면 안 된다** — 그 경로는 이 필터를 우회한다 |
@@ -314,7 +325,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 환경변수 필터 검증 | import 시점 상수로 두면 그 필터를 실효 검증할 수 없다 — 테스트가 센티넬을 심어도 이미 만들어진 dict 에는 반영되지 않아 필터를 통째로 지워도 통과한다 | `safe_env()` 가 호출 시점에 필터한다. 테스트가 실제 센티넬을 심어 5개 키를 각각 검증 |
 | 파이썬 테스트는 JS 를 파싱하지 않는다 | 스크립트로 JS 를 편집하다 개행 이스케이프가 실제 개행으로 치환되면 문자열이 끊겨 **그 파일 전체가 SyntaxError** 가 되고, 전역 스코프를 공유하므로 해당 기능이 통째로 사라진다. pytest 는 이걸 못 잡는다 | CI 의 node 게이트(`scripts/check_js.sh`) 또는 헤드리스 브라우저 실측이 유일한 방어선이다. 파이썬으로 JS 렉서를 흉내 내는 검사는 정규식 리터럴에 걸려 거짓 빨강이 난다 — 시도했다가 되돌렸다 |
 | 테스트 DB 격리 | `conftest` 가 `os.environ["DB_TYPE"]` 으로 방언을 판정하면 안 된다 — 실제 접속 대상은 `Settings.sqlalchemy_url` 이고 그것은 `.env` 의 `DATABASE_URL` 을 최우선으로 쓴다. 판정과 접속이 갈리면 sqlite 분기(`DB_PATH` 격리)를 타면서 실DB 에 붙고, `test_migrations` 의 `DROP TABLE` 이 그 DB 로 나간다 | 방언을 **해석된 URL** 에서 유도한다. sqlite 분기는 `DATABASE_URL` 을 지우는 게 아니라 **덮어쓴다** — pydantic-settings 우선순위가 init > OS 환경변수 > dotenv 라 `delenv` 는 `.env` 값을 못 누른다. `_assert_disposable_target()` 이 파일명이 정확히 `test.db` 인 임시 파일 / 로컬 CI postgres 가 아니면 즉시 중단한다(`"test" in name` 부분일치는 `contest.db` 를 통과시킨다) |
-| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "20개 파일 검사 완료" 가 실제 검사 수다 |
+| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "21개 파일 검사 완료" 가 실제 검사 수다 |
 | 늦은 응답의 정리 코드 | `finally` 에서 무조건 상태를 되돌리면, 무효화된 옛 실행이 **새로 진행 중인** 실행의 상태를 되살린다(예제 실행 버튼이 활성으로 바뀌고, 다시 누르면 진행 중인 결과가 지워진다) | 세대 토큰을 확인한 뒤에만 되돌린다. 열기·닫기 경로가 이미 복원을 부르므로 "고착 방지" 는 유지된다 |
 | 스냅샷 시점 | 테스트가 보는 값이 검증 대상 코드보다 **앞** 시점의 스냅샷이면 그 코드를 지워도 통과한다(`analyze_code` 호출 시점 dict 를 보면 그 뒤의 가드를 검증하지 못한다) | 응답 본문이나 DB 재조회로 확인한다 |
 | 필터를 겨냥한 픽스처 | 여러 필터가 순차로 걸리는 함수에서, 픽스처가 **앞선 필터**에 먼저 걸리면 뒤 필터를 지워도 결과가 같다(`4A. Watermelon` 은 루트 필터가 아니라 번호 경계에 걸렸다) | 각 필터마다 그 필터**만**이 이유가 되는 입력을 둔다 |
@@ -355,7 +366,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 부분 실패 정책 | 같은 예외에 소비처마다 정책이 반대면 한쪽이 틀린 것이다 — 테마는 밴드별로 부분 성공을 살리는데 추천은 첫 실패에서 던져 이미 성공한 태그의 결과까지 버렸다 | 태그별로 격리하고 **전부 실패했을 때만** 실패로 본다 |
 | 포커스가 body 로 이탈 | 포커스를 가진 요소가 disabled 되거나(`setLoading`) DOM 에서 사라지면 브라우저가 포커스를 `<body>` 로 옮긴다. keydown 리스너가 모달 root 에 걸려 있으므로 그 순간 **Esc 로 닫을 수 없고 Tab 트랩도 무효**가 된다(10~20초짜리 작업에서 실제로 발생) | `modal-a11y` 가 `focusout` 으로 이탈을 되돌린다. root 에 `tabIndex = -1` 이 필요하다 — 없으면 마지막 수단인 `root.focus()` 가 **조용히 무효**다(안의 버튼이 전부 disabled 면 실제로 그 상황이 된다) |
 | 테스트 픽스처의 범위 | "전 파일" 이라 적어 놓고 목록을 고정하면, 그 밖의 파일에는 무엇을 넣어도 통과한다 | glob 으로 읽고 **개수 하한**을 함께 둔다(경로가 틀리면 빈 dict 로 모든 루프가 조용히 통과한다) |
-| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 20개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
+| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 21개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
 
 ---
 
