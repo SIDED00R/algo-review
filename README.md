@@ -233,7 +233,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 ├── analyzer.py             # OpenAI GPT 코드 분석
 ├── recommender.py          # 취약 태그 기반 문제 추천 알고리즘
 ├── themes.py               # 테마별 대표 문제 풀 조회 (플랫폼별 네이티브 난이도) + DB 캐시
-├── cf_translator.py        # OpenAI를 이용한 CF 문제 본문 한국어 번역
+├── statement_translator.py # OpenAI를 이용한 문제 본문 한국어 번역 (뷰어)
 ├── demo_mode.py            # 데모 모드 플래그 및 mock 데이터
 ├── demo_seed.py            # 데모용 SQLite 샘플 데이터 시딩
 ├── warmup.py               # 기동 직후 테마 캐시 백그라운드 예열

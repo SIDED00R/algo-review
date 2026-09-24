@@ -1,11 +1,13 @@
 import recommender
 from clients import ProblemSearchError
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from routes.helpers import average_difficulty, require_platform
+from routes.helpers import average_difficulty, require_platform, unsupported_platform_400
 from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
 
 router = APIRouter()
+
+_DEMO_BY_PLATFORM = {"boj": DEMO_RECOMMENDATIONS_BOJ, "codeforces": DEMO_RECOMMENDATIONS}
 
 
 @router.get("/api/recommend")
@@ -15,7 +17,9 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     platform = require_platform(platform or "codeforces")
 
     if IS_DEMO:
-        demo = DEMO_RECOMMENDATIONS_BOJ if platform == "boj" else DEMO_RECOMMENDATIONS
+        demo = _DEMO_BY_PLATFORM.get(platform)
+        if demo is None:
+            raise unsupported_platform_400(platform)
         return {**demo, "platform": platform}
 
     extra_exclude: set = set()
@@ -29,18 +33,26 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
                     extra_exclude.add(int(raw))
                 except ValueError:
                     pass
-            else:
+            elif platform == "codeforces":
                 # 저장 시 normalize_codeforces_problem_ref 가 대문자화하므로 여기서도 맞춘다 —
                 # `?exclude=4a` 가 저장된 `4A` 와 매칭되지 않으면 제외가 조용히 무효가 된다.
                 extra_exclude.add(raw.upper())
+            else:
+                raise unsupported_platform_400(platform)
 
-    avg, has_avg, tier_name = average_difficulty(platform)
+    try:
+        avg, has_avg, tier_name = average_difficulty(platform)
+    except ValueError as e:
+        # average_difficulty 는 미지원 플랫폼에만 ValueError 를 낸다.
+        raise HTTPException(status_code=400, detail=str(e))
     if platform == "codeforces":
         avg_tier = 0
         tier_range = recommender.cf_rating_range_description(avg)
-    else:
+    elif platform == "boj":
         avg_tier = avg
         tier_range = recommender.tier_range_description(avg)
+    else:
+        raise unsupported_platform_400(platform)
 
     # 응답에 싣는 값. 추천 밴드는 아래에서 원래 평균값(BOJ 평균 티어 / CF 평균 레이팅)으로
     # 계산한다.

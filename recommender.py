@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from clients import (ProblemSearchError, get_tag_key_by_name,
                      search_cf_problems_by_tag, search_problems_by_tag)
-from constants import TIER_NAMES
+from constants import TIER_NAMES, unsupported_platform
 from timestamps import parse_stored
 import db
 
@@ -93,8 +93,15 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
     if platform == "codeforces":
         return _get_cf_recommendations(weak_tags, extra_exclude=extra_exclude,
                                        avg_rating=avg_difficulty)
+    if platform == "boj":
+        return _get_boj_recommendations(weak_tags, extra_exclude=extra_exclude,
+                                        avg_tier=avg_difficulty)
+    raise unsupported_platform(platform)
 
-    same_min, same_max, hard_min, hard_max = _boj_bands(avg_difficulty)
+
+def _get_boj_recommendations(weak_tags: list[str], extra_exclude: set | None = None, *,
+                             avg_tier: float) -> list[dict]:
+    same_min, same_max, hard_min, hard_max = _boj_bands(avg_tier)
 
     solved_ids = db.get_solved_problem_ids() | (extra_exclude or set())
 
@@ -149,7 +156,7 @@ def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = No
                             avg_rating: float) -> list[dict]:
     cf_same_min, cf_same_max, cf_hard_min, cf_hard_max = _cf_bands(avg_rating)
 
-    exclude_refs = db.get_solved_cf_refs() | (extra_exclude or set())
+    exclude_refs = db.get_solved_refs("codeforces") | (extra_exclude or set())
 
     recommendations = []
     # CF 는 태그별 실패 격리를 하지 않는다. 실패 조건은 프로세스 전역 스냅샷 하나이며

@@ -105,7 +105,7 @@ def normalize_cf_math(text: str) -> str:
     return re.sub(r'\$\$\$(.+?)\$\$\$', r'$\1$', text, flags=re.DOTALL)
 
 
-# 수식 이미지 마커의 유일한 정의. 소비처: cf_translator, tex_markers_to_markdown,
+# 수식 이미지 마커의 유일한 정의. 소비처: statement_translator, tex_markers_to_markdown,
 # static/js/problem-modal.js 의 restoreFormulaImages.
 TEX_IMG_MARKER_RE = re.compile(r'⟦img:(https?://[^⟧\s]+)⟧')
 

@@ -26,7 +26,7 @@ def _save(efficiency, **kw):
 
 
 def test_rejects_unknown_platform(minimal_client):
-    assert minimal_client.post("/api/rereview/leetcode/1000").status_code == 400
+    assert minimal_client.post("/api/rereview/atcoder/1000").status_code == 400
 
 
 def test_missing_record_returns_404(minimal_client):

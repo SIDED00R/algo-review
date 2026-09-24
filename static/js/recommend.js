@@ -66,7 +66,8 @@ function renderRecommend(container, data) {
     return;
   }
 
-  const tc = tierClass(Math.floor(data.avg_tier));
+  const spec = platformSpec(data.platform);
+  const tc = difficultyClass(data.platform, Math.floor(data.avg_tier));
   let html = `
     <div class="result-card">
       <div class="summary-grid">
@@ -87,15 +88,14 @@ function renderRecommend(container, data) {
 
   // 플랫폼 판정은 응답의 platform 필드 하나로 한다 — URL 부분문자열로 따로 판정하면
   // 같은 질의가 두 술어에서 다른 결과를 준다.
-  const isCF = data.platform === 'codeforces';
-
   for (const rec of data.recommendations) {
     html += `<div class="rec-tag-title">${escapeHtml(rec.tag)}</div><div class="rec-problems">`;
     for (const p of rec.problems) {
-      const ptc = tierClass(p.tier);
-      if (isCF) {
+      const ptc = difficultyClass(data.platform, p.tier);
+      if (spec.viewer) {
         html += `
           <div class="rec-problem-card is-clickable"
+               data-platform="${escapeHtml(data.platform)}"
                data-ref="${escapeHtml(String(p.id))}"
                data-title="${escapeHtml(p.title)}"
                data-tier="${escapeHtml(p.tier_name)}">
@@ -103,9 +103,12 @@ function renderRecommend(container, data) {
             ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       } else {
+        const url = problemUrl({
+          platform: data.platform, problem_url: p.url, problem_id: p.id, problem_ref: String(p.id),
+        });
         html += `
           <div class="rec-problem-card">
-            <a href="${escapeHtml(p.url || 'https://boj.kr/' + p.id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
             ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       }
@@ -124,7 +127,7 @@ function renderRecommend(container, data) {
     }
   }
 
-  bindCfProblemClicks(container);
+  bindProblemClicks(container);
 
   document.getElementById('recommend-reset-btn').addEventListener('click', () => fetchRecommend(new Set(_shownIds)));
 }

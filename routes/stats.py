@@ -1,6 +1,6 @@
 import db
 from fastapi import APIRouter
-from routes.helpers import average_difficulty, require_platform
+from routes.helpers import average_difficulty, require_platform, unsupported_platform_400
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ def get_stats(platform: str | None = "boj"):
 
     if platform == "codeforces":
         _, _, avg_tier_name = average_difficulty("codeforces")
-        tag_stats = db.get_cf_tag_stats()
+        tag_stats = db.get_platform_tag_stats("codeforces")
         return {
             "platform": "codeforces",
             "avg_tier_name": avg_tier_name,
@@ -28,15 +28,18 @@ def get_stats(platform: str | None = "boj"):
             "history": history,
         }
 
-    avg_tier, graded, avg_tier_name = average_difficulty("boj")
-    tag_stats = db.get_tag_stats()
-    return {
-        "platform": "boj",
-        # 등급 있는 기록이 없으면 avg_tier 는 추천용 기본값(10.0)이다 — 그대로 내보내면
-        # 기록이 없는 사용자에게 "Silver I" 가 뜬다.
-        "avg_tier": avg_tier if graded else 0,
-        "avg_tier_name": avg_tier_name,
-        "total_reviews": total_reviews,
-        "tag_stats": tag_stats,
-        "history": history,
-    }
+    if platform == "boj":
+        avg_tier, graded, avg_tier_name = average_difficulty("boj")
+        tag_stats = db.get_tag_stats()
+        return {
+            "platform": "boj",
+            # 등급 있는 기록이 없으면 avg_tier 는 추천용 기본값(10.0)이다 — 그대로 내보내면
+            # 기록이 없는 사용자에게 "Silver I" 가 뜬다.
+            "avg_tier": avg_tier if graded else 0,
+            "avg_tier_name": avg_tier_name,
+            "total_reviews": total_reviews,
+            "tag_stats": tag_stats,
+            "history": history,
+        }
+
+    raise unsupported_platform_400(platform)

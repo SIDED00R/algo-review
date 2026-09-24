@@ -28,3 +28,10 @@ def normalize_platform(value: str, default: str = "boj") -> str:
 
 def is_supported_platform(value: str) -> bool:
     return value in PLATFORMS
+
+
+def unsupported_platform(value: str) -> ValueError:
+    """플랫폼 분기의 else 가 던지는 예외. 분기가 2갈래 else 로 남으면 새 플랫폼이
+    에러 없이 다른 플랫폼 경로로 처리되므로, 모든 분기는 이것으로 끝난다."""
+    allowed = ", ".join(f"'{p}'" for p in PLATFORMS)
+    return ValueError(f"지원하지 않는 플랫폼입니다: {value!r}. {allowed} 만 가능합니다.")

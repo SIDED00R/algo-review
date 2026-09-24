@@ -1,6 +1,6 @@
-"""번역 전후 수식 이미지 마커 마스킹 (API 호출 없음)."""
-import cf_translator
-from cf_translator import _mask_image_markers, _unmask_image_markers
+"""번역 전후 수식 이미지 마커 마스킹 (API 호출 없음) + 출처·HTML 규칙이 프롬프트에 실리는지."""
+import statement_translator
+from statement_translator import _mask_image_markers, _unmask_image_markers
 
 _URL_A = "https://espresso.codeforces.com/a7487d7e62f90136b78ae3fbf0a008396f146e13.png"
 _URL_B = "https://espresso.codeforces.com/488158367221f441ba94b9475c03436069df2a7e.png"
@@ -53,8 +53,10 @@ class _FakeCompletions:
     def __init__(self, content, finish_reason):
         self._content = content
         self._finish_reason = finish_reason
+        self.calls = []
 
     def create(self, **kwargs):
+        self.calls.append(kwargs)
         return type("_FakeResponse", (), {
             "choices": [_FakeChoice(self._content, self._finish_reason)],
         })()
@@ -62,9 +64,8 @@ class _FakeCompletions:
 
 class _FakeOpenAI:
     def __init__(self, content, finish_reason):
-        self.chat = type("_FakeChat", (), {
-            "completions": _FakeCompletions(content, finish_reason),
-        })()
+        self.completions = _FakeCompletions(content, finish_reason)
+        self.chat = type("_FakeChat", (), {"completions": self.completions})()
 
 
 def test_translate_returns_partial_content_when_truncated(monkeypatch):
@@ -72,17 +73,32 @@ def test_translate_returns_partial_content_when_truncated(monkeypatch):
     # 유료 호출이 반복된다 — 잘린 번역이라도 성공으로 간주해 영구 캐시되도록,
     # 예외 대신 부분 번역문 + 안내 문구를 반환해야 한다.
     monkeypatch.setattr(
-        cf_translator, "get_client",
+        statement_translator, "get_client",
         lambda: _FakeOpenAI("잘린 번역문...", "length"),
     )
-    result = cf_translator.translate_cf_text("원문", "제목")
+    result = statement_translator.translate_statement("원문", "제목", source="Codeforces")
     assert "잘린 번역문..." in result
     assert "일부 생략" in result
 
 
 def test_translate_returns_content_when_not_truncated(monkeypatch):
     monkeypatch.setattr(
-        cf_translator, "get_client",
+        statement_translator, "get_client",
         lambda: _FakeOpenAI("완전한 번역문", "stop"),
     )
-    assert cf_translator.translate_cf_text("원문", "제목") == "완전한 번역문"
+    assert statement_translator.translate_statement("원문", "제목", source="Codeforces") == "완전한 번역문"
+
+
+def test_source_and_html_rules_reach_the_prompt(monkeypatch):
+    """출처는 프롬프트에 그대로 적히고, HTML 보존 규칙은 html=True 일 때만 붙는다."""
+    fake = _FakeOpenAI("번역", "stop")
+    monkeypatch.setattr(statement_translator, "get_client", lambda: fake)
+
+    statement_translator.translate_statement("<p>x</p>", "t", source="LeetCode", html=True)
+    statement_translator.translate_statement("x", "t", source="Codeforces")
+
+    html_prompt, plain_prompt = (c["messages"][0]["content"] for c in fake.completions.calls)
+    assert "from a LeetCode problem" in html_prompt
+    assert "HTML tag" in html_prompt
+    assert "from a Codeforces problem" in plain_prompt
+    assert "HTML tag" not in plain_prompt

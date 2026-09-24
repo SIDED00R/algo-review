@@ -1,7 +1,9 @@
 """문제 식별자 → 문제 메타/본문 해석. 리뷰·리뷰 대기 등록·재리뷰 라우터가 공유한다."""
 import clients as api_client
 import db
+from constants import unsupported_platform
 from fastapi import HTTPException
+from routes.helpers import unsupported_platform_400
 
 # solved.ac 조회가 실패했을 때 쓰는 자리표시 제목. BOJ 문제의 실제 제목이 이 형태가 될 수
 # 없으므로, 나중에 그 행을 캐시로 읽었을 때 "아직 해석되지 않은 메타" 임을 알아볼 수 있다.
@@ -53,6 +55,8 @@ def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str
             raise HTTPException(status_code=502,
                                 detail=f"Codeforces 문제 조회 실패 ({type(e).__name__})") from None
 
+    if platform != "boj":
+        raise unsupported_platform_400(platform)
     if problem_id is None:
         raise HTTPException(status_code=400, detail="백준 문제 번호를 입력하세요.")
 
@@ -100,6 +104,8 @@ def resolve_statement(platform: str, info: dict, custom_statement: str | None = 
         return custom
     if platform == "codeforces":
         scraped = api_client.get_codeforces_problem_statement(info["problem_ref"])
-    else:
+    elif platform == "boj":
         scraped = api_client.get_problem_statement(int(info["problem_ref"]))
+    else:
+        raise unsupported_platform(platform)
     return "" if is_scrape_failure(scraped) else scraped

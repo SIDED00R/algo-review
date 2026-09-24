@@ -2,11 +2,15 @@ import json
 import re
 
 from config import settings
+from constants import unsupported_platform
 from llm_client import choice_text, get_client, require_choice
 
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
+
+# 프롬프트에 적는 플랫폼 이름. 없는 플랫폼은 분석하지 않는다.
+_PLATFORM_LABELS = {"boj": "백준", "codeforces": "Codeforces"}
 
 
 # JSON 의 유효한 이스케이프 하나, 또는 그 밖의 백슬래시 하나.
@@ -66,7 +70,9 @@ def analyze_code(problem_info: dict, problem_statement: str, code: str) -> dict:
 
     tags_str = ", ".join(problem_info["tags"]) if problem_info["tags"] else "태그 없음"
     platform = (problem_info.get("platform") or "boj").lower()
-    platform_label = "Codeforces" if platform == "codeforces" else "백준"
+    if platform not in _PLATFORM_LABELS:
+        raise unsupported_platform(platform)
+    platform_label = _PLATFORM_LABELS[platform]
     problem_label = problem_info.get("problem_ref") or problem_info.get("id")
 
     system_prompt = """당신은 알고리즘 코드 리뷰 전문가입니다.

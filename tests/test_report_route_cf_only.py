@@ -70,4 +70,4 @@ def test_empty_platform_is_rejected_before_touching_history(minimal_client):
 def test_unknown_platform_is_rejected(minimal_client):
     # stats/history 와 같은 400 이다 — require_platform 이 ValueError 를 400 으로 바꾼다
     # (validate_platform 을 라우터에서 그대로 쓰면 500 이 된다).
-    assert minimal_client.get("/api/report?platform=leetcode").status_code == 400
+    assert minimal_client.get("/api/report?platform=atcoder").status_code == 400

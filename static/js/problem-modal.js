@@ -22,14 +22,18 @@ function restoreFormulaImages(html) {
   );
 }
 
-function bindCfProblemClicks(rootEl) {
+// 인앱 뷰어를 여는 카드(.is-clickable)는 data-platform·data-ref·data-title·data-tier 를 갖는다.
+function bindProblemClicks(rootEl) {
   rootEl.querySelectorAll('.is-clickable').forEach(el => {
     // 마우스뿐 아니라 키보드로도 열 수 있어야 한다 — div 라 기본 동작이 없다.
     makeRowActivatable(el, () => {
-      openProblemModal(el.dataset.ref, el.dataset.title, el.dataset.tier);
+      openProblemModal(el.dataset.platform, el.dataset.ref, el.dataset.title, el.dataset.tier);
     });
   });
 }
+
+// 뷰어 언어 select 값 → 리뷰 폼의 언어 select 값.
+const PM_LANGUAGE_NAMES = { python3: 'Python 3', cpp: 'GNU C++17' };
 
 let _currentProblem = null;
 // 예제 실행 세대. 실행 중 모달을 닫거나 다른 문제를 열면 결과 노드가 사라지므로,
@@ -43,13 +47,14 @@ function resetRunButton() {
   btn.textContent = '예제 실행';
 }
 
-async function openProblemModal(ref, title, tierName) {
-  _currentProblem = { ref, samples: [] };
+async function openProblemModal(platform, ref, title, tierName) {
+  const spec = platformSpec(platform);
+  _currentProblem = { platform, ref, samples: [] };
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
   document.getElementById('pm-title').textContent = `${ref}. ${title}`;
-  document.getElementById('pm-difficulty').className = `tier-badge ${cfRatingClass(Number(String(tierName).replace(/[^0-9]/g, '')))}`;
+  document.getElementById('pm-difficulty').className = `tier-badge ${spec.viewerBadgeClass(tierName)}`;
   document.getElementById('pm-difficulty').textContent = tierName;
   document.getElementById('pm-meta').textContent = '';
   document.getElementById('pm-link').innerHTML = '';
@@ -70,10 +75,10 @@ async function openProblemModal(ref, title, tierName) {
   pmReviewBtnReset.title = '';
   window.setEditorValue('pm-code', '');
   // 임시 저장 키는 문제마다 다르다. bindDraft 는 에디터를 비운 뒤에 부른다.
-  window.bindDraft('pm-code', `codeforces:${ref}`);
+  window.bindDraft('pm-code', `${platform}:${ref}`);
 
   try {
-    const data = await fetchJsonOk(`/api/problem/cf/${ref}`, undefined, '문제 로딩 실패');
+    const data = await fetchJsonOk(spec.viewerUrl(ref), undefined, '문제 로딩 실패');
 
     // 응답이 아직 유효한지 확인한다 — /api/problem/cf 는 수 초~십수 초라, 늦은 응답이
     // 나중에 연 문제의 본문·samples·sections 를 덮는다.
@@ -84,10 +89,9 @@ async function openProblemModal(ref, title, tierName) {
 
     document.getElementById('pm-title').textContent = `${ref}. ${data.title}`;
     document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
-    const pUrl = /^https?:\/\//i.test(data.url || '') ? data.url : cfRefToUrl(ref);
-    document.getElementById('pm-link').innerHTML = pUrl
-      ? `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer">문제 링크 열기</a>`
-      : '';
+    const pUrl = problemUrl({ platform, problem_ref: ref, problem_url: data.url });
+    document.getElementById('pm-link').innerHTML =
+      `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer">문제 링크 열기</a>`;
     document.getElementById('pm-loading').classList.add('hidden');
 
     const samplesHtml = data.samples.map((s, i) => `
@@ -304,10 +308,10 @@ function proceedToReview() {
   if (!confirmEditorOverwrite()) return;
   closeProblemModal();
   fillReviewForm({
-    platform: 'codeforces',
+    platform: _currentProblem.platform,
     problem_ref: _currentProblem.ref,
     code: window.getEditorValue('pm-code'),
-    language: document.getElementById('pm-language').value === 'cpp' ? 'GNU C++17' : 'Python 3',
+    language: PM_LANGUAGE_NAMES[document.getElementById('pm-language').value],
   });
 }
 

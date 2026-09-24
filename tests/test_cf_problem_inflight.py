@@ -14,6 +14,7 @@ from fastapi import FastAPI
 
 import clients as api_client
 from routes import problem as problem_route
+from routes import problem_cache
 
 _RAW = {
     "title": "Watermelon",
@@ -28,11 +29,11 @@ _URL = "/api/problem/cf/4A"
 @pytest.fixture(autouse=True)
 def clean_route_state():
     """캐시와 in-flight 맵은 모듈 전역이라 테스트 사이에 남는다."""
-    problem_route._PROBLEM_CACHE.clear()
-    problem_route._IN_FLIGHT.clear()
+    problem_cache._CACHE.clear()
+    problem_cache._IN_FLIGHT.clear()
     yield
-    problem_route._PROBLEM_CACHE.clear()
-    problem_route._IN_FLIGHT.clear()
+    problem_cache._CACHE.clear()
+    problem_cache._IN_FLIGHT.clear()
 
 
 @pytest.fixture
@@ -50,12 +51,12 @@ def stubs(monkeypatch):
         calls["gate"].wait(5)
         return dict(_RAW)
 
-    def _translate(text, title):
+    def _translate(text, title, **kwargs):
         calls["translate"].append(text)
         return "[ko]" + text
 
     monkeypatch.setattr(api_client, "scrape_cf_problem", _scrape)
-    monkeypatch.setattr(problem_route, "translate_cf_text", _translate)
+    monkeypatch.setattr(problem_route, "translate_statement", _translate)
     return calls
 
 
@@ -130,7 +131,7 @@ def test_failed_fetch_does_not_stick(monkeypatch):
         return dict(_RAW)
 
     monkeypatch.setattr(api_client, "scrape_cf_problem", _scrape)
-    monkeypatch.setattr(problem_route, "translate_cf_text", lambda text, title: text)
+    monkeypatch.setattr(problem_route, "translate_statement", lambda text, title, **kwargs: text)
 
     async def _main():
         async with _client() as client:
@@ -141,7 +142,7 @@ def test_failed_fetch_does_not_stick(monkeypatch):
     assert first.status_code == 502
     assert second.status_code == 200
     assert len(attempts) == 2
-    assert problem_route._IN_FLIGHT == {}
+    assert problem_cache._IN_FLIGHT == {}
 
 
 def test_concurrent_waiters_share_the_failure(stubs, monkeypatch):
@@ -180,4 +181,4 @@ def test_malformed_ref_is_rejected_before_any_scraping(stubs):
 
     assert resp.status_code == 400
     assert stubs["scrape"] == []
-    assert problem_route._IN_FLIGHT == {}
+    assert problem_cache._IN_FLIGHT == {}

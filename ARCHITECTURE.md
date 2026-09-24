@@ -23,7 +23,8 @@
 │  Service Layer  │             │  External Clients (clients/)      │
 │  analyzer.py    │             │  solved_ac · codeforces           │
 │  recommender.py │             │  github · utils                   │
-│ cf_translator.py│             └──────────────┬────────────────────┘
+│ statement_      │             └──────────────┬────────────────────┘
+│   translator.py │                            │
 │  themes.py      │                            │
 └────────┬────────┘                            │
          │                                     │ HTTP
@@ -63,7 +64,7 @@
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /`(index.html 서빙 + `__V__` 자산 캐시 버전 치환), `GET /health`, 전역 예외 핸들러 |
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/CORS 등 |
 | `constants.py` | 플랫폼 화이트리스트·티어 이름·`normalize_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
-| `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`cf_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
+| `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`statement_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 | `timestamps.py` | 저장 시각의 단일 규약 — 항상 오프셋 있는 UTC 로 저장(`utc_now_iso`), 읽을 때 오프셋 없는 값은 UTC 로 해석(`parse_stored`) |
 | `backfill_statements.py` | 기존 기록의 `problem_statement` 백필(일회성 CLI). BOJ 는 GitHub README, CF 는 codeforces.com 재수집. dry-run 기본, `--apply` 로만 기록 |
@@ -74,7 +75,7 @@
 | `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json`)·정규화(`normalize_review_result`). 클라이언트는 `llm_client` 를 쓴다 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시 |
-| `cf_translator.py` | Codeforces 문제 본문 한국어 번역. `llm_client` 를 쓴다 — 문제 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
+| `statement_translator.py` | 문제 본문 한국어 번역(출처·HTML 보존 여부는 호출자가 지정). `llm_client` 를 쓴다 — CF 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
 
 ### 데모 인프라
 | 파일 | 단일 책임 |
@@ -129,7 +130,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/rereview.py` | `POST /api/rereview/{platform}/{ref}` | 대기 행을 AI 리뷰로 채우고(회차 증가 없음) README 갱신 |
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
-| `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 + 응답 캐시 |
+| `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
+| `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes`, `GET /api/themes/{theme_id}/problems` | 테마 목록 + 플랫폼별 테마 문제 조회 (푼 문제 제외) |
@@ -198,7 +200,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/rereview.py` | `db.update_pending_review` | 대기 행을 리뷰 결과로 갱신 + 태그 통계 첫 집계 |
 | `routes/helpers.py` | `clients.push_files_to_github` | 코드+README 단일 커밋 GitHub push |
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
-| `routes/problem.py` | `cf_translator.translate_cf_text` | CF 본문 OpenAI 한국어 번역 |
+| `routes/problem.py` | `statement_translator.translate_statement` | CF 본문 OpenAI 한국어 번역 |
+| `routes/problem.py` | `routes.problem_cache.run_deduplicated` · `cache_set` | 응답 캐시 조회·동시 요청 병합·저장 |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
 | `routes/stats.py`·`routes/recommend.py` | `helpers.average_difficulty` | 평균 난이도 조회 + 표시 라벨(내부에서 `db.get_average_tier`/`get_average_cf_rating`) |
@@ -286,7 +289,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 언어 ↔ 확장자 | `get_file_extension` 이 만든 확장자를 `_ext_to_language` 가 모르면 그 언어로 push 한 풀이를 다시 가져올 때 `language` 가 빈 문자열이 되고, `rereview` 가 파일명을 재현할 수 없다며 재업로드를 거부한다. BOJ 는 `C99`, CF 는 `GNU G++17 7.3.0` 처럼 `c`/`c++` 부분문자열이 없는 표기를 쓴다 | 두 함수를 왕복으로 고정한다 — `tests/test_clients_utils.py` 가 실제 표기 30여 종과 "만들 수 있는 확장자 전체가 역매핑에 있다" 를 검사 |
 | GitHub 트리 조회 | 항목 10 만 개 / 7MB 를 넘기면 GitHub 가 `truncated=true` 와 함께 트리를 자른다. 부분 결과를 성공으로 취급하면 가져오기·백필이 **조용히 일부 문제를 누락**한다 | `fetch_repo_tree()` 가 `truncated` 를 확인해 예외로 드러낸다 |
 | 성장 곡선 dedupe | `get_tier_history` 는 문제당 **모든 회차**를 준다. 문제당 한 점만 쓰려고 마지막 회차를 남기면, `tier` 는 회차가 아니라 문제의 속성이라 값은 그대로이고 **그 문제가 시계열에 놓이는 날짜만 이동**한다 → 오래된 문제를 재제출하면 이미 지나간 구간의 레이팅이 소급 변한다 | 정순 1패스로 **첫 등장**을 남긴다(서버가 오름차순이므로 재정렬도 불필요). `tests/test_frontend_invariants.py` 가 `.reverse()` 부재를 고정 |
-| 뷰어 캐시 vs 붙여넣은 본문 | `closeProblemModal` 이 `_currentProblem` 을 지우지 않으므로, 뷰어를 닫은 뒤 같은 문제를 손으로 입력하면 옛 번역본이 남아 있다. 서버 `resolve_statement` 는 붙여넣은 본문을 우선하는데 프론트가 반대로 고르면 **LLM 리뷰와 GitHub README 의 문제 설명이 갈린다** | `description: pastedStatement \|\| cfSections?.statement` — 서버와 같은 우선순위. 뷰어에서 바로 넘어온 경우엔 `fillReviewForm` 이 textarea 를 비우므로 번역본이 그대로 쓰인다 |
+| 뷰어 캐시 vs 붙여넣은 본문 | `closeProblemModal` 이 `_currentProblem` 을 지우지 않으므로, 뷰어를 닫은 뒤 같은 문제를 손으로 입력하면 옛 번역본이 남아 있다. 서버 `resolve_statement` 는 붙여넣은 본문을 우선하는데 프론트가 반대로 고르면 **LLM 리뷰와 GitHub README 의 문제 설명이 갈린다** | `description: pastedStatement \|\| viewerSections?.statement` — 서버와 같은 우선순위. 뷰어에서 바로 넘어온 경우엔 `fillReviewForm` 이 textarea 를 비우므로 번역본이 그대로 쓰인다 |
 | 목록 데이터 vs DOM | `/api/review-imported` 는 서버에서 `solved_history` 행을 **실제로 삭제**한다. 프론트가 DOM 만 지우면 목록 배열이 stale 이 되고, 필터를 한 번만 만져도 삭제된 항목이 되살아난다(재클릭 시 404) | `requestImportedReview` 를 `loadImportedHistory` 클로저 안에 두어 `allProblems` 에서도 뺀 뒤 재렌더한다 |
 | 예제 실행 버튼 | 실행 중(케이스당 최대 5초) 모달을 닫거나 다른 문제를 열면 결과 노드가 사라진다. 노드 확인 없이 쓰면 TypeError 가 나고, **catch 안에서 같은 노드를 다시 참조하면 예외가 함수를 탈출**해 버튼 복원에 도달하지 못한다(새로고침 외 복구 불가) | 세대 토큰으로 갈린 실행을 멈추고, `finally` 로 버튼을 되돌린다. 모달 열기·닫기도 `resetRunButton()` 을 부른다 |
 | 서드파티 CDN | `marked`·`DOMPurify` 를 무가드로 부르면 CDN 이 막힐 때 ReferenceError 가 나고, **서버가 이미 저장·과금한 리뷰 결과가 화면에서 통째로 사라진다** | `renderMarkdown()` 한 곳만 두고 미로드 시 평문으로 폴백한다. `Chart`·KaTeX 도 같은 가드를 쓴다 |

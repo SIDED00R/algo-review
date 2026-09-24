@@ -38,7 +38,7 @@ def test_stats_codeforces_empty(minimal_client):
 
 
 def test_stats_rejects_unknown_platform(minimal_client):
-    r = minimal_client.get("/api/stats", params={"platform": "leetcode"})
+    r = minimal_client.get("/api/stats", params={"platform": "atcoder"})
     assert r.status_code == 400
 
 

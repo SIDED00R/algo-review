@@ -13,6 +13,14 @@ MAX_TRANSLATE_LENGTH = 20_000
 
 _INDEX_MARKER_RE = re.compile(r'⟦img:(\d+)⟧')
 
+# HTML 조각을 번역할 때만 붙는 규칙. 태그를 옮겨 적다 깨뜨리거나 표·예제 데이터를 번역하면
+# 프런트가 그리는 본문이 깨진다.
+_HTML_RULES = (
+    "7. The input is an HTML fragment. Keep every HTML tag and attribute exactly as-is and "
+    "translate only the human-readable text between tags. "
+    "Do not translate or alter anything inside <pre> or <code> elements."
+)
+
 
 def _mask_image_markers(text: str) -> tuple[str, list[str]]:
     """수식 이미지 마커의 URL 을 짧은 번호로 바꾼다.
@@ -37,34 +45,41 @@ def _unmask_image_markers(text: str, urls: list[str]) -> str:
     return _INDEX_MARKER_RE.sub(_to_url, text)
 
 
-def translate_cf_text(text: str, title: str) -> str:
+def _system_prompt(source: str, html: bool) -> str:
+    rules = (
+        "You are a competitive programming translator. "
+        f"Translate the given text segment from a {source} problem into natural Korean. "
+        "IMPORTANT RULES: "
+        "1. Always return the full translated text. Never return empty output. "
+        "2. Wrap ALL mathematical expressions, variables, and constraints in LaTeX delimiters: "
+        "   use $...$ for inline math (e.g., $n$, $1 \\le n \\le 10^5$, $x_i$) "
+        "   and $$...$$ for display math (block equations only). "
+        "   CRITICAL: Each $...$ must open and close on the SAME LINE — never put a newline inside $...$. "
+        "3. Do NOT add any section headers or labels (e.g., do not write '문제:', '입력:', '출력:'). "
+        "4. Translate all English prose naturally to Korean. "
+        "5. If the text is already in Korean or has nothing to translate, return it as-is. "
+        "6. Keep every ⟦img:N⟧ marker (N is a digit) exactly as-is, in place — "
+        "   it is a formula image placeholder. Do not translate, renumber, or drop it, "
+        "   and never wrap it in $...$."
+    )
+    return rules + (" " + _HTML_RULES if html else "")
+
+
+def translate_statement(text: str, title: str, *, source: str, html: bool = False) -> str:
     """번역 성공 시 번역문, 응답이 비어 있으면 원문을 그대로 반환. API 예외는 전파한다.
+
+    source 는 프롬프트에 적는 출처("Codeforces" 등). html=True 면 태그를 보존하는 규칙을 더한다.
 
     응답이 max_tokens 에 걸려 잘린 경우도 성공으로 간주해 잘린 번역문 + 안내 문구를 반환한다.
     routes/problem.py 는 성공 결과를 만료 없이 캐시한다.
 
-    입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
+    CF 입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
     """
     text, image_urls = _mask_image_markers(text)
     resp = get_client().chat.completions.create(
         model=settings.openai_model or "gpt-4o-mini",
         messages=[
-            {"role": "system", "content": (
-                "You are a competitive programming translator. "
-                "Translate the given text segment from a Codeforces problem into natural Korean. "
-                "IMPORTANT RULES: "
-                "1. Always return the full translated text. Never return empty output. "
-                "2. Wrap ALL mathematical expressions, variables, and constraints in LaTeX delimiters: "
-                "   use $...$ for inline math (e.g., $n$, $1 \\le n \\le 10^5$, $x_i$) "
-                "   and $$...$$ for display math (block equations only). "
-                "   CRITICAL: Each $...$ must open and close on the SAME LINE — never put a newline inside $...$. "
-                "3. Do NOT add any section headers or labels (e.g., do not write '문제:', '입력:', '출력:'). "
-                "4. Translate all English prose naturally to Korean. "
-                "5. If the text is already in Korean or has nothing to translate, return it as-is. "
-                "6. Keep every ⟦img:N⟧ marker (N is a digit) exactly as-is, in place — "
-                "   it is a formula image placeholder. Do not translate, renumber, or drop it, "
-                "   and never wrap it in $...$."
-            )},
+            {"role": "system", "content": _system_prompt(source, html)},
             {"role": "user", "content": f"Problem: {title}\n\nTranslate this text:\n\n{text}"},
         ],
         max_tokens=_MAX_TOKENS,

@@ -41,6 +41,50 @@ function tierBadgeHtml(cls, name) {
   return `<span class="tier-badge ${cls}">${name}</span>`;
 }
 
+// 플랫폼 표 — 라벨·문제 번호 입력 규약·URL·난이도 배지·인앱 뷰어 지원 여부를 한 곳에 둔다.
+// 렌더 지점은 `platform === 'codeforces'` 로 갈리지 않고 이 표를 읽는다. 없는 플랫폼은
+// throw 한다 — else 로 BOJ 에 떨어지면 새 플랫폼이 boj.kr 링크와 BOJ 티어 배지로 조용히 그려진다.
+const PLATFORMS = {
+  boj: {
+    label: 'BOJ',
+    viewer: false,
+    refField: 'problem_id',
+    placeholder: '예) 1000',
+    help: '백준: 숫자만 입력하세요. 예) 1000',
+    avgLabel: '평균 레벨',
+    avgMono: false,
+    problemLabel: p => String(p.problem_id ?? p.problem_ref ?? ''),
+    problemUrl: p => `https://boj.kr/${p.problem_id ?? p.problem_ref}`,
+    difficultyClass: tier => tierClass(tier),
+  },
+  codeforces: {
+    label: 'Codeforces',
+    viewer: true,
+    refField: 'problem_ref',
+    placeholder: '예) 4A 또는 4/A',
+    help: 'Codeforces: contestId + index 형식. 예) 4A, 4/A',
+    avgLabel: '평균 레이팅',
+    avgMono: true,
+    problemLabel: p => p.problem_ref,
+    // 파싱 실패 시에도 BOJ 로 흘려보내지 않는다.
+    problemUrl: p => cfRefToUrl(p.problem_ref) || 'https://codeforces.com/problemset',
+    // 서버가 CF 리뷰의 tier 를 항상 0 으로 준다 — 배지에 색이 없다.
+    difficultyClass: () => '',
+    viewerUrl: ref => `/api/problem/cf/${ref}`,
+    viewerBadgeClass: tierName => cfRatingClass(Number(String(tierName).replace(/[^0-9]/g, ''))),
+  },
+};
+
+function platformSpec(platform) {
+  const spec = PLATFORMS[platform || 'boj'];
+  if (!spec) throw new Error(`지원하지 않는 플랫폼: ${platform}`);
+  return spec;
+}
+
+function difficultyClass(platform, tier) {
+  return platformSpec(platform).difficultyClass(tier);
+}
+
 // 백엔드 db.PENDING_EFFICIENCY 와 같은 값 — 리뷰 없이 등록한 행의 마커
 const EFF_PENDING = 'pending';
 
@@ -53,8 +97,7 @@ function effLabel(e) {
 }
 
 function problemLabel(problem) {
-  if (problem.platform === 'codeforces') return problem.problem_ref;
-  return String(problem.problem_id ?? problem.problem_ref ?? '');
+  return platformSpec(problem.platform).problemLabel(problem);
 }
 
 /** 페이지 버튼 목록을 그린다. 리뷰 기록 탭과 가져온 기록 탭이 함께 쓴다.
@@ -140,11 +183,7 @@ function cfRefToUrl(ref) {
 function problemUrl(problem) {
   // href 에 들어가므로 http(s) 만 통과시킨다 — escapeHtml 은 `javascript:` 를 막지 못한다.
   if (/^https?:\/\//i.test(problem.problem_url || '')) return problem.problem_url;
-  if (problem.platform === 'codeforces') {
-    // 파싱 실패 시에도 BOJ 로 흘려보내지 않는다.
-    return cfRefToUrl(problem.problem_ref) || 'https://codeforces.com/problemset';
-  }
-  return `https://boj.kr/${problem.problem_id ?? problem.problem_ref}`;
+  return platformSpec(problem.platform).problemUrl(problem);
 }
 
 function escapeHtml(str) {

@@ -321,10 +321,12 @@ def _tally_tag_efficiency(rows: list) -> dict:
     return counts
 
 
-def get_cf_tag_stats() -> list:
+def get_platform_tag_stats(platform: str) -> list:
+    """그 플랫폼 리뷰 전 회차의 태그별 판정 집계. BOJ 는 첫 판정 행만 세는 tag_stats
+    테이블(get_tag_stats)을 따로 쓴다."""
     with session_scope() as session:
         rows = [dict(r) for r in session.execute(
-            select(Review.tags, Review.efficiency).where(Review.platform == "codeforces")
+            select(Review.tags, Review.efficiency).where(Review.platform == platform)
         ).mappings().all()]
 
     counts = _tally_tag_efficiency(rows)
@@ -334,10 +336,10 @@ def get_cf_tag_stats() -> list:
 _AVG_TIER_WINDOW = 30  # UI 표시("최근 30개")와 일치
 
 
-def get_average_tier() -> float:
-    """최근 30개 고유 **BOJ** 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다.
+def get_average_tier(platform: str = "boj") -> float:
+    """최근 30개 고유 문제의 tier 평균 — 성장에 따라 추천 난이도가 올라간다.
 
-    모집단은 platform='boj' 로 명시한다. 지금은 CF 리뷰의 tier 가 항상 0 이라 `tier > 0`
+    모집단은 platform 으로 명시한다. 지금은 CF 리뷰의 tier 가 항상 0 이라 `tier > 0`
     만으로도 걸러지지만, 이 함수의 기준은 tier 값이 아니라 플랫폼이다.
     """
     rn = func.row_number().over(
@@ -346,7 +348,7 @@ def get_average_tier() -> float:
     ).label("rn")
     with session_scope() as session:
         sub = select(Review.tier, Review.created_at, rn).where(
-            Review.platform == "boj", Review.tier > 0).subquery()
+            Review.platform == platform, Review.tier > 0).subquery()
         tiers = session.scalars(
             select(sub.c.tier).where(sub.c.rn == 1)
             .order_by(sub.c.created_at.desc()).limit(_AVG_TIER_WINDOW)
@@ -359,11 +361,11 @@ def get_average_tier() -> float:
     return sum(tiers) / len(tiers)
 
 
-def has_graded_tier() -> bool:
-    """등급(tier > 0)이 있는 BOJ 리뷰가 하나라도 있는지."""
+def has_graded_tier(platform: str = "boj") -> bool:
+    """등급(tier > 0)이 있는 그 플랫폼 리뷰가 하나라도 있는지."""
     with session_scope() as session:
         return session.scalar(
-            select(Review.id).where(Review.platform == "boj", Review.tier > 0).limit(1)) is not None
+            select(Review.id).where(Review.platform == platform, Review.tier > 0).limit(1)) is not None
 
 
 # 'Codeforces N' 라벨이 붙은 CF 리뷰 행의 술어. has_cf_rating() 과 get_average_cf_rating() 이 공유한다.

@@ -14,7 +14,7 @@ from fastapi import HTTPException
 import db
 import clients as api_client
 from config import settings
-from constants import TIER_NAMES
+from constants import TIER_NAMES, unsupported_platform
 from routes.models import MAX_CODE_LENGTH, validate_platform
 
 logger = logging.getLogger("uvicorn.error")
@@ -74,9 +74,11 @@ def average_difficulty(platform: str) -> tuple[float, bool, str]:
         avg = db.get_average_cf_rating()
         graded = db.has_cf_rating()
         return avg, graded, f"CF {int(avg)}" if graded else "N/A"
-    avg = db.get_average_tier()
-    graded = db.has_graded_tier()
-    return avg, graded, TIER_NAMES.get(int(avg), "N/A") if graded else "N/A"
+    if platform == "boj":
+        avg = db.get_average_tier("boj")
+        graded = db.has_graded_tier("boj")
+        return avg, graded, TIER_NAMES.get(int(avg), "N/A") if graded else "N/A"
+    raise unsupported_platform(platform)
 
 
 def require_platform(value: str) -> str:
@@ -88,6 +90,11 @@ def require_platform(value: str) -> str:
         return validate_platform(value)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+def unsupported_platform_400(platform: str) -> HTTPException:
+    """라우터 플랫폼 분기의 else. require_platform 을 통과한 값이 분기에 없으면 400 이다."""
+    return HTTPException(status_code=400, detail=str(unsupported_platform(platform)))
 
 
 def require_reviewable_code(code: str) -> str:
@@ -133,11 +140,13 @@ def require_problem_ref(platform: str, problem_ref) -> str:
         if not ref.isdigit():
             raise HTTPException(status_code=400, detail="BOJ 문제 번호는 숫자여야 합니다.")
         return ref
-    try:
-        contest_id, index = api_client.normalize_codeforces_problem_ref(ref)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from None
-    return f"{contest_id}{index}"
+    if platform == "codeforces":
+        try:
+            contest_id, index = api_client.normalize_codeforces_problem_ref(ref)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from None
+        return f"{contest_id}{index}"
+    raise unsupported_platform_400(platform)
 
 
 # 경로 세그먼트 구분자만 바꾼다. `/` 가 제목에 있으면 폴더가 깊어져 재가져오기 파서의
@@ -158,9 +167,11 @@ def build_solution_target(platform: str, problem_ref, title: str, tier_name: str
         tier_cat = safe_path_segment((tier_name.split() or ["Unrated"])[0])
         folder = f"백준/{tier_cat}/{problem_ref}번. {name}"
         msg = f"[BOJ] {problem_ref}번. {name}"
-    else:
+    elif platform == "codeforces":
         folder = f"Codeforces/{problem_ref}. {name}"
         msg = f"[Codeforces] {problem_ref}. {name}"
+    else:
+        raise unsupported_platform(platform)
     return folder, msg
 
 
@@ -248,8 +259,10 @@ def push_review_bundle(repo: str, token: str, *, platform: str, problem_ref: str
     if not (description or input_desc or output_desc):
         if platform == "boj":
             sections = api_client.get_boj_problem_sections(int(problem_ref))
-        else:
+        elif platform == "codeforces":
             sections = api_client.get_cf_problem_sections(problem_ref)
+        else:
+            raise unsupported_platform(platform)
         if not sections or not any(sections.values()):
             # 스크래핑 실패를 빈 섹션으로 오인하면 README 를 본문 없이 재생성해 기존 문제 설명을
             # 지운다. None 뿐 아니라 "200 인데 본문이 비었다" 도 실패로 본다.

@@ -122,9 +122,9 @@ function renderImportCards(container, problems) {
   }
 
   container.innerHTML = problems.map(p => {
-    const tc = tierClass(p.tier);
+    const tc = difficultyClass(p.platform, p.tier);
     const cardKey = `${p.platform || 'boj'}-${p.problem_ref || p.problem_id}`;
-    const platformBadge = (p.platform || 'boj') === 'codeforces' ? 'Codeforces' : 'BOJ';
+    const platformBadge = platformSpec(p.platform).label;
     const actionBtns = p.has_code
       ? `<button class="btn-sm btn-code btn-view-code" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}" data-box-key="${escapeHtml(cardKey)}">코드 보기</button>
          <button class="btn-sm btn-ai btn-review-imported" data-platform="${escapeHtml(p.platform || 'boj')}" data-problem-ref="${escapeHtml(p.problem_ref || p.problem_id)}"${_reviewing.has(cardKey) ? ' disabled' : ''}>AI 리뷰</button>`

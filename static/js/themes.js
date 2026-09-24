@@ -116,7 +116,7 @@ async function loadThemeProblems({ force = false } = {}) {
 function renderThemeProblems(container, data) {
   const problems = data.problems || [];
   const label = data.theme ? data.theme.label : '';
-  const isCf = data.platform === 'codeforces';
+  const spec = platformSpec(data.platform);
 
   let html = '<div class="result-card">';
   html += `
@@ -132,22 +132,27 @@ function renderThemeProblems(container, data) {
   } else {
     html += '<div class="rec-problems">';
     for (const p of problems) {
-      if (isCf) {
-        // CF 문제는 인앱 뷰어로 — 난이도는 네이티브 레이팅(*1300) 표기.
+      // CF 문제는 레이팅(*1300) 배지, 나머지는 tier·tier_name 배지 — 응답 항목의 필드로 갈린다.
+      const badge = p.rating != null
+        ? `<span class="tier-badge ${cfRatingClass(p.rating)}">*${escapeHtml(String(p.rating))}</span>`
+        : tierBadgeHtml(difficultyClass(data.platform, p.tier), escapeHtml(p.tier_name));
+      const tierLabel = p.rating != null ? `*${p.rating}` : p.tier_name;
+      if (spec.viewer) {
         html += `
         <div class="rec-problem-card is-clickable"
+             data-platform="${escapeHtml(data.platform)}"
              data-ref="${escapeHtml(String(p.id))}"
              data-title="${escapeHtml(p.title)}"
-             data-tier="*${escapeHtml(String(p.rating))}">
+             data-tier="${escapeHtml(String(tierLabel))}">
           <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
-          <span class="tier-badge ${cfRatingClass(p.rating)}">*${escapeHtml(String(p.rating))}</span>
+          ${badge}
         </div>`;
       } else {
         // 백준 본체(acmicpc)가 서비스 종료라 링크 없이 정보만 표시한다.
         html += `
         <div class="rec-problem-card">
           <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
-          ${tierBadgeHtml(tierClass(p.tier), escapeHtml(p.tier_name))}
+          ${badge}
         </div>`;
       }
     }
@@ -158,7 +163,7 @@ function renderThemeProblems(container, data) {
 
   document.getElementById('themes-refresh-btn')
     .addEventListener('click', () => loadThemeProblems({ force: true }));
-  bindCfProblemClicks(container);
+  bindProblemClicks(container);
 }
 
 // 플랫폼 토글 — stats.js가 문서 전역 [data-platform]을 바인딩하므로 별도 속성(data-themes-platform)을 쓴다.
