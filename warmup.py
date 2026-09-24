@@ -15,6 +15,8 @@ async def warm_theme_caches():
     운영(Cloud SQL)에서는 하루 중 첫 인스턴스만 실제 fetch를 수행한다."""
     for platform in PLATFORMS:
         for theme in theme_service.THEMES:
+            if not theme_service.theme_supports(platform, theme):
+                continue
             try:
                 # 신선도 확인도 DB 를 친다 — try 밖에 두면 온디맨드 DB 정지 상태에서
                 # 첫 항목의 OperationalError 가 이 코루틴을 통째로 끝낸다. 그 태스크는

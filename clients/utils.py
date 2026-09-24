@@ -21,6 +21,10 @@ class ProblemSearchError(RuntimeError):
     """
 
 
+class ProblemNotFound(LookupError):
+    """형식은 맞지만 그 사이트에 없는 문제다. 라우터는 404 로 매핑한다."""
+
+
 # BOJ 는 `C99`·`C11`·`C90`(+ `(Clang)` 변종), CF 는 `GNU C11`, 프론트는 `C` 를 쓴다.
 # 놓치면 확장자가 .txt 가 된다. rereview 는 재업로드를 거부한다.
 _C_LANG_RE = re.compile(r"(?:^|\s)c(?:\d+|2x)?(?:\s|$)")
@@ -43,11 +47,17 @@ def get_problem_url(platform: str, problem_ref: str | int) -> str:
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
     if platform == "boj":
         return f"https://boj.kr/{problem_ref}"
+    if platform == "leetcode":
+        from clients.leetcode import normalize_leetcode_problem_ref
+        return f"https://leetcode.com/problems/{normalize_leetcode_problem_ref(str(problem_ref))}/"
     raise unsupported_platform(platform)
 
 
 def get_file_extension(language: str) -> str:
     lang = (language or "").lower()
+    # 앱의 "MySQL" 과 LeetCode 의 mysql·mssql·postgresql·oraclesql 을 모두 받는다.
+    if "sql" in lang:
+        return ".sql"
     if _CPP_LANG_RE.search(lang) or "c plus" in lang:
         return ".cpp"
     if "python" in lang or "pypy" in lang:
@@ -94,6 +104,8 @@ def _ext_to_language(filename: str) -> str:
         ".rs": "Rust", ".go": "Go", ".rb": "Ruby", ".swift": "Swift",
         ".cs": "C#", ".php": "PHP", ".hs": "Haskell", ".scala": "Scala",
         ".fs": "F#", ".d": "D",
+        # 방언은 확장자에 남지 않는다 — 앱의 SQL 언어 옵션인 MySQL 로 되돌린다.
+        ".sql": "MySQL",
     }
     for ext, lang in ext_map.items():
         if filename.endswith(ext):

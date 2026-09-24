@@ -31,7 +31,8 @@ def _run_review(platform: str, review: dict) -> dict:
         db.get_stored_problem_statement(platform, review["problem_ref"]))
     # 저장된 코드에도 길이 상한을 적용한다 — 가져오기로 들어온 행은 요청 본문 검증을 거치지 않는다.
     require_reviewable_code(review["code"])
-    return run_llm("코드 분석 실패", analyzer.analyze_code, problem_info, statement, review["code"])
+    return run_llm("코드 분석 실패", analyzer.analyze_code, problem_info, statement, review["code"],
+                   language=review.get("language", ""))
 
 
 def _repush_bundle(platform: str, problem_ref: str, review: dict) -> tuple[bool, str | None]:

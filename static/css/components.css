@@ -254,6 +254,10 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 .cf-master           { color: var(--cf-master-fg);           background: var(--cf-master-bg);           border-color: var(--cf-master-line); }
 .cf-grandmaster      { color: var(--cf-grandmaster-fg);      background: var(--cf-grandmaster-bg);      border-color: var(--cf-grandmaster-line); }
 
+.lc-easy   { color: var(--lc-easy-fg);   background: var(--lc-easy-bg);   border-color: var(--lc-easy-line); }
+.lc-medium { color: var(--lc-medium-fg); background: var(--lc-medium-bg); border-color: var(--lc-medium-line); }
+.lc-hard   { color: var(--lc-hard-fg);   background: var(--lc-hard-bg);   border-color: var(--lc-hard-line); }
+
 /* 효율 판정은 텍스트에 얹히므로 전경색만 쓴다 */
 .eff-good    { color: var(--eff-good-fg); }
 .eff-ok      { color: var(--eff-ok-fg); }

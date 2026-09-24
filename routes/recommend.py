@@ -3,11 +3,13 @@ from clients import ProblemSearchError
 from fastapi import APIRouter, HTTPException, Query
 
 from routes.helpers import average_difficulty, require_platform, unsupported_platform_400
-from demo_mode import IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ
+from demo_mode import (IS_DEMO, DEMO_RECOMMENDATIONS, DEMO_RECOMMENDATIONS_BOJ,
+                       DEMO_RECOMMENDATIONS_LC)
 
 router = APIRouter()
 
-_DEMO_BY_PLATFORM = {"boj": DEMO_RECOMMENDATIONS_BOJ, "codeforces": DEMO_RECOMMENDATIONS}
+_DEMO_BY_PLATFORM = {"boj": DEMO_RECOMMENDATIONS_BOJ, "codeforces": DEMO_RECOMMENDATIONS,
+                     "leetcode": DEMO_RECOMMENDATIONS_LC}
 
 
 @router.get("/api/recommend")
@@ -37,6 +39,9 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
                 # 저장 시 normalize_codeforces_problem_ref 가 대문자화하므로 여기서도 맞춘다 —
                 # `?exclude=4a` 가 저장된 `4A` 와 매칭되지 않으면 제외가 조용히 무효가 된다.
                 extra_exclude.add(raw.upper())
+            elif platform == "leetcode":
+                # 저장된 problem_ref 는 소문자 slug 다.
+                extra_exclude.add(raw.lower())
             else:
                 raise unsupported_platform_400(platform)
 
@@ -51,6 +56,9 @@ def get_recommendations(platform: str = Query("codeforces"), exclude: str = Quer
     elif platform == "boj":
         avg_tier = avg
         tier_range = recommender.tier_range_description(avg)
+    elif platform == "leetcode":
+        avg_tier = avg
+        tier_range = recommender.lc_difficulty_range_description(avg)
     else:
         raise unsupported_platform_400(platform)
 

@@ -67,7 +67,7 @@ function renderRecommend(container, data) {
   }
 
   const spec = platformSpec(data.platform);
-  const tc = difficultyClass(data.platform, Math.floor(data.avg_tier));
+  const tc = difficultyClass(data.platform, spec.avgTier(data.avg_tier));
   let html = `
     <div class="result-card">
       <div class="summary-grid">
@@ -92,6 +92,10 @@ function renderRecommend(container, data) {
     html += `<div class="rec-tag-title">${escapeHtml(rec.tag)}</div><div class="rec-problems">`;
     for (const p of rec.problems) {
       const ptc = difficultyClass(data.platform, p.tier);
+      // 문제 dict 의 id 는 플랫폼 식별자(BOJ 번호·CF ref·LC slug)다. 화면 라벨은 표가 정한다.
+      const label = escapeHtml(problemLabel({
+        platform: data.platform, problem_id: p.problem_id, problem_ref: String(p.id),
+      }));
       if (spec.viewer) {
         html += `
           <div class="rec-problem-card is-clickable"
@@ -99,7 +103,7 @@ function renderRecommend(container, data) {
                data-ref="${escapeHtml(String(p.id))}"
                data-title="${escapeHtml(p.title)}"
                data-tier="${escapeHtml(p.tier_name)}">
-            <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
+            <span>${label}. ${escapeHtml(p.title)}</span>
             ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       } else {
@@ -108,7 +112,7 @@ function renderRecommend(container, data) {
         });
         html += `
           <div class="rec-problem-card">
-            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</a>
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${label}. ${escapeHtml(p.title)}</a>
             ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
       }

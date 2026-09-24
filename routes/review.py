@@ -24,7 +24,8 @@ def review_code(req: ReviewRequest):
     problem_info = resolve_problem_info(req.platform, req.problem_id, req.problem_ref)
     statement = resolve_statement(req.platform, problem_info, req.problem_statement)
 
-    result = run_llm("코드 분석 실패", analyzer.analyze_code, problem_info, statement, req.code)
+    result = run_llm("코드 분석 실패", analyzer.analyze_code, problem_info, statement, req.code,
+                     language=language)
 
     # 저장하는 것은 사용자가 붙여 넣은 원문(req.problem_statement)이다 — 위 statement 는
     # 스크래핑 결과가 섞여 있고, 재제출 때 resolve_statement 가 다시 해석한다.

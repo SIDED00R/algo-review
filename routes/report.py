@@ -21,8 +21,8 @@ def get_report(platform: str = "boj"):
     # 가 태그 통계와 최근 풀이 기록을 함께 프롬프트에 넣는다.
     if platform == "boj":
         tag_stats = db.get_tag_stats()
-    elif platform == "codeforces":
-        tag_stats = db.get_platform_tag_stats("codeforces")
+    elif platform in ("codeforces", "leetcode"):
+        tag_stats = db.get_platform_tag_stats(platform)
     else:
         raise unsupported_platform_400(platform)
     if not tag_stats:

@@ -71,7 +71,7 @@ def translate_statement(text: str, title: str, *, source: str, html: bool = Fals
     source 는 프롬프트에 적는 출처("Codeforces" 등). html=True 면 태그를 보존하는 규칙을 더한다.
 
     응답이 max_tokens 에 걸려 잘린 경우도 성공으로 간주해 잘린 번역문 + 안내 문구를 반환한다.
-    routes/problem.py 는 성공 결과를 만료 없이 캐시한다.
+    뷰어 라우터(routes/problem.py·problem_leetcode.py)는 성공 결과를 만료 없이 캐시한다.
 
     CF 입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
     """

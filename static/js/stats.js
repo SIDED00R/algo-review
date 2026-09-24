@@ -80,7 +80,7 @@ function renderStats(container, data) {
   const levelLabel = spec.avgLabel;
   const levelValue = spec.avgMono
     ? `<span class="mono">${escapeHtml(data.avg_tier_name)}</span>`
-    : tierBadgeHtml(difficultyClass(data.platform, Math.floor(data.avg_tier)), escapeHtml(data.avg_tier_name));
+    : tierBadgeHtml(difficultyClass(data.platform, spec.avgTier(data.avg_tier)), escapeHtml(data.avg_tier_name));
 
   container.innerHTML = `
     <div class="result-card">

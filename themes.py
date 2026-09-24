@@ -1,23 +1,38 @@
 import time
 
 import db
-from clients import ProblemSearchError, search_cf_problems_by_tag, search_problems_by_tag
+from clients import (ProblemSearchError, search_cf_problems_by_tag, search_lc_problems_by_tag,
+                     search_problems_by_tag)
 from constants import unsupported_platform
 
-# 테마별 문제 둘러보기 — 알고리즘 분야별 대표 문제를 플랫폼(Codeforces/백준)별 네이티브 난이도로 제공한다.
-# cf_tag 는 Codeforces problemset 태그명(공백 포함), boj_tag 는 solved.ac 태그 키.
+# 테마별 문제 둘러보기 — 알고리즘 분야별 대표 문제를 플랫폼별 네이티브 난이도로 제공한다.
+# cf_tag 는 Codeforces problemset 태그명(공백 포함), boj_tag 는 solved.ac 태그 키, lc_tag 는 LeetCode
+# topicTag slug. 키가 없는 플랫폼에는 그 테마가 없다(SQL 은 LeetCode 뿐).
 THEMES = [
-    {"id": "dp",              "label": "다이나믹 프로그래밍", "cf_tag": "dp",              "boj_tag": "dp"},
-    {"id": "greedy",          "label": "그리디 알고리즘",     "cf_tag": "greedy",          "boj_tag": "greedy"},
-    {"id": "graphs",          "label": "그래프 이론",         "cf_tag": "graphs",          "boj_tag": "graphs"},
-    {"id": "brute-force",     "label": "완전 탐색",           "cf_tag": "brute force",     "boj_tag": "bruteforcing"},
-    {"id": "dfs",             "label": "DFS / 탐색",          "cf_tag": "dfs and similar", "boj_tag": "dfs"},
-    {"id": "binary-search",   "label": "이분 탐색",           "cf_tag": "binary search",   "boj_tag": "binary_search"},
-    {"id": "shortest-path",   "label": "최단 경로",           "cf_tag": "shortest paths",  "boj_tag": "shortest_path"},
-    {"id": "data-structures", "label": "자료 구조",           "cf_tag": "data structures", "boj_tag": "data_structures"},
-    {"id": "strings",         "label": "문자열",              "cf_tag": "strings",         "boj_tag": "string"},
-    {"id": "math",            "label": "수학",                "cf_tag": "math",            "boj_tag": "math"},
+    {"id": "dp", "label": "다이나믹 프로그래밍",
+     "cf_tag": "dp", "boj_tag": "dp", "lc_tag": "dynamic-programming"},
+    {"id": "greedy", "label": "그리디 알고리즘",
+     "cf_tag": "greedy", "boj_tag": "greedy", "lc_tag": "greedy"},
+    {"id": "graphs", "label": "그래프 이론",
+     "cf_tag": "graphs", "boj_tag": "graphs", "lc_tag": "graph"},
+    {"id": "brute-force", "label": "완전 탐색",
+     "cf_tag": "brute force", "boj_tag": "bruteforcing", "lc_tag": "backtracking"},
+    {"id": "dfs", "label": "DFS / 탐색",
+     "cf_tag": "dfs and similar", "boj_tag": "dfs", "lc_tag": "depth-first-search"},
+    {"id": "binary-search", "label": "이분 탐색",
+     "cf_tag": "binary search", "boj_tag": "binary_search", "lc_tag": "binary-search"},
+    {"id": "shortest-path", "label": "최단 경로",
+     "cf_tag": "shortest paths", "boj_tag": "shortest_path", "lc_tag": "shortest-path"},
+    {"id": "data-structures", "label": "자료 구조",
+     "cf_tag": "data structures", "boj_tag": "data_structures", "lc_tag": "hash-table"},
+    {"id": "strings", "label": "문자열",
+     "cf_tag": "strings", "boj_tag": "string", "lc_tag": "string"},
+    {"id": "math", "label": "수학",
+     "cf_tag": "math", "boj_tag": "math", "lc_tag": "math"},
+    {"id": "sql", "label": "SQL (Database)", "lc_tag": "database"},
 ]
+
+_TAG_FIELD = {"boj": "boj_tag", "codeforces": "cf_tag", "leetcode": "lc_tag"}
 
 
 PER_BAND = 8               # 응답에 담는 밴드당 문제 수 (테마당 최대 24개)
@@ -28,10 +43,20 @@ CACHE_TTL_SEC = 24 * 3600  # 대표 문제 목록은 하루면 충분
 # 난이도 밴드 (쉬움/보통/어려움) — 밴드별 최다 풀이 순 상위를 뽑는다.
 BOJ_BANDS = [(3, 8), (9, 13), (14, 18)]           # B3~S3 / S2~G3 / G2~P3
 CF_BANDS = [(800, 1199), (1200, 1699), (1700, 2400)]
+LC_BANDS = [(1, 1), (2, 2), (3, 3)]               # Easy / Medium / Hard
+
+# 같은 난이도 상한. LeetCode 는 밴드 하나가 난이도 하나라 밴드 크기(PER_BAND)가 곧 상한이다.
+PER_DIFFICULTY_BY_PLATFORM = {"boj": PER_DIFFICULTY, "codeforces": PER_DIFFICULTY, "leetcode": PER_BAND}
 
 
-def get_theme_list() -> list[dict]:
-    return [{"id": t["id"], "label": t["label"]} for t in THEMES]
+def theme_supports(platform: str, theme: dict) -> bool:
+    if platform not in _TAG_FIELD:
+        raise unsupported_platform(platform)
+    return _TAG_FIELD[platform] in theme
+
+
+def get_theme_list(platform: str) -> list[dict]:
+    return [{"id": t["id"], "label": t["label"]} for t in THEMES if theme_supports(platform, t)]
 
 
 def find_theme(theme_id: str) -> dict | None:
@@ -83,6 +108,19 @@ def _fetch_cf_pool(cf_tag: str) -> list[list[dict]]:
     return bands
 
 
+def _fetch_lc_pool(lc_tag: str) -> list[list[dict]]:
+    """LC 스냅샷 검색 1회(풀이 수순) 후 난이도(Easy/Medium/Hard)로 버킷팅."""
+    try:
+        pool = search_lc_problems_by_tag(lc_tag, LC_BANDS[0][0], LC_BANDS[-1][1], set())
+    except ProblemSearchError:
+        return [[] for _ in LC_BANDS]
+    bands = []
+    for lo, hi in LC_BANDS:
+        in_band = [p for p in pool if lo <= p["tier"] <= hi]
+        bands.append(_cap_per_difficulty(in_band, "tier", POOL_PER_DIFFICULTY))
+    return bands
+
+
 def _pool_cache_key(platform: str, theme: dict) -> str:
     return f"themes:v2:{platform}:{theme['id']}"
 
@@ -104,6 +142,8 @@ def get_theme_problem_pool(platform: str, theme: dict) -> list[list[dict]] | Non
         fresh = _fetch_boj_pool(theme["boj_tag"])
     elif platform == "codeforces":
         fresh = _fetch_cf_pool(theme["cf_tag"])
+    elif platform == "leetcode":
+        fresh = _fetch_lc_pool(theme["lc_tag"])
     else:
         raise unsupported_platform(platform)
 
@@ -137,8 +177,8 @@ def _solved_set(platform: str) -> set:
         return hit[0]
     if platform == "boj":
         fresh = db.get_solved_problem_ids()
-    elif platform == "codeforces":
-        fresh = db.get_solved_refs("codeforces")
+    elif platform in ("codeforces", "leetcode"):
+        fresh = db.get_solved_refs(platform)
     else:
         raise unsupported_platform(platform)
     _solved_cache[platform] = (fresh, now)
@@ -146,7 +186,7 @@ def _solved_set(platform: str) -> set:
 
 
 # 응답 정렬·같은 난이도 상한에 쓰는 난이도 필드. 플랫폼마다 문제 dict 의 키가 다르다.
-_DIFF_FIELD = {"boj": "tier", "codeforces": "rating"}
+_DIFF_FIELD = {"boj": "tier", "codeforces": "rating", "leetcode": "tier"}
 
 
 def build_theme_response(platform: str, theme: dict) -> dict:
@@ -167,7 +207,8 @@ def build_theme_response(platform: str, theme: dict) -> dict:
     problems = []
     for band in bands:
         unsolved = [p for p in band if p["id"] not in solved]
-        problems.extend(_cap_per_difficulty(unsolved, diff_field, PER_DIFFICULTY)[:PER_BAND])
+        capped = _cap_per_difficulty(unsolved, diff_field, PER_DIFFICULTY_BY_PLATFORM[platform])
+        problems.extend(capped[:PER_BAND])
     problems.sort(key=lambda p: p[diff_field])
 
     resp["problems"] = problems

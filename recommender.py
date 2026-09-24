@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from clients import (ProblemSearchError, get_tag_key_by_name,
-                     search_cf_problems_by_tag, search_problems_by_tag)
-from constants import TIER_NAMES, unsupported_platform
+                     search_cf_problems_by_tag, search_lc_problems_by_tag, search_problems_by_tag)
+from constants import LC_DIFFICULTY_NAMES, TIER_NAMES, unsupported_platform
 from timestamps import parse_stored
 import db
 
@@ -15,6 +15,8 @@ HARD_PER_TAG = 2
 CF_RANGE_LOW       = 100
 CF_RANGE_SAME_HIGH = 100
 CF_RANGE_HARD_HIGH = 500
+
+LC_TIER_MIN, LC_TIER_MAX = 1, 3   # Easy ~ Hard
 
 
 def _boj_bands(avg_tier: float) -> tuple[int, int, int, int]:
@@ -38,6 +40,14 @@ def _cf_bands(avg_rating: float) -> tuple[int, int, int, int]:
             min(3500, rating + CF_RANGE_SAME_HIGH),
             min(3500, rating + CF_RANGE_SAME_HIGH + 1),
             min(3500, rating + CF_RANGE_HARD_HIGH))
+
+
+def _lc_bands(avg_tier: float) -> tuple[int, int, int, int]:
+    """(same_min, same_max, hard_min, hard_max) — 난이도가 3단계라 same 은 평균 난이도 하나,
+    hard 는 한 단계 위부터 Hard 까지다. Hard 평균이면 둘이 같은 밴드가 된다(id 로 중복 제거).
+    반올림은 half-up — helpers.average_difficulty 의 라벨·프런트 배지와 같은 규칙이다."""
+    level = min(LC_TIER_MAX, max(LC_TIER_MIN, int(avg_tier + 0.5)))
+    return level, level, min(LC_TIER_MAX, level + 1), LC_TIER_MAX
 
 
 def _score_tags(tag_data: list) -> list:
@@ -96,6 +106,9 @@ def get_recommendations(weak_tags: list[str], platform: str = "boj",
     if platform == "boj":
         return _get_boj_recommendations(weak_tags, extra_exclude=extra_exclude,
                                         avg_tier=avg_difficulty)
+    if platform == "leetcode":
+        return _get_lc_recommendations(weak_tags, extra_exclude=extra_exclude,
+                                       avg_tier=avg_difficulty)
     raise unsupported_platform(platform)
 
 
@@ -174,9 +187,37 @@ def _get_cf_recommendations(weak_tags: list[str], extra_exclude: set | None = No
     return recommendations
 
 
+def _get_lc_recommendations(weak_tags: list[str], extra_exclude: set | None = None, *,
+                            avg_tier: float) -> list[dict]:
+    same_min, same_max, hard_min, hard_max = _lc_bands(avg_tier)
+
+    exclude_refs = db.get_solved_refs("leetcode") | (extra_exclude or set())
+
+    recommendations = []
+    # CF 와 같은 이유로 태그별 실패 격리를 하지 않는다 — 실패 조건은 스냅샷 하나다.
+    for tag in weak_tags:
+        same_problems = search_lc_problems_by_tag(tag, same_min, same_max, exclude_refs)[:SAME_PER_TAG]
+        hard_problems = search_lc_problems_by_tag(tag, hard_min, hard_max, exclude_refs)[:HARD_PER_TAG]
+        # Hard 평균이면 same·hard 밴드가 같아 같은 문제가 두 번 나온다.
+        problems = list({p["id"]: p for p in same_problems + hard_problems}.values())
+        if problems:
+            recommendations.append({
+                "tag": tag,
+                "tag_key": tag,
+                "problems": problems,
+            })
+    return recommendations
+
+
 def tier_range_description(avg_tier: float) -> str:
     same_min, _, _, hard_max = _boj_bands(avg_tier)
     return f"{TIER_NAMES.get(same_min, '?')} ~ {TIER_NAMES.get(hard_max, '?')}"
+
+
+def lc_difficulty_range_description(avg_tier: float) -> str:
+    """BOJ 의 tier_range_description 과 짝."""
+    same_min, _, _, hard_max = _lc_bands(avg_tier)
+    return f"{LC_DIFFICULTY_NAMES[same_min]} ~ {LC_DIFFICULTY_NAMES[hard_max]}"
 
 
 def cf_rating_range_description(avg_rating: float) -> str:

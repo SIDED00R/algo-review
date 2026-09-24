@@ -58,6 +58,7 @@ function renderImportShell(list) {
           <option value="">전체 플랫폼</option>
           <option value="boj">BOJ</option>
           <option value="codeforces">Codeforces</option>
+          <option value="leetcode">LeetCode</option>
         </select>
         <select id="import-tier-filter" class="select filter-fixed" aria-label="난이도 필터">
           ${tierFilterOptionsHtml()}

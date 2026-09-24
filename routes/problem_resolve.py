@@ -39,21 +39,36 @@ def is_unresolved_problem_info(info: dict, problem_id: int) -> bool:
             and not info.get("tier") and not info.get("tags"))
 
 
+# 문제 메타를 외부 API 에서 problem_ref 로 바로 읽는 플랫폼: (clients 함수 이름, 빈 입력 안내, 라벨).
+# 함수는 호출 시점에 이름으로 찾는다 — 테스트가 clients 의 함수를 대역으로 바꾼다.
+_REMOTE_LOOKUPS = {
+    "codeforces": ("get_codeforces_problem_info",
+                   "Codeforces 문제 번호를 입력하세요. 예: 4A 또는 4/A", "Codeforces"),
+    "leetcode": ("get_leetcode_problem_info",
+                 "LeetCode 문제 번호·slug·URL 을 입력하세요. 예: 175 또는 two-sum", "LeetCode"),
+}
+
+
+def _resolve_remote(platform: str, problem_ref: str | None) -> dict:
+    fetch_name, empty_message, label = _REMOTE_LOOKUPS[platform]
+    if not (problem_ref or "").strip():
+        raise HTTPException(status_code=400, detail=empty_message)
+    try:
+        return getattr(api_client, fetch_name)(problem_ref.strip())
+    except api_client.UpstreamUnavailable as e:
+        # 상류 장애다 — 400 으로 주면 사용자가 자기 입력을 고치려 한다.
+        raise HTTPException(status_code=502, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502,
+                            detail=f"{label} 문제 조회 실패 ({type(e).__name__})") from None
+
+
 def resolve_problem_info(platform: str, problem_id: int | None, problem_ref: str | None) -> dict:
     """플랫폼별 문제 메타(제목·티어·태그)를 반환한다. LLM 을 쓰지 않는다."""
-    if platform == "codeforces":
-        if not (problem_ref or "").strip():
-            raise HTTPException(status_code=400, detail="Codeforces 문제 번호를 입력하세요. 예: 4A 또는 4/A")
-        try:
-            return api_client.get_codeforces_problem_info(problem_ref.strip())
-        except api_client.UpstreamUnavailable as e:
-            # 상류 장애다 — 400 으로 주면 사용자가 자기 입력을 고치려 한다.
-            raise HTTPException(status_code=502, detail=str(e))
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            raise HTTPException(status_code=502,
-                                detail=f"Codeforces 문제 조회 실패 ({type(e).__name__})") from None
+    if platform in _REMOTE_LOOKUPS:
+        return _resolve_remote(platform, problem_ref)
 
     if platform != "boj":
         raise unsupported_platform_400(platform)
@@ -104,6 +119,8 @@ def resolve_statement(platform: str, info: dict, custom_statement: str | None = 
         return custom
     if platform == "codeforces":
         scraped = api_client.get_codeforces_problem_statement(info["problem_ref"])
+    elif platform == "leetcode":
+        scraped = api_client.get_leetcode_problem_statement(info["problem_ref"])
     elif platform == "boj":
         scraped = api_client.get_problem_statement(int(info["problem_ref"]))
     else:

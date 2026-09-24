@@ -65,6 +65,8 @@ _SAMPLES = [
     ("TypeScript", "const lines: string[] = require('fs').readFileSync(0,'utf8').split('\n');\n"
                    "console.log(lines[0]);"),
     ("TypeScript", "interface Point { x: number }\nconst p: Point = { x: 1 };"),
+    ("MySQL", "SELECT p.firstName, a.city\nFROM Person p\nLEFT JOIN Address a ON p.personId = a.personId;"),
+    ("MySQL", "select id, name from Employee where salary > 100 order by id"),
 ]
 
 # 언어끼리 마커를 공유하는 조합. 표는 첫 일치를 채택하므로 넓은 마커가 앞에 놓이면
@@ -92,6 +94,9 @@ _COLLISIONS = [
     ("Java", "import java.io.*;\nclass Main { public static void main(String[] a) throws IOException {"
              " BufferedReader br = new BufferedReader(new InputStreamReader(System.in)); } }"),
     ("Python 3", "import sys\na, b = map(int, sys.stdin.readline().split())\nprint(a + b)"),
+    # SQL 마커(SELECT … FROM)는 다른 언어의 문자열 안에도 나온다 — SQL 은 표의 맨 끝이다
+    ("Python 3", "q = 'SELECT * FROM t'\nprint(q)"),
+    ("Java", "import java.sql.*;\npublic class Main { String q = \"SELECT id FROM t\"; }"),
 ]
 
 _SAMPLES = _SAMPLES + _COLLISIONS

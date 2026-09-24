@@ -1,6 +1,6 @@
 """문제 뷰어 응답의 프로세스 캐시 + 같은 키의 동시 요청 병합.
 
-`/api/problem/cf/{ref}` 가 쓴다. 캐시 키는 라우터가 플랫폼 접두사를 붙여 만든다(`cf:4A`).
+`/api/problem/cf/{ref}`·`/api/problem/lc/{slug}` 가 쓴다. 캐시 키는 라우터가 플랫폼 접두사를 붙여 만든다(`cf:4A`·`lc:two-sum`).
 번역 성공 결과는 만료 없이, 실패 결과는 60초 뒤 재시도하도록 짧게 둔다.
 """
 import asyncio

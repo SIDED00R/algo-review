@@ -88,7 +88,7 @@
 /* ══════════════════════════════════════════════════════════════════════════
    데이터 색 — 화면에서 유일한 유채색
 
-   전경/배경/경계를 테마별로 짝지어 정의한다. 32쌍 전부 자기 배경 위에서 4.5:1 이상이다.
+   전경/배경/경계를 테마별로 짝지어 정의한다. 38쌍 전부 자기 배경 위에서 4.5:1 이상이다.
    ══════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -106,6 +106,11 @@
   --cf-candidate-master-fg:#C67CDE; --cf-candidate-master-bg:#190F1D; --cf-candidate-master-line:#3B2442;
   --cf-master-fg:#E0AA7B; --cf-master-bg:#1F150D; --cf-master-line:#463220;
   --cf-grandmaster-fg:#E07E7B; --cf-grandmaster-bg:#1E0E0D; --cf-grandmaster-line:#452221;
+
+  /* LeetCode Easy/Medium/Hard — pupil·gold·grandmaster 와 같은 값이라 대비 검증이 같다. */
+  --lc-easy-fg:#85D692; --lc-easy-bg:#101C12; --lc-easy-line:#26402B;
+  --lc-medium-fg:#E0C77B; --lc-medium-bg:#1F1A0D; --lc-medium-line:#463D20;
+  --lc-hard-fg:#E07E7B; --lc-hard-bg:#1E0E0D; --lc-hard-line:#452221;
 
   /* 판정 배지는 fg 만 쓴다. bg/line 은 tier·cf 와 같은 3종 세트로 유지하고,
      good/poor 의 bg·line 은 아래 --status-* 별칭이 소비한다. */
@@ -148,6 +153,10 @@
   --cf-candidate-master-fg:#71238B; --cf-candidate-master-bg:#F6EFF8; --cf-candidate-master-line:#DFD0E4;
   --cf-master-fg:#93531A; --cf-master-bg:#F9F3EE; --cf-master-line:#E7D9CE;
   --cf-grandmaster-fg:#931E1A; --cf-grandmaster-bg:#F8EFEF; --cf-grandmaster-line:#E6CFCE;
+
+  --lc-easy-fg:#2A7E38; --lc-easy-bg:#F0F7F1; --lc-easy-line:#D2E2D4;
+  --lc-medium-fg:#866B18; --lc-medium-bg:#F9F6EE; --lc-medium-line:#E7E0CE;
+  --lc-hard-fg:#931E1A; --lc-hard-bg:#F8EFEF; --lc-hard-line:#E6CFCE;
 
   --eff-good-fg:#2A7E4D; --eff-good-bg:#F0F7F3; --eff-good-line:#D2E2D9;
   --eff-ok-fg:#8B6818; --eff-ok-bg:#F8F5EF; --eff-ok-line:#E6DFCE;

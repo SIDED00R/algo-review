@@ -44,10 +44,11 @@ def _capture(seen):
     setdefault 가 truthy 를 돌려줄 때 `or` 가 단락돼 dict 대신 문자열이 반환된다
     (KeyError: 'efficiency'). 명시 함수로 둔다.
     """
-    def _fake(info, statement, code):
+    def _fake(info, statement, code, language=""):
         seen["info"] = dict(info)
         seen["statement"] = statement
         seen["code"] = code
+        seen["language"] = language
         return _RESULT
     return _fake
 

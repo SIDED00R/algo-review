@@ -41,8 +41,9 @@ _DEMO_AWARE_MODULES = [
     # 스킵된다.
     "server",
     "routes.auth", "routes.execute", "routes.github_push",
-    "routes.import_codeforces", "routes.import_github", "routes.pending_review",
-    "routes.problem", "routes.recommend", "routes.report", "routes.rereview",
+    "routes.import_codeforces", "routes.import_github", "routes.import_leetcode",
+    "routes.pending_review", "routes.problem", "routes.problem_leetcode",
+    "routes.recommend", "routes.report", "routes.rereview",
     "routes.review", "routes.solved", "routes.themes",
 ]
 
@@ -117,7 +118,7 @@ def clean_process_caches():
     DB 는 테스트마다 갈아끼우는데 이 값들은 모듈 전역이라 남는다 — 앞 테스트가 심은
     상태가 뒤 테스트의 판정을 바꾼다.
     """
-    from clients import codeforces, solved_ac
+    from clients import codeforces, leetcode, solved_ac
 
     db.reset_tag_stats_rebuild_flag()
     solved_ac._TAG_KEY_CACHE.clear()
@@ -125,6 +126,11 @@ def clean_process_caches():
     codeforces._snapshot = None
     codeforces._lookup = None
     codeforces._last_force_refresh = 0.0
+    leetcode._snapshot = None
+    leetcode._by_slug = None
+    leetcode._by_id = None
+    leetcode._last_force_refresh = 0.0
+    leetcode._question_cache.clear()
     yield
 
 

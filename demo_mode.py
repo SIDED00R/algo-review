@@ -130,6 +130,61 @@ DEMO_RECOMMENDATIONS = {
     ],
 }
 
+DEMO_LC_PROBLEM = {
+    "title": "Two Sum",
+    "problem_id": 1,
+    "difficulty": "Easy",
+    "tier": 1,
+    "category": "Algorithms",
+    "is_paid_only": False,
+    "tags": ["Array", "Hash Table"],
+    "content_html_ko": (
+        "<p>정수 배열 <code>nums</code>와 정수 <code>target</code>이 주어질 때, 두 수의 합이 "
+        "<code>target</code>이 되는 두 원소의 <em>인덱스</em>를 반환하세요.</p>"
+        "<p>각 입력에는 정확히 하나의 답이 있으며, 같은 원소를 두 번 쓸 수 없습니다.</p>"
+        "<pre>입력: nums = [2,7,11,15], target = 9\n출력: [0,1]</pre>"
+    ),
+    "url": "https://leetcode.com/problems/two-sum/",
+    "translated": True,
+}
+
+DEMO_RECOMMENDATIONS_LC = {
+    "avg_tier": 2,
+    "tier_name": "LeetCode Medium",
+    "tier_range": "Medium ~ Hard",
+    "weak_tags": ["Dynamic Programming", "Database", "Graph"],
+    "recommendations": [
+        {
+            "tag": "Dynamic Programming",
+            "tag_key": "Dynamic Programming",
+            "problems": [
+                {"id": "coin-change", "problem_id": 322, "title": "Coin Change", "tier": 2, "tier_name": "Medium",
+                 "url": "https://leetcode.com/problems/coin-change/"},
+                {"id": "edit-distance", "problem_id": 72, "title": "Edit Distance", "tier": 3, "tier_name": "Hard",
+                 "url": "https://leetcode.com/problems/edit-distance/"},
+            ],
+        },
+        {
+            "tag": "Database",
+            "tag_key": "Database",
+            "problems": [
+                {"id": "department-highest-salary", "problem_id": 184, "title": "Department Highest Salary",
+                 "tier": 2, "tier_name": "Medium", "url": "https://leetcode.com/problems/department-highest-salary/"},
+                {"id": "trips-and-users", "problem_id": 262, "title": "Trips and Users", "tier": 3,
+                 "tier_name": "Hard", "url": "https://leetcode.com/problems/trips-and-users/"},
+            ],
+        },
+        {
+            "tag": "Graph",
+            "tag_key": "Graph",
+            "problems": [
+                {"id": "course-schedule", "problem_id": 207, "title": "Course Schedule", "tier": 2,
+                 "tier_name": "Medium", "url": "https://leetcode.com/problems/course-schedule/"},
+            ],
+        },
+    ],
+}
+
 DEMO_RECOMMENDATIONS_BOJ = {
     "avg_tier": 11,
     "tier_name": "Gold V",
@@ -221,6 +276,28 @@ DEMO_THEME_PROBLEMS = {
         {"id": 9012, "title": "괄호", "tier": 7, "tier_name": "Silver IV"},
         {"id": 1874, "title": "스택 수열", "tier": 9, "tier_name": "Silver II"},
         {"id": 1655, "title": "가운데를 말해요", "tier": 14, "tier_name": "Gold II"},
+    ]),
+    ("leetcode", "dp"): _demo_theme_response("leetcode", "dp", [
+        {"id": "climbing-stairs", "problem_id": 70, "title": "Climbing Stairs", "tier": 1, "tier_name": "Easy"},
+        {"id": "coin-change", "problem_id": 322, "title": "Coin Change", "tier": 2, "tier_name": "Medium"},
+        {"id": "edit-distance", "problem_id": 72, "title": "Edit Distance", "tier": 3, "tier_name": "Hard"},
+    ]),
+    ("leetcode", "greedy"): _demo_theme_response("leetcode", "greedy", [
+        {"id": "assign-cookies", "problem_id": 455, "title": "Assign Cookies", "tier": 1, "tier_name": "Easy"},
+        {"id": "jump-game", "problem_id": 55, "title": "Jump Game", "tier": 2, "tier_name": "Medium"},
+        {"id": "candy", "problem_id": 135, "title": "Candy", "tier": 3, "tier_name": "Hard"},
+    ]),
+    ("leetcode", "graphs"): _demo_theme_response("leetcode", "graphs", [
+        {"id": "find-center-of-star-graph", "problem_id": 1791, "title": "Find Center of Star Graph",
+         "tier": 1, "tier_name": "Easy"},
+        {"id": "course-schedule", "problem_id": 207, "title": "Course Schedule", "tier": 2, "tier_name": "Medium"},
+        {"id": "alien-dictionary-ii", "problem_id": 269, "title": "Alien Dictionary", "tier": 3, "tier_name": "Hard"},
+    ]),
+    ("leetcode", "data-structures"): _demo_theme_response("leetcode", "data-structures", [
+        {"id": "two-sum", "problem_id": 1, "title": "Two Sum", "tier": 1, "tier_name": "Easy"},
+        {"id": "lru-cache", "problem_id": 146, "title": "LRU Cache", "tier": 2, "tier_name": "Medium"},
+        {"id": "first-missing-positive", "problem_id": 41, "title": "First Missing Positive",
+         "tier": 3, "tier_name": "Hard"},
     ]),
 }
 

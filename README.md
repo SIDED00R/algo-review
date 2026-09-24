@@ -9,19 +9,21 @@
 현재 지원 범위:
 - `BOJ`: 코드 리뷰, 문제 추천, 통계
 - `Codeforces`: 코드 리뷰, 문제 추천, 통계, 제출 기록 import, 인앱 문제 뷰어
+- `LeetCode`: 코드 리뷰(알고리즘 + Database/SQL), 문제 추천, 통계, 제출 기록 import, 인앱 문제 뷰어
 
 ## 주요 기능
 
 - **코드 리뷰**
-  - BOJ 또는 Codeforces 문제 번호와 코드를 입력하면 AI가 시간복잡도, 효율성, 개선점, 강점/약점을 분석합니다.
+  - BOJ·Codeforces·LeetCode 문제 번호와 코드를 입력하면 AI가 시간복잡도, 효율성, 개선점, 강점/약점을 분석합니다.
+  - LeetCode 는 번호(`175`)·slug(`two-sum`)·문제 URL 중 아무거나 입력합니다. 언어를 `MySQL` 로 두면(SQL 은 자동 감지됨) 결과 집합 정확성·조인/서브쿼리 선택·스캔 비용 관점의 SQL 쿼리 리뷰로 분석합니다.
   - 리뷰 결과는 GitHub 저장소에 코드 + README(리뷰 섹션 포함)로 push 할 수 있습니다.
 - **리뷰 없이 먼저 등록 → 나중에 AI 리뷰**
   - LLM 토큰이 없어 리뷰가 실패해도 코드와 문제 정보만으로 GitHub에 올릴 수 있습니다(`리뷰 대기` 상태로 기록).
   - 나중에 '리뷰 기록' 탭에서 AI 리뷰를 실행하면 같은 기록이 채워지고(제출 회차는 늘지 않음) README의 리뷰 섹션도 갱신됩니다.
   - 대기 상태는 태그 통계에 섞이지 않고, 실제 리뷰가 채워질 때 처음 집계됩니다.
-- **CF 인앱 문제 뷰어**
-  - Codeforces 문제를 앱 내에서 바로 보고 한국어 번역까지 제공합니다.
-  - 예제 입출력 직접 실행 (Python / C++) 지원
+- **인앱 문제 뷰어 (Codeforces · LeetCode)**
+  - 문제를 앱 내에서 바로 보고 한국어 번역까지 제공합니다.
+  - Codeforces 는 예제 입출력 직접 실행 (Python / C++) 지원. LeetCode 는 함수 시그니처·SQL 기반이라 예제 실행이 없고, 유료(Premium) 문제는 본문 없이 링크만 보여줍니다. Database 문제는 에디터 언어가 MySQL 로 시작합니다.
   - 코드를 쓰는 창이라 `Esc` 로는 닫히지 않습니다 (닫기는 ✕ 버튼 또는 바깥 클릭). 에디터 안에서 `Esc` 는 포커스만 빼냅니다.
 - **코드 임시 저장**
   - 문제 뷰어 에디터(문제 추천·테마별 문제에서 여는 창)에서 작성 중인 코드가 서버에 자동 저장됩니다(입력이 멎으면 1.5초 뒤, 계속 입력해도 5초마다). 코드 리뷰 탭 에디터는 저장하지 않습니다.
@@ -30,6 +32,7 @@
 - **기록 import**
   - `BaekjoonHub GitHub` 저장소 import
   - `Codeforces handle` 기반 import
+  - `LeetCode 사용자 이름` 기반 import — 세션 쿠키(`LEETCODE_SESSION`)가 있으면 본인 AC 코드까지, 없으면 최근 AC 20개 목록만
 - **지난 제출 불러오기 → 고쳐서 재제출**
   - 효율성 지적을 받은 코드를 리뷰 폼으로 다시 불러와 수정하고 재제출합니다. 새 제출은 회차로 쌓이고 과거 회차는 그대로 남습니다.
   - 코드 리뷰 탭의 `지난 제출 불러오기`(입력한 문제의 최신 회차) 또는 리뷰 기록 모달의 `이 코드로 다시 풀기`(원하는 회차)로 들어갑니다.
@@ -43,12 +46,12 @@
   - 태그 통계, 티어(레이팅) 변화, 누적 분석 리포트
 - **문제 추천**
   - 약한 태그와 현재 수준 + 도전 난이도를 혼합해 다음 문제를 추천합니다.
-  - BOJ / Codeforces 각각 지원
+  - BOJ / Codeforces / LeetCode 각각 지원 (LeetCode 는 Easy/Medium/Hard 밴드, SQL 문제는 `Database` 태그로 묶임)
 - **테마별 문제**
-  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제를 플랫폼(Codeforces/백준) 토글 + 테마 칩으로 둘러봅니다.
-  - 난이도는 사이트 네이티브 그대로 표시합니다 (CF: 레이팅 + 공식 색상 배지, 백준: solved.ac 실제 티어 배지). 이미 푼 문제는 목록에서 제외됩니다.
-  - 같은 난이도(CF 레이팅 / 백준 티어)는 최대 2개까지만 담아 난이도가 고르게 퍼지게 합니다.
-  - 백준 카드는 acmicpc 서비스 종료로 링크 없이 정보만 표시, CF 카드는 클릭 시 기존 인앱 뷰어 모달로 열립니다.
+  - 사용자 데이터와 무관하게 알고리즘 분야별(DP·그리디·그래프 등 10개) 대표 문제를 플랫폼(Codeforces/백준/LeetCode) 토글 + 테마 칩으로 둘러봅니다. `SQL (Database)` 테마는 LeetCode 에만 있습니다.
+  - 난이도는 사이트 네이티브 그대로 표시합니다 (CF: 레이팅 + 공식 색상 배지, 백준: solved.ac 실제 티어 배지, LeetCode: Easy/Medium/Hard 배지). 이미 푼 문제는 목록에서 제외됩니다.
+  - 같은 난이도(CF 레이팅 / 백준 티어)는 최대 2개까지만 담아 난이도가 고르게 퍼지게 합니다. LeetCode 는 난이도가 3단계라 난이도당 8개까지입니다.
+  - 백준 카드는 acmicpc 서비스 종료로 링크 없이 정보만 표시, CF·LeetCode 카드는 클릭 시 인앱 뷰어 모달로 열립니다.
 
 ## 기존 기록의 문제 설명 백필
 
@@ -65,6 +68,7 @@ python backfill_statements.py --apply             # 실제 기록
 |------|------|------|
 | BOJ (`--platform boj`) | GitHub 저장소 README | acmicpc.net 이 종료돼 재수집이 불가하다. GitHub 에 push 했던 문제만 복구된다 |
 | CF (`--platform codeforces`) | codeforces.com 재수집 | 동작한다 |
+| LeetCode | — | 미지원(리뷰 시점에 본문을 바로 받아온다) |
 
 이미 값이 있는 행은 덮어쓰지 않고, 수집 실패 문자열은 저장하지 않는다. 백필 대상 시기에는 사용자가
 붙여 넣은 원문이 저장되지 않았으므로 복구 대상이 아니다(현재는 `/api/review` 가 그 원문을 저장한다).
@@ -135,6 +139,13 @@ CI([.github/workflows/deploy.yml](.github/workflows/deploy.yml))는 PR·push 마
 - CF 문제 본문은 공식 API가 제공하지 않으므로 크롤링으로 가져옵니다.
   - 실패 시 리뷰 화면의 `문제 설명` 입력칸에 직접 붙여 넣어도 됩니다.
 - CF 소스코드 import는 본인 계정 API Key / Secret이 필요합니다.
+
+## LeetCode 관련 주의사항
+
+- 문제 목록·본문·태그는 공개 GraphQL 로 받습니다. 전체 목록(약 4,000문제)은 42회 요청으로 받아 하루 동안 `api_cache` 에 두므로, 하루 첫 LeetCode 요청은 1분 가까이 걸릴 수 있습니다(기동 시 백그라운드 예열이 대신 받습니다).
+- 내 제출 코드 import 는 로그인 세션 쿠키 `LEETCODE_SESSION` 이 필요합니다. 브라우저에서 leetcode.com 로그인 후 개발자 도구 → Application → Cookies 에서 복사해 `.env` 에 두거나 가져오기 폼에 넣습니다. 쿠키는 주기적으로 만료됩니다. 쿠키가 없으면 최근 AC 20개 목록만(코드 없이) 가져옵니다.
+- 유료(Premium) 문제는 본문을 받을 수 없어 리뷰는 제목·난이도·태그로만 진행되고, 추천·테마 목록에서는 제외됩니다.
+- 뷰어에 예제 실행이 없습니다 — LeetCode 문제는 함수 시그니처 기반이고 Database 문제는 SQL 이라 stdin/stdout 실행기로 채점할 수 없습니다.
 
 ## 배포
 
@@ -277,9 +288,10 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 
 - **Backend**: FastAPI + Uvicorn
 - **Frontend**: HTML / CSS / Vanilla JS
-- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, CF 문제 번역: GPT-4o-mini)
+- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, 문제 번역(CF·LeetCode): GPT-4o-mini)
 - **BOJ 데이터**: solved.ac API
 - **Codeforces 데이터**: Codeforces API + 크롤링
+- **LeetCode 데이터**: LeetCode GraphQL(공개) + 구 REST 문제 목록, 내 제출은 세션 쿠키
 - **DB**: SQLAlchemy 2.0 ORM + Alembic 마이그레이션 — SQLite (로컬 / 데모) / PostgreSQL (배포)
 - **배포**: GCP Cloud Run
 
@@ -287,18 +299,19 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 
 | 변수 | 필수 | 설명 |
 |------|------|------|
-| `OPENAI_API_KEY` | ✅ (DEMO_MODE=false 일 때) | AI 코드 리뷰·리포트 및 CF 문제 번역 |
+| `OPENAI_API_KEY` | ✅ (DEMO_MODE=false 일 때) | AI 코드 리뷰·리포트 및 문제 번역(CF·LeetCode) |
 | `GITHUB_CLIENT_ID` | 선택 | GitHub OAuth 앱 Client ID |
 | `GITHUB_CLIENT_SECRET` | 선택 | GitHub OAuth 앱 Client Secret |
 | `APP_URL` | 선택 | 서버 공개 URL (OAuth redirect 용) |
 | `CODEFORCES_API_KEY` | 선택 | CF 소스코드 import용 |
 | `CODEFORCES_API_SECRET` | 선택 | CF 소스코드 import용 |
+| `LEETCODE_SESSION` | 선택 | LeetCode 내 제출 코드 import용 브라우저 로그인 쿠키. 없으면 최근 AC 목록만(코드 없음) |
 | `OPENAI_MODEL` | 선택 | 사용할 OpenAI 모델 — 미설정 시 리뷰·리포트 `gpt-4o`, 번역 `gpt-4o-mini`. 설정하면 리뷰·번역 모두 이 값으로 대체 |
 | `OPENAI_BASE_URL` | 선택 | OpenAI 호환 엔드포인트 URL — 다른 제공자(예: Gemini)로 전환할 때만 지정 |
 | `OPENAI_MAX_TOKENS` | 선택 | 리뷰·번역 응답 최대 토큰 (기본값: 리뷰 `2048`, 번역 `2000`) |
 | `OPENAI_REPORT_MAX_TOKENS` | 선택 | 종합 리포트 응답 최대 토큰 (기본값: `1024`) |
-| `OPENAI_TEMPERATURE` | 선택 | CF 번역 temperature (기본값: `0.3`) |
-| `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·CF 번역) 공통 타임아웃(초) (기본값: `15`) |
+| `OPENAI_TEMPERATURE` | 선택 | 문제 번역 temperature (기본값: `0.3`) |
+| `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·번역) 공통 타임아웃(초) (기본값: `15`) |
 | `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `1`) |
 | `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. `/api/execute` 는 이 서비스로 위임한다 — 비워 두면 403 이다 |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |

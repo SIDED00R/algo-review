@@ -17,6 +17,15 @@ from clients.codeforces import (
     get_codeforces_user_submissions,
     search_cf_problems_by_tag,
 )
+from clients.leetcode import (
+    normalize_leetcode_problem_ref,
+    get_leetcode_problem_info,
+    get_leetcode_problem_statement,
+    get_lc_problem_sections,
+    scrape_lc_problem,
+    search_lc_problems_by_tag,
+    get_leetcode_user_submissions,
+)
 from clients.github import (
     exchange_github_code,
     get_github_user,
@@ -29,6 +38,7 @@ from clients.github import (
     get_raw_github_content,
 )
 from clients.utils import (
+    ProblemNotFound,
     ProblemSearchError,
     UpstreamUnavailable,
     get_problem_url,
@@ -43,9 +53,12 @@ __all__ = [
     "tex_markers_to_markdown",
     "get_codeforces_user_info", "get_codeforces_user_submissions",
     "search_cf_problems_by_tag",
+    "normalize_leetcode_problem_ref", "get_leetcode_problem_info", "get_leetcode_problem_statement",
+    "get_lc_problem_sections", "scrape_lc_problem", "search_lc_problems_by_tag",
+    "get_leetcode_user_submissions",
     "exchange_github_code", "get_github_user", "get_github_user_repos",
     "normalize_codeforces_problem_ref",
     "get_github_file_sha", "push_file_to_github", "push_files_to_github",
     "get_baekjoonhub_problems", "get_boj_readme_paths", "get_raw_github_content",
-    "ProblemSearchError", "UpstreamUnavailable", "get_problem_url", "get_file_extension",
+    "ProblemNotFound", "ProblemSearchError", "UpstreamUnavailable", "get_problem_url", "get_file_extension",
 ]

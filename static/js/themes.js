@@ -1,10 +1,9 @@
 // 테마별 문제 탭 — 플랫폼(Codeforces/백준) 토글 + 테마 칩 선택 + 3계층 캐시(메모리/localStorage/서버).
 let themesPlatform = 'codeforces';
 let selectedThemeId = null;
-let _themeList = null;                    // [{id, label}]
+const _themeLists = {};                   // platform → [{id, label}] — 테마 목록은 플랫폼마다 다르다(SQL 은 LeetCode 뿐)
 const _themeProblemsCache = new Map();    // 'codeforces:dp' → 테마 문제 응답
 
-const _LS_LIST_KEY = 'themes:list:v1';
 const _LS_LIST_TTL_MS = 24 * 60 * 60 * 1000;
 const _LS_PROBLEMS_TTL_MS = 30 * 60 * 1000;
 
@@ -27,24 +26,31 @@ function _lsSet(key, data) {
 }
 
 async function ensureThemeList() {
-  if (_themeList) return _themeList;
-  const cached = _lsGet(_LS_LIST_KEY, _LS_LIST_TTL_MS);
-  if (cached) { _themeList = cached; return _themeList; }
-  const data = await fetchJsonOk('/api/themes', undefined, '테마 목록 로딩 실패');
-  _themeList = data.themes || [];
-  _lsSet(_LS_LIST_KEY, _themeList);
-  return _themeList;
+  const platform = themesPlatform;
+  if (_themeLists[platform]) return _themeLists[platform];
+  const lsKey = `themes:list:v2:${platform}`;
+  const cached = _lsGet(lsKey, _LS_LIST_TTL_MS);
+  if (cached) { _themeLists[platform] = cached; return cached; }
+  const data = await fetchJsonOk(`/api/themes?platform=${encodeURIComponent(platform)}`, undefined, '테마 목록 로딩 실패');
+  _themeLists[platform] = data.themes || [];
+  _lsSet(lsKey, _themeLists[platform]);
+  return _themeLists[platform];
 }
 
 async function loadThemes() {
   const result = document.getElementById('themes-result');
+  let list;
   try {
-    await ensureThemeList();
+    list = await ensureThemeList();
   } catch (e) {
     showError(result, e.message);
     return;
   }
-  renderThemeChips();
+  // 플랫폼을 바꾸면 고른 테마가 새 목록에 없을 수 있다(SQL → 백준). 첫 테마로 옮긴다.
+  if (selectedThemeId && !list.some(t => t.id === selectedThemeId)) {
+    selectedThemeId = list[0]?.id || null;
+  }
+  renderThemeChips(list);
   if (selectedThemeId) {
     loadThemeProblems();
   } else {
@@ -52,9 +58,9 @@ async function loadThemes() {
   }
 }
 
-function renderThemeChips() {
+function renderThemeChips(list) {
   const box = document.getElementById('themes-chips');
-  box.innerHTML = _themeList.map(t =>
+  box.innerHTML = list.map(t =>
     `<button class="theme-chip${t.id === selectedThemeId ? ' active' : ''}" data-theme-id="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`
   ).join('');
   box.querySelectorAll('.theme-chip').forEach(btn => {
@@ -137,6 +143,9 @@ function renderThemeProblems(container, data) {
         ? `<span class="tier-badge ${cfRatingClass(p.rating)}">*${escapeHtml(String(p.rating))}</span>`
         : tierBadgeHtml(difficultyClass(data.platform, p.tier), escapeHtml(p.tier_name));
       const tierLabel = p.rating != null ? `*${p.rating}` : p.tier_name;
+      const label = escapeHtml(problemLabel({
+        platform: data.platform, problem_id: p.problem_id, problem_ref: String(p.id),
+      }));
       if (spec.viewer) {
         html += `
         <div class="rec-problem-card is-clickable"
@@ -144,14 +153,14 @@ function renderThemeProblems(container, data) {
              data-ref="${escapeHtml(String(p.id))}"
              data-title="${escapeHtml(p.title)}"
              data-tier="${escapeHtml(String(tierLabel))}">
-          <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
+          <span>${label}. ${escapeHtml(p.title)}</span>
           ${badge}
         </div>`;
       } else {
         // 백준 본체(acmicpc)가 서비스 종료라 링크 없이 정보만 표시한다.
         html += `
         <div class="rec-problem-card">
-          <span>${escapeHtml(String(p.id))}. ${escapeHtml(p.title)}</span>
+          <span>${label}. ${escapeHtml(p.title)}</span>
           ${badge}
         </div>`;
       }
@@ -177,14 +186,15 @@ document.querySelectorAll('.btn-toggle[data-themes-platform]').forEach(btn => {
     btn.classList.add('active');
     btn.setAttribute('aria-pressed', 'true');
     themesPlatform = btn.dataset.themesPlatform;
-    if (selectedThemeId) loadThemeProblems();
+    // 목록이 플랫폼마다 달라 칩도 다시 그린다.
+    loadThemes();
   });
 });
 
 // 유휴 프리페치 — 접속 직후 기본 플랫폼의 테마 문제를 백그라운드로 순차 워밍해 탭 진입을 즉시로 만든다.
 async function prefetchThemeData() {
-  await ensureThemeList();
-  for (const t of _themeList) {
+  const list = await ensureThemeList();
+  for (const t of list) {
     const key = `${themesPlatform}:${t.id}`;
     if (_themeProblemsCache.has(key) || _lsGet(`themes:problems:v2:${key}`, _LS_PROBLEMS_TTL_MS)) continue;
     try {

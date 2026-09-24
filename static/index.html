@@ -119,7 +119,7 @@
     <section id="tab-review" class="tab-content active measure-work" role="tabpanel" aria-labelledby="tabbtn-review">
       <div class="work-head">
         <h2>코드 리뷰</h2>
-        <p class="desc">백준 또는 Codeforces 문제 번호와 풀이 코드를 입력하면 AI가 분석해드립니다.</p>
+        <p class="desc">백준·Codeforces·LeetCode 문제 번호와 풀이 코드를 입력하면 AI가 분석해드립니다. SQL 풀이도 리뷰합니다.</p>
       </div>
 
       <div class="field-row cols-3">
@@ -128,6 +128,7 @@
           <select id="problem-platform">
             <option value="boj">백준</option>
             <option value="codeforces" selected>Codeforces</option>
+            <option value="leetcode">LeetCode</option>
           </select>
         </div>
         <div>
@@ -152,6 +153,7 @@
             <option value="TypeScript">TypeScript</option>
             <option value="Swift">Swift</option>
             <option value="Ruby">Ruby</option>
+            <option value="MySQL">MySQL (SQL)</option>
             <option value="">자동 감지</option>
           </select>
           <p id="code-language-help" class="hint">GitHub push 시 파일 확장자에 사용됩니다.</p>
@@ -165,7 +167,7 @@
           문제 설명 직접 붙여넣기 (선택)
         </summary>
         <textarea id="problem-statement" rows="6" spellcheck="false" aria-label="문제 설명"
-          placeholder="Codeforces 문제문 자동 수집이 실패하면 여기에 직접 붙여 넣을 수 있습니다."></textarea>
+          placeholder="문제 본문 자동 수집이 실패하면 여기에 직접 붙여 넣을 수 있습니다."></textarea>
       </details>
 
       <div class="field-head">
@@ -193,6 +195,7 @@
           <select id="recommend-platform">
             <option value="codeforces" selected>Codeforces</option>
             <option value="boj">백준</option>
+            <option value="leetcode">LeetCode</option>
           </select>
         </div>
         <button id="recommend-btn" class="btn-primary">추천받기</button>
@@ -204,12 +207,14 @@
     <section id="tab-themes" class="tab-content hidden measure-list" role="tabpanel" aria-labelledby="tabbtn-themes">
       <div class="list-head">
         <h2>테마별 문제</h2>
-        <p class="desc">알고리즘 분야별 대표 문제를 사이트별 난이도로 보여줍니다. 이미 푼 문제는 제외됩니다. Codeforces 문제는 클릭하면 인앱 뷰어로 열립니다.</p>
+        <p class="desc">알고리즘 분야별 대표 문제를 사이트별 난이도로 보여줍니다. 이미 푼 문제는 제외됩니다.
+          Codeforces·LeetCode 문제는 클릭하면 인앱 뷰어로 열립니다. SQL 테마는 LeetCode 에 있습니다.</p>
       </div>
       <div class="toolbar">
         <div class="platform-toggle">
           <button class="btn-toggle active" data-themes-platform="codeforces" aria-pressed="true">Codeforces</button>
           <button class="btn-toggle" data-themes-platform="boj" aria-pressed="false">백준</button>
+          <button class="btn-toggle" data-themes-platform="leetcode" aria-pressed="false">LeetCode</button>
         </div>
       </div>
       <div id="themes-chips" class="theme-chips"></div>
@@ -237,6 +242,7 @@
         <div class="platform-toggle">
           <button class="btn-toggle active" data-platform="boj" aria-pressed="true">백준</button>
           <button class="btn-toggle" data-platform="codeforces" aria-pressed="false">Codeforces</button>
+          <button class="btn-toggle" data-platform="leetcode" aria-pressed="false">LeetCode</button>
         </div>
         <button id="stats-btn" class="btn-primary btn-sm">통계 불러오기</button>
       </div>
@@ -253,6 +259,7 @@
         <div class="platform-toggle">
           <button class="btn-toggle active" data-report-platform="boj" aria-pressed="true">백준</button>
           <button class="btn-toggle" data-report-platform="codeforces" aria-pressed="false">Codeforces</button>
+          <button class="btn-toggle" data-report-platform="leetcode" aria-pressed="false">LeetCode</button>
         </div>
         <button id="report-btn" class="btn-primary btn-sm">리포트 생성</button>
       </div>
@@ -362,6 +369,66 @@
       </div>
 
       <div id="cf-import-result" aria-live="polite"></div>
+
+      <div class="card">
+        <details>
+          <summary>
+            <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+            <h2>LeetCode 가져오기</h2>
+          </summary>
+          <p class="desc">
+            LeetCode 사용자 이름으로 AC 기록을 가져옵니다. 세션 쿠키가 없으면 최근 AC 20개만(코드 없음),
+            있으면 본인 AC 코드까지 가져옵니다.
+          </p>
+
+          <div class="field-row cols-2">
+            <div>
+              <label class="label" for="lc-username">LeetCode 사용자 이름</label>
+              <input id="lc-username" type="text" placeholder="예) sidedoor" />
+            </div>
+            <div>
+              <label class="label" for="lc-count">가져올 문제 수</label>
+              <select id="lc-count">
+                <option value="20" selected>최근 20개</option>
+                <option value="50">최근 50개</option>
+                <option value="100">최근 100개</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="label" for="lc-session">LEETCODE_SESSION 쿠키 (선택)</label>
+            <input id="lc-session" type="password" placeholder="브라우저 쿠키 LEETCODE_SESSION 값" />
+            <p class="hint">
+              비워두면 서버의 <code>.env</code>에 있는 <code>LEETCODE_SESSION</code>을 우선 사용합니다.
+              leetcode.com 로그인 후 개발자 도구 → Application → Cookies 에서 복사합니다.
+            </p>
+          </div>
+
+          <details class="nested-toggle">
+            <summary>
+              <span class="toggle-arrow"><svg aria-hidden="true"><use href="#i-chevron" /></svg></span>
+              <span class="hint">GitHub 자동 push — 풀이를 GitHub에 올리려면 펼치세요</span>
+            </summary>
+            <div class="form-row">
+              <label class="label" for="lc-gh-repo">GitHub 저장소</label>
+              <input id="lc-gh-repo" type="text" placeholder="예) username/my-solutions" />
+            </div>
+            <div class="form-row">
+              <label class="label" for="lc-gh-token">GitHub Personal Access Token</label>
+              <input id="lc-gh-token" type="password" placeholder="ghp_..." />
+              <p class="hint">
+                Settings → Developer settings → Personal access tokens → <b>Contents: Write</b> 권한 필요.
+                소스 코드가 있는 문제만 push됩니다 (세션 쿠키 필요).
+              </p>
+            </div>
+          </details>
+
+          <div class="action-row"><button id="lc-import-btn" class="btn-primary">LeetCode에서 가져오기</button></div>
+        </details>
+      </div>
+
+      <div id="lc-import-result" aria-live="polite"></div>
       <div id="import-history-list"></div>
     </section>
   </main>
@@ -404,6 +471,7 @@
             <select id="pm-language">
               <option value="python3">Python 3</option>
               <option value="cpp">C++ (GNU C++17)</option>
+              <option value="mysql" hidden>MySQL</option>
             </select>
           </div>
           <div id="pm-code" class="pm-code"></div>
@@ -464,6 +532,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/go/go.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/swift/swift.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/ruby/ruby.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
@@ -493,6 +562,7 @@
   <script src="/static/js/import-history.js?v=__V__"></script>
   <script src="/static/js/import-github.js?v=__V__"></script>
   <script src="/static/js/import-codeforces.js?v=__V__"></script>
+  <script src="/static/js/import-leetcode.js?v=__V__"></script>
   <script src="/static/js/report.js?v=__V__"></script>
   <!-- 지난 제출 불러오기 (utils·editor·tabs 의존) -->
   <script src="/static/js/load-submission.js?v=__V__"></script>

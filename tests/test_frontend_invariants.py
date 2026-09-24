@@ -1236,3 +1236,41 @@ def test_no_unterminated_string_literals(path):
     """
     bad = _unterminated_string_lines(path.read_text(encoding="utf-8"))
     assert not bad, f"{path.name}: {bad} 번 줄의 문자열이 줄 끝까지 닫히지 않았다"
+
+
+def test_leetcode_is_wired_into_every_platform_control(html, js):
+    """플랫폼을 고르는 곳 전부에 LeetCode 가 있어야 한다 — 한 곳이라도 빠지면 그 탭만 LeetCode 를 모른다."""
+    for attr in ("data-platform", "data-themes-platform", "data-report-platform"):
+        assert re.search(rf'{attr}="leetcode"[^>]*aria-pressed=', html), f"{attr} 토글에 leetcode 버튼이 없다"
+    for select_id in ("problem-platform", "recommend-platform"):
+        block = html[html.index(f'id="{select_id}"'):]
+        block = block[:block.index("</select>")]
+        assert 'value="leetcode"' in block, f"#{select_id} 에 leetcode 가 없다"
+    assert '<option value="MySQL">' in html, "#code-language 에 SQL 언어가 없다"
+    assert "mode/sql/sql.min.js" in html, "CodeMirror sql 모드를 로드하지 않는다"
+    assert re.search(r"\bleetcode:\s*\{", js["utils.js"]), "플랫폼 표에 leetcode 가 없다"
+    assert "'MySQL': 'text/x-mysql'" in js["editor.js"]
+    assert "import-leetcode.js?v=__V__" in html
+    assert "fetchJsonOk('/api/import-leetcode'" in js["import-leetcode.js"]
+    assert 'value="leetcode"' in js["import-history.js"], "가져온 기록 플랫폼 필터에 leetcode 가 없다"
+
+
+def test_viewer_hides_sample_execution_when_the_response_has_no_samples(js):
+    """LeetCode 응답에는 samples 가 없다 — 실행 버튼이 보이면 실행기가 '지원하지 않는 언어' 로 실패한다."""
+    src = js["problem-modal.js"]
+    body = _js_function_body(src, "async function openProblemModal")
+    assert "setSampleUiVisible(false)" in body, "응답 전에 실행 영역을 숨기지 않는다"
+    assert "setSampleUiVisible(hasSamples)" in body
+    assert re.search(r"Array\.isArray\(data\.samples\)", body)
+    # HTML 본문은 정화 헬퍼만 거친다.
+    assert "sanitizeHtml(" in src
+    assert re.search(r"function\s+sanitizeHtml\s*\(", js["utils.js"])
+
+
+def test_theme_list_is_loaded_per_platform(js):
+    """테마 목록은 플랫폼마다 다르다(SQL 은 LeetCode 뿐). 한 목록을 공유하면 백준에 SQL 칩이 생긴다."""
+    src = js["themes.js"]
+    assert re.search(r"/api/themes\?platform=", src)
+    assert re.search(r"themes:list:v2:\$\{platform\}", src), "localStorage 키에 플랫폼이 없다"
+    toggle = src[src.index("data-themes-platform]').forEach"):]
+    assert "loadThemes()" in toggle, "플랫폼을 바꿔도 칩을 다시 그리지 않는다"

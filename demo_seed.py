@@ -73,6 +73,19 @@ _REVIEWS = [
          feedback="중첩 루프로 각 타일을 시뮬레이션해 시간 초과가 발생합니다. 수식으로 바로 계산하세요.",
          strengths=["문제 의도를 파악했습니다"],
          weaknesses=["O(NM) 시뮬레이션 대신 O(1) 수식으로 해결해야 합니다"]),
+    dict(problem_id=1, title="Two Sum", tier=1, tier_name="LeetCode Easy",
+         tags=["Array", "Hash Table"], platform="leetcode", problem_ref="two-sum",
+         efficiency="good", complexity="O(N)", language="Python 3",
+         feedback="해시 맵으로 보수를 찾아 한 번의 순회로 해결했습니다. 인덱스 반환 조건도 정확합니다.",
+         strengths=["해시 맵으로 O(N) 을 달성했습니다"],
+         weaknesses=[]),
+    dict(problem_id=175, title="Combine Two Tables", tier=1, tier_name="LeetCode Easy",
+         tags=["Database"], platform="leetcode", problem_ref="combine-two-tables",
+         efficiency="ok", complexity="Person 전체 스캔 1회 + Address 해시 조인", language="MySQL",
+         better_algorithm="LEFT JOIN 은 맞지만 SELECT * 대신 필요한 네 컬럼만 명시하세요.",
+         feedback="주소가 없는 사람도 남겨야 하므로 LEFT JOIN 선택이 정확합니다. 컬럼을 명시하면 결과 스키마가 안정됩니다.",
+         strengths=["LEFT JOIN 으로 NULL 행을 보존했습니다"],
+         weaknesses=["SELECT * 는 테이블 변경에 취약합니다"]),
 ]
 
 _SOLVED = [
@@ -92,6 +105,8 @@ _SOLVED = [
          tags=["strings"], platform="codeforces", problem_ref="71A", language="Python 3"),
     dict(problem_id=70003, title="Next Round", tier=0, tier_name="Codeforces 900",
          tags=["implementation"], platform="codeforces", problem_ref="158B", language="Python 3"),
+    dict(problem_id=176, title="Second Highest Salary", tier=2, tier_name="LeetCode Medium",
+         tags=["Database"], platform="leetcode", problem_ref="second-highest-salary", language="MySQL"),
 ]
 
 
@@ -118,6 +133,7 @@ def seed():
             weaknesses=r.get("weaknesses", []),
             platform=r["platform"],
             problem_ref=r["problem_ref"],
+            language=r.get("language", ""),
         )
 
     for s in _SOLVED:

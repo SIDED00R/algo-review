@@ -7,9 +7,9 @@ from routes.models import DraftSaveRequest
 
 router = APIRouter()
 
-# 키 하나가 에디터 자리 하나다 — 문제 뷰어는 `codeforces:{ref}`.
-# 이 값이 그대로 PK 가 된다.
-_KEY_PATTERN = re.compile(r"^[A-Za-z0-9:_-]{1,80}$")
+# 키 하나가 에디터 자리 하나다 — 문제 뷰어는 `{platform}:{ref}` (예: `codeforces:4A`, `leetcode:two-sum`).
+# 이 값이 그대로 PK 가 된다. LeetCode slug 는 길어질 수 있어 상한을 넉넉히 둔다.
+_KEY_PATTERN = re.compile(r"^[A-Za-z0-9:_-]{1,120}$")
 
 
 def _require_key(draft_key: str) -> str:
