@@ -102,3 +102,7 @@ def test_source_and_html_rules_reach_the_prompt(monkeypatch):
     assert "HTML tag" in html_prompt
     assert "from a Codeforces problem" in plain_prompt
     assert "HTML tag" not in plain_prompt
+    # HTML 경로는 KaTeX 를 돌리지 않는다 — LaTeX 로 감싸라는 규칙이 있으면 $…$ 가 그대로 보인다.
+    assert "Do NOT convert anything to LaTeX" in html_prompt
+    assert "Wrap ALL mathematical expressions" not in html_prompt
+    assert "Wrap ALL mathematical expressions" in plain_prompt

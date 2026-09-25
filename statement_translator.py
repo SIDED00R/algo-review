@@ -13,6 +13,20 @@ MAX_TRANSLATE_LENGTH = 20_000
 
 _INDEX_MARKER_RE = re.compile(r'⟦img:(\d+)⟧')
 
+# 수식 규칙은 입력 형식에 따라 다르다. CF 텍스트는 프런트가 KaTeX 로 그리므로 $…$ 로 감싸고,
+# HTML(LeetCode)은 KaTeX 를 돌리지 않으므로 LaTeX 로 바꾸면 `$1 \le n \le 10^5$` 가 그대로 보인다.
+_MATH_RULE_TEXT = (
+    "2. Wrap ALL mathematical expressions, variables, and constraints in LaTeX delimiters: "
+    "   use $...$ for inline math (e.g., $n$, $1 \\le n \\le 10^5$, $x_i$) "
+    "   and $$...$$ for display math (block equations only). "
+    "   CRITICAL: Each $...$ must open and close on the SAME LINE — never put a newline inside $...$. "
+)
+_MATH_RULE_HTML = (
+    "2. Do NOT convert anything to LaTeX and do NOT add $ delimiters. Keep mathematical "
+    "   expressions, variables and constraints exactly as they appear in the HTML "
+    "   (<code>, <sup>, <sub>, plain text). "
+)
+
 # HTML 조각을 번역할 때만 붙는 규칙. 태그를 옮겨 적다 깨뜨리거나 표·예제 데이터를 번역하면
 # 프런트가 그리는 본문이 깨진다.
 _HTML_RULES = (
@@ -51,10 +65,7 @@ def _system_prompt(source: str, html: bool) -> str:
         f"Translate the given text segment from a {source} problem into natural Korean. "
         "IMPORTANT RULES: "
         "1. Always return the full translated text. Never return empty output. "
-        "2. Wrap ALL mathematical expressions, variables, and constraints in LaTeX delimiters: "
-        "   use $...$ for inline math (e.g., $n$, $1 \\le n \\le 10^5$, $x_i$) "
-        "   and $$...$$ for display math (block equations only). "
-        "   CRITICAL: Each $...$ must open and close on the SAME LINE — never put a newline inside $...$. "
+        + (_MATH_RULE_HTML if html else _MATH_RULE_TEXT) +
         "3. Do NOT add any section headers or labels (e.g., do not write '문제:', '입력:', '출력:'). "
         "4. Translate all English prose naturally to Korean. "
         "5. If the text is already in Korean or has nothing to translate, return it as-is. "
