@@ -59,7 +59,9 @@ def fake_api(monkeypatch):
             found = next((q for q in _QUESTIONS if q["titleSlug"] == variables["slug"]), None)
             if found is None:
                 return _Resp({"data": {"question": None}})
-            return _Resp({"data": {"question": {**found, "content": None if found["isPaidOnly"] else _CONTENT}}})
+            return _Resp({"data": {"question": {**found, "questionId": str(int(found["questionFrontendId"]) + 1000),
+                                                "content": None if found["isPaidOnly"] else _CONTENT,
+                                                "exampleTestcases": "[2,7]\n9", "metaData": '{"params":[{},{}]}'}}})
         if "recentAcSubmissionList" in query:
             return _Resp({"data": {"recentAcSubmissionList": [
                 {"id": "1", "title": "Two Sum", "titleSlug": "two-sum", "timestamp": "2", "lang": "python3"},
@@ -186,6 +188,8 @@ def test_scrape_returns_viewer_fields_and_not_found(fake_api):
     raw = lc.scrape_lc_problem("two-sum")
     assert (raw["problem_id"], raw["tier"], raw["category"], raw["is_paid_only"]) == (1, 1, "Algorithms", False)
     assert "<sup>" in raw["content_html"]
+    # 채점기 호출용 내부 번호는 문제 번호와 다르고 문자열이다. 예제 원문도 그대로 실린다.
+    assert (raw["question_id"], raw["example_testcases"], raw["meta_data"]) == ("1001", "[2,7]\n9", '{"params":[{},{}]}')
     with pytest.raises(ProblemNotFound):
         lc.scrape_lc_problem("no-such-slug")
 

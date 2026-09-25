@@ -13,19 +13,6 @@ function outputMatches(actual, expected) {
   });
 }
 
-// 하네스 경로 전용. 하네스는 공백 없는 JSON 을 찍는데 커스텀 기대 출력은 `[0, 1]` 처럼 공백이
-// 들어올 수 있어 양쪽을 파싱해 구조로 비교한다. JSON 이 아니면 false.
-function jsonOutputMatches(actual, expected) {
-  try {
-    return JSON.stringify(JSON.parse(actual)) === JSON.stringify(JSON.parse(expected));
-  } catch {
-    return false;
-  }
-}
-
-// 사용자 코드의 `from __future__ import …` 는 파일 맨 앞에 있어야 한다 — prelude 앞으로 올린다.
-const FUTURE_IMPORT_RE = /^from[ \t]+__future__[ \t]+import[^\n]*$/gm;
-
 // 수식 이미지 마커(⟦img:URL⟧)를 <img> 로 되살린다. escapeHtml 이후에 호출해야 URL 이
 // 속성값으로 안전하고, http(s) 만 매치해 javascript: 스킴을 배제한다.
 function restoreFormulaImages(html) {
@@ -48,13 +35,23 @@ function bindProblemClicks(rootEl) {
 // 뷰어 언어 select 값 → 리뷰 폼의 언어 select 값.
 const PM_LANGUAGE_NAMES = { python3: 'Python 3', cpp: 'GNU C++17', mysql: 'MySQL' };
 
-// LeetCode 하네스는 Python 3 코드라 이 언어에서만 예제를 실행한다.
-const LC_HARNESS_LANGUAGE = 'python3';
-
 // 예제 실행 영역(실행 버튼·결과·커스텀 예제). samples 가 있는 응답에서만 보인다.
 function setSampleUiVisible(visible) {
   for (const sel of ['#pm-run-btn', '#pm-test-results', '#problem-modal .pm-custom-section']) {
     document.querySelector(sel).classList.toggle('hidden', !visible);
+  }
+}
+
+// 예제 결과에 따라 리뷰 버튼 문구를 바꾼다. 리뷰 버튼은 숨기지 않는다 — 예제가 실패해도
+// (컴파일 오류·시간 초과·채점기 장애) 리뷰로는 넘어갈 수 있어야 한다.
+function setReviewOutcome(allPassed) {
+  const reviewBtn = document.getElementById('pm-review-btn');
+  if (allPassed) {
+    reviewBtn.textContent = '코드 리뷰 진행';
+    reviewBtn.title = '';
+  } else {
+    reviewBtn.textContent = '예제 실패 — 그래도 리뷰 진행';
+    reviewBtn.title = '일부 예제가 통과되지 않았습니다. 다중 정답 문제라면 진행해도 됩니다.';
   }
 }
 
@@ -77,11 +74,14 @@ function resetRunButton() {
   if (!btn) return;
   btn.disabled = false;
   btn.textContent = '예제 실행';
+  const submitBtn = document.getElementById('pm-submit-btn');
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'LeetCode 에 제출';
 }
 
 async function openProblemModal(platform, ref, title, tierName) {
   const spec = platformSpec(platform);
-  _currentProblem = { platform, ref, samples: [], harness: null };
+  _currentProblem = { platform, ref, samples: [], judge: null };
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
@@ -102,11 +102,8 @@ async function openProblemModal(platform, ref, title, tierName) {
   resetRunButton();
   // 응답을 받기 전에는 예제 실행 영역을 숨긴다 — 예제가 없는 플랫폼에서 버튼이 잠깐 보였다 사라진다.
   setSampleUiVisible(false);
-  // 리뷰 버튼은 숨기지 않는다 — 예제 실행이 실패하거나(컴파일 오류·시간 초과) 실행 서비스가
-  // 응답하지 않을 때도 리뷰로는 넘어갈 수 있어야 한다.
-  const pmReviewBtnReset = document.getElementById('pm-review-btn');
-  pmReviewBtnReset.textContent = '코드 리뷰 진행';
-  pmReviewBtnReset.title = '';
+  document.getElementById('pm-submit-btn').classList.add('hidden');
+  setReviewOutcome(true);
   window.setEditorValue('pm-code', '');
   // 임시 저장 키는 문제마다 다르다. bindDraft 는 에디터를 비운 뒤에 부른다.
   window.bindDraft('pm-code', `${platform}:${ref}`);
@@ -118,13 +115,14 @@ async function openProblemModal(platform, ref, title, tierName) {
     // 나중에 연 문제의 본문·samples·sections 를 덮는다.
     if (_currentProblem?.ref !== ref) return;
 
-    // 예제는 CF(stdin/stdout)와 LeetCode 알고리즘 문제(인자 한 줄씩 + harness)에 있다.
-    // 없는 응답(SQL·하네스 미지원 문제)은 실행 영역을 숨긴 채 둔다.
+    // 예제는 CF(stdin/stdout, 이 앱의 실행기)와 LeetCode(judge: 'leetcode', LeetCode 채점기)에 있다.
+    // 없는 응답은 실행 영역을 숨긴 채 둔다. 제출 버튼은 채점기가 있는 플랫폼에만 보인다.
     const hasSamples = Array.isArray(data.samples);
     _currentProblem.samples  = hasSamples ? data.samples : [];
-    _currentProblem.harness  = data.harness || null;
+    _currentProblem.judge    = data.judge || null;
     _currentProblem.sections = data.statement_sections_ko || {};
     setSampleUiVisible(hasSamples);
+    document.getElementById('pm-submit-btn').classList.toggle('hidden', _currentProblem.judge !== 'leetcode');
 
     // SQL 언어는 SQL 을 받는 플랫폼에서만 고를 수 있고, Database 문제면 기본값이다.
     const langSel = document.getElementById('pm-language');
@@ -220,21 +218,21 @@ function addCustomCase() {
   const el = document.createElement('div');
   el.className = 'pm-custom-case';
   el.id = `pm-custom-${id}`;
-  // LeetCode 는 stdin 이 아니라 함수 인자다 — 하네스가 읽는 형식을 자리표시자로 알린다.
-  const inputHint = _currentProblem?.harness
-    ? '인자당 한 줄, JSON 형식. 예)\n[2,7,11,15]\n9'
-    : '입력값을 입력하세요';
-  const outputHint = _currentProblem?.harness ? 'JSON 형식. 예) [0,1]' : '기대 출력값을 입력하세요';
+  // LeetCode 는 stdin 이 아니라 함수 인자(한 줄씩)고, 기대 출력은 채점기가 정답 코드로 계산해
+  // 주므로 입력 칸만 둔다.
+  const isJudge = _currentProblem?.judge === 'leetcode';
+  const outputField = isJudge ? '' : `
+      <div>
+        <label for="pm-custom-output-${id}">기대 출력</label>
+        <textarea id="pm-custom-output-${id}" placeholder="기대 출력값을 입력하세요"></textarea>
+      </div>`;
+  const inputHint = isJudge ? '인자당 한 줄. 예)\n[2,7,11,15]\n9' : '입력값을 입력하세요';
   el.innerHTML = `
     <div class="pm-custom-case-row">
       <div>
         <label for="pm-custom-input-${id}">입력</label>
         <textarea id="pm-custom-input-${id}" placeholder="${inputHint}"></textarea>
-      </div>
-      <div>
-        <label for="pm-custom-output-${id}">기대 출력</label>
-        <textarea id="pm-custom-output-${id}" placeholder="${outputHint}"></textarea>
-      </div>
+      </div>${outputField}
     </div>
     <div class="pm-custom-case-footer">
       <button class="pm-custom-delete-btn" data-remove-case="${id}">삭제</button>
@@ -267,10 +265,10 @@ async function runSamples() {
     ...customCases.map(s => ({ input: s.input, output: s.output, isCustom: true })),
   ];
 
-  const userCode = window.getEditorValue('pm-code').trim();
+  const code = window.getEditorValue('pm-code').trim();
   const resultsEl = document.getElementById('pm-test-results');
 
-  if (!userCode) {
+  if (!code) {
     resultsEl.innerHTML = '<div class="alert alert-info">코드를 먼저 작성해주세요.</div>';
     return;
   }
@@ -280,27 +278,16 @@ async function runSamples() {
   }
 
   const language = document.getElementById('pm-language').value;
-  // LeetCode 는 제출 코드를 하네스로 감싸 stdin 인자 → Solution 메서드 → JSON 출력으로 바꾼다.
-  const harness = _currentProblem?.harness;
-  if (harness && language !== LC_HARNESS_LANGUAGE) {
-    resultsEl.innerHTML =
-      '<div class="alert alert-info">LeetCode 예제 실행은 Python 3 에서만 지원합니다. 언어를 Python 3 로 바꿔주세요.</div>';
-    return;
+  // LeetCode 는 이 앱의 실행기가 아니라 LeetCode 채점기가 한 번에 전부 돌린다(leetcode-judge.js).
+  if (_currentProblem?.judge === 'leetcode') {
+    return runLeetcodeSamples(allCases, code, language);
   }
-  const futureImports = harness ? (userCode.match(FUTURE_IMPORT_RE) || []).join('\n') : '';
-  const code = harness
-    ? `${futureImports}\n${harness.prelude}\n${userCode.replace(FUTURE_IMPORT_RE, '')}\n${harness.epilogue}`
-    : userCode;
   const btn = document.getElementById('pm-run-btn');
 
   btn.disabled = true;
   btn.textContent = '실행 중...';
   resultsEl.innerHTML = '';
-  // 숨기지 않는다 — 예제 실행이 실패하거나(컴파일 오류·시간 초과) 실행 서비스가
-  // 응답하지 않을 때도 리뷰로는 넘어갈 수 있어야 한다.
-  const pmReviewBtn = document.getElementById('pm-review-btn');
-  pmReviewBtn.textContent = '코드 리뷰 진행';
-  pmReviewBtn.title = '';
+  setReviewOutcome(true);
 
   let allPassed = true;
   // 이 실행이 아직 유효한지 판단하는 세대 토큰. 실행 중(케이스당 최대 5초) 모달을 닫고
@@ -326,9 +313,7 @@ async function runSamples() {
 
         const actual = (result.stdout || '').trimEnd();
         const expected = sample.output.trimEnd();
-        const matched = outputMatches(actual, expected)
-          || (harness && jsonOutputMatches(actual, expected));
-        const passed = matched && result.exit_code === 0;
+        const passed = outputMatches(actual, expected) && result.exit_code === 0;
         if (!passed) allPassed = false;
 
         const detailHtml = !passed ? `
@@ -361,14 +346,7 @@ async function runSamples() {
     if (runToken === _runToken) resetRunButton();
   }
 
-  const reviewBtn = document.getElementById('pm-review-btn');
-  if (allPassed) {
-    reviewBtn.textContent = '코드 리뷰 진행';
-    reviewBtn.title = '';
-  } else {
-    reviewBtn.textContent = '예제 실패 — 그래도 리뷰 진행';
-    reviewBtn.title = '일부 예제가 통과되지 않았습니다. 다중 정답 문제라면 진행해도 됩니다.';
-  }
+  setReviewOutcome(allPassed);
 }
 
 // 뷰어의 코드를 리뷰 폼으로 넘긴다. 폼 채우기·탭 전환·#code-language 의 change 발생은

@@ -2,7 +2,7 @@
 
 문제 식별자는 titleSlug("two-sum")다. 번호(questionFrontendId)는 스냅샷으로 slug 에 대응한다.
 문제 목록 스냅샷은 questionList 를 100개씩 넘겨 받아(상한이 100 이다) 구 REST 의 풀이 수와 합친다 —
-42 요청이라 프로세스 캐시 외에 api_cache 에 하루 동안 저장한다(이 모듈만 clients 에서 db 를 부른다).
+42 요청이라 프로세스 캐시 외에 api_cache 에 하루 동안 저장한다(db 는 지연 import).
 """
 import logging
 import re
@@ -66,7 +66,7 @@ _Q_LIST = (
 )
 _Q_QUESTION = (
     "query($slug:String!){question(titleSlug:$slug){"
-    "questionFrontendId title titleSlug difficulty categoryTitle isPaidOnly content "
+    "questionId questionFrontendId title titleSlug difficulty categoryTitle isPaidOnly content "
     "exampleTestcases metaData topicTags{name slug}}}"
 )
 _Q_RECENT_AC = (
@@ -188,7 +188,7 @@ def _install_snapshot(items: list[dict]) -> None:
 
 def _load_snapshot_items() -> list[dict]:
     """api_cache(하루) → 원격 → 만료 캐시 순. 전부 실패하면 raise."""
-    import db  # 지연 import — clients 가 db 를 쓰는 유일한 곳이다(스냅샷 42 요청을 인스턴스마다 반복하지 않으려고).
+    import db  # 지연 import(스냅샷 42 요청을 인스턴스마다 반복하지 않으려고 api_cache 를 쓴다).
     cached = db.cache_get(SNAPSHOT_CACHE_KEY, SNAPSHOT_TTL_SEC)
     if cached:
         return cached
@@ -328,7 +328,8 @@ def get_lc_problem_sections(problem_ref: str) -> dict | None:
 def scrape_lc_problem(problem_ref: str) -> dict:
     """뷰어용 원본. 형식 오류 ValueError, 없는 문제 ProblemNotFound. 유료 문제는 content_html 이 빈 문자열이다.
 
-    example_testcases·meta_data 는 예제 실행용 원문(clients.leetcode_examples 가 해석한다)."""
+    question_id 는 채점기 호출용 내부 번호(문제 번호 problem_id 와 다르다). example_testcases 는 예제
+    인자 한 줄씩, meta_data 는 함수 시그니처 JSON — clients.leetcode_judge.split_example_cases 가 쓴다."""
     from clients.utils import get_problem_url
     slug = normalize_leetcode_problem_ref(problem_ref)
     question = _fetch_lc_question(slug)
@@ -338,6 +339,7 @@ def scrape_lc_problem(problem_ref: str) -> dict:
     return {
         "title": question.get("title") or slug,
         "problem_id": int(question.get("questionFrontendId") or 0),
+        "question_id": str(question.get("questionId") or ""),
         "difficulty": question.get("difficulty") or "",
         "tier": tier,
         "category": question.get("categoryTitle") or "",
