@@ -1256,7 +1256,8 @@ def test_leetcode_is_wired_into_every_platform_control(html, js):
 
 
 def test_viewer_hides_sample_execution_when_the_response_has_no_samples(js):
-    """LeetCode 응답에는 samples 가 없다 — 실행 버튼이 보이면 실행기가 '지원하지 않는 언어' 로 실패한다."""
+    """samples 없는 응답(SQL·하네스 미지원 LeetCode 문제)은 실행 영역을 숨긴다 — SQL 은 실행기가 '지원하지 않는 언어' 로
+    실패하고, 하네스 없는 문제는 채점할 기대 출력이 없다."""
     src = js["problem-modal.js"]
     body = _js_function_body(src, "async function openProblemModal")
     assert "setSampleUiVisible(false)" in body, "응답 전에 실행 영역을 숨기지 않는다"

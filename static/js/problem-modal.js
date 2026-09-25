@@ -13,6 +13,19 @@ function outputMatches(actual, expected) {
   });
 }
 
+// 하네스 경로 전용. 하네스는 공백 없는 JSON 을 찍는데 커스텀 기대 출력은 `[0, 1]` 처럼 공백이
+// 들어올 수 있어 양쪽을 파싱해 구조로 비교한다. JSON 이 아니면 false.
+function jsonOutputMatches(actual, expected) {
+  try {
+    return JSON.stringify(JSON.parse(actual)) === JSON.stringify(JSON.parse(expected));
+  } catch {
+    return false;
+  }
+}
+
+// 사용자 코드의 `from __future__ import …` 는 파일 맨 앞에 있어야 한다 — prelude 앞으로 올린다.
+const FUTURE_IMPORT_RE = /^from[ \t]+__future__[ \t]+import[^\n]*$/gm;
+
 // 수식 이미지 마커(⟦img:URL⟧)를 <img> 로 되살린다. escapeHtml 이후에 호출해야 URL 이
 // 속성값으로 안전하고, http(s) 만 매치해 javascript: 스킴을 배제한다.
 function restoreFormulaImages(html) {
@@ -35,7 +48,10 @@ function bindProblemClicks(rootEl) {
 // 뷰어 언어 select 값 → 리뷰 폼의 언어 select 값.
 const PM_LANGUAGE_NAMES = { python3: 'Python 3', cpp: 'GNU C++17', mysql: 'MySQL' };
 
-// 예제 실행 영역(실행 버튼·결과·커스텀 예제). stdin/stdout 예제가 있는 응답에서만 보인다.
+// LeetCode 하네스는 Python 3 코드라 이 언어에서만 예제를 실행한다.
+const LC_HARNESS_LANGUAGE = 'python3';
+
+// 예제 실행 영역(실행 버튼·결과·커스텀 예제). samples 가 있는 응답에서만 보인다.
 function setSampleUiVisible(visible) {
   for (const sel of ['#pm-run-btn', '#pm-test-results', '#problem-modal .pm-custom-section']) {
     document.querySelector(sel).classList.toggle('hidden', !visible);
@@ -65,7 +81,7 @@ function resetRunButton() {
 
 async function openProblemModal(platform, ref, title, tierName) {
   const spec = platformSpec(platform);
-  _currentProblem = { platform, ref, samples: [] };
+  _currentProblem = { platform, ref, samples: [], harness: null };
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
@@ -102,9 +118,11 @@ async function openProblemModal(platform, ref, title, tierName) {
     // 나중에 연 문제의 본문·samples·sections 를 덮는다.
     if (_currentProblem?.ref !== ref) return;
 
-    // 예제는 stdin/stdout 응답(CF)에만 있다. 없는 응답은 실행 영역을 숨긴 채 둔다.
+    // 예제는 CF(stdin/stdout)와 LeetCode 알고리즘 문제(인자 한 줄씩 + harness)에 있다.
+    // 없는 응답(SQL·하네스 미지원 문제)은 실행 영역을 숨긴 채 둔다.
     const hasSamples = Array.isArray(data.samples);
     _currentProblem.samples  = hasSamples ? data.samples : [];
+    _currentProblem.harness  = data.harness || null;
     _currentProblem.sections = data.statement_sections_ko || {};
     setSampleUiVisible(hasSamples);
 
@@ -202,15 +220,20 @@ function addCustomCase() {
   const el = document.createElement('div');
   el.className = 'pm-custom-case';
   el.id = `pm-custom-${id}`;
+  // LeetCode 는 stdin 이 아니라 함수 인자다 — 하네스가 읽는 형식을 자리표시자로 알린다.
+  const inputHint = _currentProblem?.harness
+    ? '인자당 한 줄, JSON 형식. 예)\n[2,7,11,15]\n9'
+    : '입력값을 입력하세요';
+  const outputHint = _currentProblem?.harness ? 'JSON 형식. 예) [0,1]' : '기대 출력값을 입력하세요';
   el.innerHTML = `
     <div class="pm-custom-case-row">
       <div>
         <label for="pm-custom-input-${id}">입력</label>
-        <textarea id="pm-custom-input-${id}" placeholder="입력값을 입력하세요"></textarea>
+        <textarea id="pm-custom-input-${id}" placeholder="${inputHint}"></textarea>
       </div>
       <div>
         <label for="pm-custom-output-${id}">기대 출력</label>
-        <textarea id="pm-custom-output-${id}" placeholder="기대 출력값을 입력하세요"></textarea>
+        <textarea id="pm-custom-output-${id}" placeholder="${outputHint}"></textarea>
       </div>
     </div>
     <div class="pm-custom-case-footer">
@@ -244,10 +267,10 @@ async function runSamples() {
     ...customCases.map(s => ({ input: s.input, output: s.output, isCustom: true })),
   ];
 
-  const code = window.getEditorValue('pm-code').trim();
+  const userCode = window.getEditorValue('pm-code').trim();
   const resultsEl = document.getElementById('pm-test-results');
 
-  if (!code) {
+  if (!userCode) {
     resultsEl.innerHTML = '<div class="alert alert-info">코드를 먼저 작성해주세요.</div>';
     return;
   }
@@ -257,6 +280,17 @@ async function runSamples() {
   }
 
   const language = document.getElementById('pm-language').value;
+  // LeetCode 는 제출 코드를 하네스로 감싸 stdin 인자 → Solution 메서드 → JSON 출력으로 바꾼다.
+  const harness = _currentProblem?.harness;
+  if (harness && language !== LC_HARNESS_LANGUAGE) {
+    resultsEl.innerHTML =
+      '<div class="alert alert-info">LeetCode 예제 실행은 Python 3 에서만 지원합니다. 언어를 Python 3 로 바꿔주세요.</div>';
+    return;
+  }
+  const futureImports = harness ? (userCode.match(FUTURE_IMPORT_RE) || []).join('\n') : '';
+  const code = harness
+    ? `${futureImports}\n${harness.prelude}\n${userCode.replace(FUTURE_IMPORT_RE, '')}\n${harness.epilogue}`
+    : userCode;
   const btn = document.getElementById('pm-run-btn');
 
   btn.disabled = true;
@@ -292,7 +326,9 @@ async function runSamples() {
 
         const actual = (result.stdout || '').trimEnd();
         const expected = sample.output.trimEnd();
-        const passed = outputMatches(actual, expected) && result.exit_code === 0;
+        const matched = outputMatches(actual, expected)
+          || (harness && jsonOutputMatches(actual, expected));
+        const passed = matched && result.exit_code === 0;
         if (!passed) allPassed = false;
 
         const detailHtml = !passed ? `

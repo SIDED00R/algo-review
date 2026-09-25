@@ -67,7 +67,7 @@ _Q_LIST = (
 _Q_QUESTION = (
     "query($slug:String!){question(titleSlug:$slug){"
     "questionFrontendId title titleSlug difficulty categoryTitle isPaidOnly content "
-    "topicTags{name slug}}}"
+    "exampleTestcases metaData topicTags{name slug}}}"
 )
 _Q_RECENT_AC = (
     "query($u:String!,$n:Int!){recentAcSubmissionList(username:$u,limit:$n){"
@@ -326,7 +326,9 @@ def get_lc_problem_sections(problem_ref: str) -> dict | None:
 
 
 def scrape_lc_problem(problem_ref: str) -> dict:
-    """뷰어용 원본. 형식 오류 ValueError, 없는 문제 ProblemNotFound. 유료 문제는 content_html 이 빈 문자열이다."""
+    """뷰어용 원본. 형식 오류 ValueError, 없는 문제 ProblemNotFound. 유료 문제는 content_html 이 빈 문자열이다.
+
+    example_testcases·meta_data 는 예제 실행용 원문(clients.leetcode_examples 가 해석한다)."""
     from clients.utils import get_problem_url
     slug = normalize_leetcode_problem_ref(problem_ref)
     question = _fetch_lc_question(slug)
@@ -341,6 +343,8 @@ def scrape_lc_problem(problem_ref: str) -> dict:
         "category": question.get("categoryTitle") or "",
         "is_paid_only": bool(question.get("isPaidOnly")),
         "content_html": question.get("content") or "",
+        "example_testcases": question.get("exampleTestcases") or "",
+        "meta_data": question.get("metaData") or "",
         "tags": [t.get("name", "") for t in (question.get("topicTags") or []) if t.get("name")],
         "url": get_problem_url("leetcode", slug),
     }

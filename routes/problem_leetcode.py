@@ -1,12 +1,14 @@
 """LeetCode 문제 뷰어 — 본문 HTML 을 받아 한국어로 번역해 돌려준다.
 
-예제 실행은 없다. LeetCode 문제는 함수 시그니처 기반이고 Database 문제는 SQL 이라
-stdin/stdout 실행기로 채점할 수 없다.
+알고리즘 문제는 `samples`(인자 한 줄씩 JSON / 기대 출력)와 Python 3 `harness`(제출 코드 앞뒤에
+붙이는 코드)를 함께 준다 — 프런트가 둘을 합쳐 CF 와 같은 `/api/execute` 로 채점한다.
+Database(SQL) 문제와 하네스가 못 다루는 문제는 두 필드가 없다.
 """
 import asyncio
 
 import clients as api_client
 from clients.leetcode import normalize_leetcode_problem_ref
+from clients.leetcode_examples import build_lc_examples
 from fastapi import APIRouter, HTTPException
 from routes import problem_cache
 from routes.helpers import upstream_failure
@@ -66,6 +68,9 @@ async def _fetch_and_translate(cache_key: str, slug: str) -> dict:
         "url": raw["url"],
         "translated": translated,
     }
+    examples = build_lc_examples(raw.get("meta_data", ""), raw.get("example_testcases", ""), html)
+    if examples:
+        result.update(examples)
     # 번역 성공 시 영구 캐시, 실패 시 60초 뒤 재시도. 본문이 없는 유료 문제는 번역할 것이 없어 영구 캐시한다.
     problem_cache.cache_set(cache_key, result, translated or not html)
     return result

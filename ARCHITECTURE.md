@@ -121,6 +121,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/leetcode.py` | LeetCode 공개 GraphQL(문제 목록 스냅샷·본문·태그 검색) + 세션 쿠키로 내 제출 코드. 문제 식별자는 titleSlug, 번호는 스냅샷으로 대응. 스냅샷은 42 요청이라 `api_cache` 에 하루 저장한다 — clients 에서 `db` 를 부르는 유일한 곳(지연 import) |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
+| `clients/leetcode_examples.py` | LeetCode 예제 케이스 추출 + Python 3 실행 하네스. `exampleTestcases`(인자 한 줄씩)·`metaData`(함수명·타입)·본문 `Output:` 줄을 `samples` 로 묶고, 제출 코드 앞뒤에 붙일 prelude(typing·ListNode·TreeNode)/epilogue(stdin JSON → `Solution().메서드` → JSON 한 줄) 를 만든다. 디자인 문제·미지원 타입·개수 불일치·JSON 이 아닌 기대 출력(커스텀 채점)은 None |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension` — SQL 계열은 `.sql`), 브라우저 UA 단일 출처(`BROWSER_USER_AGENT` — solved.ac·CF·LeetCode 헤더가 공유), 예외 세 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) · `ProblemNotFound`(형식은 맞지만 없는 문제 → 404) |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
@@ -134,7 +135,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
-| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. 예제 실행 없음(함수 시그니처·SQL). 유료 문제는 본문 없이 |
+| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. 알고리즘 문제는 `samples`(인자 한 줄씩 JSON / 기대 출력) + Python 3 `harness`(prelude·epilogue)를 함께 준다. SQL·미지원 타입 문제는 두 필드 없음. 유료 문제는 본문 없이 |
 | `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
@@ -178,7 +179,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
-| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(stdin/stdout 예제가 있는 응답에서만), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다 |
+| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `harness` 가 있으면 Python 3 에 한해 제출 코드를 prelude/epilogue 로 감싸 보낸다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다 |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
@@ -209,7 +210,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `statement_translator.translate_statement` | CF 본문 OpenAI 한국어 번역 |
 | `routes/problem.py` | `routes.problem_cache.run_deduplicated` · `cache_set` | 응답 캐시 조회·동시 요청 병합·저장 |
-| `routes/problem_leetcode.py` | `clients.scrape_lc_problem` · `statement_translator.translate_statement(html=True)` · `routes.problem_cache` | LeetCode 본문 조회·HTML 보존 번역·캐시 |
+| `routes/problem_leetcode.py` | `clients.scrape_lc_problem` · `clients.leetcode_examples.build_lc_examples` · `statement_translator.translate_statement(html=True)` · `routes.problem_cache` | LeetCode 본문 조회·예제 케이스/하네스 생성·HTML 보존 번역·캐시 |
 | `routes/import_leetcode.py` | `clients.get_leetcode_user_submissions` | LeetCode AC 제출 조회(세션 쿠키 유무에 따라 코드 포함 여부) |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
