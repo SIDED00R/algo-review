@@ -234,6 +234,38 @@ class ExecuteRequest(BaseModel):
         return max(1, min(v, 10))
 
 
+class LeetcodeRunRequest(BaseModel):
+    """뷰어 '예제 실행'(LeetCode 채점기). cases 는 케이스별 입력 문자열(인자 한 줄씩)이다."""
+    problem_ref: str
+    language: str = "python3"
+    code: str
+    cases: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("code")
+    @classmethod
+    def code_max_length(cls, v):
+        return validate_code_length(v)
+
+    @field_validator("cases")
+    @classmethod
+    def cases_max_length(cls, v):
+        if sum(len(c) for c in v) > 10_000:
+            raise ValueError("입력은 합쳐서 10,000자를 초과할 수 없습니다.")
+        return v
+
+
+class LeetcodeSubmitRequest(BaseModel):
+    """뷰어 'LeetCode 에 제출'. 계정의 제출 목록에 기록이 남는다."""
+    problem_ref: str
+    language: str = "python3"
+    code: str
+
+    @field_validator("code")
+    @classmethod
+    def code_max_length(cls, v):
+        return validate_code_length(v)
+
+
 class DraftSaveRequest(BaseModel):
     """에디터 임시 저장 요청. 코드가 비면 저장 대신 그 임시 저장본을 지운다(db.save_draft)."""
     code: str

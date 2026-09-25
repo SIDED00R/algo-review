@@ -23,7 +23,7 @@
   - 대기 상태는 태그 통계에 섞이지 않고, 실제 리뷰가 채워질 때 처음 집계됩니다.
 - **인앱 문제 뷰어 (Codeforces · LeetCode)**
   - 문제를 앱 내에서 바로 보고 한국어 번역까지 제공합니다.
-  - Codeforces 는 예제 입출력 직접 실행 (Python / C++) 지원. LeetCode 알고리즘 문제는 Python 3 에서 예제 실행을 지원합니다 — 공식 예제 인자를 `Solution` 메서드에 넘겨 결과를 기대 출력과 비교하며, 커스텀 예제는 인자당 한 줄(JSON)로 넣습니다. Database(SQL) 문제·디자인(클래스) 문제·기대 출력이 JSON 이 아닌 커스텀 채점 문제(27번 등)는 예제 실행이 없고, 유료(Premium) 문제는 본문 없이 링크만 보여줍니다. Database 문제는 에디터 언어가 MySQL 로 시작합니다.
+  - Codeforces 는 예제 입출력 직접 실행 (Python / C++) 지원. LeetCode 는 **LeetCode 채점기**로 예제 실행(Python 3 / C++ / MySQL 전부, 기대 출력은 LeetCode 가 계산)과 **실제 제출**(`LeetCode 에 제출` 버튼 → Accepted/오답·통과 케이스 수·실행 시간·제출 기록 링크)을 지원합니다. 커스텀 예제는 입력만(인자당 한 줄) 넣습니다. 유료(Premium) 문제는 본문 없이 링크만 보여줍니다. Database 문제는 에디터 언어가 MySQL 로 시작합니다.
   - 코드를 쓰는 창이라 `Esc` 로는 닫히지 않습니다 (닫기는 ✕ 버튼 또는 바깥 클릭). 에디터 안에서 `Esc` 는 포커스만 빼냅니다.
 - **코드 임시 저장**
   - 문제 뷰어 에디터(문제 추천·테마별 문제에서 여는 창)에서 작성 중인 코드가 서버에 자동 저장됩니다(입력이 멎으면 1.5초 뒤, 계속 입력해도 5초마다). 코드 리뷰 탭 에디터는 저장하지 않습니다.
@@ -145,7 +145,9 @@ CI([.github/workflows/deploy.yml](.github/workflows/deploy.yml))는 PR·push 마
 - 문제 목록·본문·태그는 공개 GraphQL 로 받습니다. 전체 목록(약 4,000문제)은 42회 요청으로 받아 하루 동안 `api_cache` 에 두므로, 하루 첫 LeetCode 요청은 1분 가까이 걸릴 수 있습니다(기동 시 백그라운드 예열이 대신 받습니다).
 - 내 제출 코드 import 는 로그인 세션 쿠키 `LEETCODE_SESSION` 이 필요합니다. 브라우저에서 leetcode.com 로그인 후 개발자 도구 → Application → Cookies 에서 복사해 `.env` 에 두거나 가져오기 폼에 넣습니다. 쿠키는 주기적으로 만료됩니다. 쿠키가 없으면 최근 AC 20개 목록만(코드 없이) 가져옵니다.
 - 유료(Premium) 문제는 본문을 받을 수 없어 리뷰는 제목·난이도·태그로만 진행되고, 추천·테마 목록에서는 제외됩니다.
-- 뷰어의 예제 실행은 Python 3 알고리즘 문제만 지원합니다. 제출 코드를 하네스(`clients/leetcode_examples.py`)로 감싸 stdin 의 인자(한 줄씩 JSON)를 `Solution` 메서드에 넘기고 반환값을 JSON 한 줄로 찍어 비교합니다. `ListNode`·`TreeNode` 는 LeetCode 와 같은 배열 표기로 넣고 받으며, 반환이 `void` 인 in-place 문제는 첫 인자를 출력으로 봅니다. C++ 하네스는 없고(언어를 바꾸라는 안내만), Database(SQL) 문제는 실행기에 DB 가 없어 채점하지 않습니다. 코드에서 `print` 하면 출력에 섞여 실패로 판정됩니다.
+- 뷰어의 예제 실행·제출은 이 앱의 실행기가 아니라 **LeetCode 채점기**(웹사이트가 쓰는 비공개 엔드포인트 `interpret_solution`·`submit`)가 합니다. 서버에 설정된 계정 하나로 호출하므로 `LEETCODE_SESSION` 과 `LEETCODE_CSRFTOKEN`(둘 다 브라우저 쿠키) 이 필요하고, 없으면 401 입니다. 예제 실행은 제출 기록을 남기지 않고, 제출은 계정의 제출 목록에 남습니다.
+- 세션 쿠키는 호출마다 LeetCode 가 만료를 **요청 시점 기준 2주 뒤**로 미룬 새 값을 내려 주며, 앱은 그 값을 `api_cache`(`lc:judge-session:v1`)에 저장해 다음 호출에 씁니다. 2주 안에 한 번이라도 쓰면 수동 갱신이 필요 없습니다(채점기 경로에만 해당하고, 제출 기록 가져오기는 저장된 갱신값을 쓰지 않습니다 — 폼 입력 또는 환경변수). 만료돼 401 이 나면 브라우저에서 쿠키를 다시 복사해 환경변수를 갱신하면 됩니다(저장값이 실패하면 환경변수 값으로 한 번 더 시도하고, DB 를 읽을 수 없으면 환경변수 값만 씁니다). 짧은 시간에 여러 번 부르면 LeetCode 가 429 나 Cloudflare 봇 확인(502)을 돌려줍니다 — 잠시 뒤 다시 누르면 됩니다.
+- 사용자 인증이 없는 공개 엔드포인트라 프로세스 전역 분당 20회 상한을 둡니다. 비공개 엔드포인트라 LeetCode 쪽 변경으로 언제든 깨질 수 있습니다.
 
 ## 배포
 
@@ -305,7 +307,8 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `APP_URL` | 선택 | 서버 공개 URL (OAuth redirect 용) |
 | `CODEFORCES_API_KEY` | 선택 | CF 소스코드 import용 |
 | `CODEFORCES_API_SECRET` | 선택 | CF 소스코드 import용 |
-| `LEETCODE_SESSION` | 선택 | LeetCode 내 제출 코드 import용 브라우저 로그인 쿠키. 없으면 최근 AC 목록만(코드 없음) |
+| `LEETCODE_SESSION` | 선택 | LeetCode 브라우저 로그인 쿠키. 내 제출 코드 import(없으면 최근 AC 목록만, 코드 없음)와 뷰어의 예제 실행·제출(LeetCode 채점기)에 쓴다 |
+| `LEETCODE_CSRFTOKEN` | 선택 | LeetCode `csrftoken` 쿠키. 뷰어의 예제 실행·제출에 세션과 함께 필요하다(없으면 401) |
 | `OPENAI_MODEL` | 선택 | 사용할 OpenAI 모델 — 미설정 시 리뷰·리포트 `gpt-4o`, 번역 `gpt-4o-mini`. 설정하면 리뷰·번역 모두 이 값으로 대체 |
 | `OPENAI_BASE_URL` | 선택 | OpenAI 호환 엔드포인트 URL — 다른 제공자(예: Gemini)로 전환할 때만 지정 |
 | `OPENAI_MAX_TOKENS` | 선택 | 리뷰·번역 응답 최대 토큰 (기본값: 리뷰 `2048`, 번역 `2000`) |

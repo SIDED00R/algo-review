@@ -37,27 +37,21 @@ def test_viewer_translates_html_and_caches_by_normalized_slug(minimal_app, monke
     assert first["content_html_ko"] == "[ko]<p>hi</p>"
     assert first["translated"] is True
     assert (first["difficulty"], first["category"], first["problem_id"]) == ("Easy", "Algorithms", 1)
-    assert "samples" not in first and "harness" not in first, \
-        "메타데이터 없는 응답에는 예제가 없다 — 프런트는 samples 유무로 실행 영역을 숨긴다"
+    # 예제 원문이 없는 응답도 judge 는 알리고 samples 는 빈 목록이다 — 프런트는 samples 배열 유무로 실행 영역을 켠다.
+    assert (first["judge"], first["samples"]) == ("leetcode", [])
     assert client.get("/api/problem/lc/two-sum").json() == first
     assert calls == ["two-sum"], "정규화된 slug 하나로 한 번만 수집해야 한다"
 
 
-def test_algorithm_problem_carries_samples_and_python_harness(minimal_app, monkeypatch):
-    raw = dict(_RAW,
-               content_html="<pre>Input: nums = [2,7,11,15], target = 9\nOutput: [0,1]</pre>",
-               example_testcases="[2,7,11,15]\n9",
-               meta_data='{"name":"twoSum","params":[{"name":"nums","type":"integer[]"},'
-                         '{"name":"target","type":"integer"}],"return":{"type":"integer[]"}}')
+def test_samples_are_example_inputs_split_per_case(minimal_app, monkeypatch):
+    raw = dict(_RAW, example_testcases="[2,7,11,15]\n9\n[3,3]\n6",
+               meta_data='{"name":"twoSum","params":[{"name":"nums"},{"name":"target"}]}')
     monkeypatch.setattr(api_client, "scrape_lc_problem", lambda slug: raw)
-    # 예제는 번역 전 원문에서 뽑는다 — 번역이 Output 줄을 한국어로 바꿔도 기대 출력은 남아야 한다.
-    monkeypatch.setattr(lc_route, "translate_statement",
-                        lambda text, title, **kw: text.replace("Output:", "출력:"))
+    monkeypatch.setattr(lc_route, "translate_statement", lambda text, title, **kw: text)
     body = minimal_app(lc_route.router).get("/api/problem/lc/two-sum").json()
-    assert body["samples"] == [{"input": "[2,7,11,15]\n9", "output": "[0,1]"}]
-    assert body["harness"]["prelude"].startswith("from typing import *")
-    assert "_LC_NAME = 'twoSum'" in body["harness"]["epilogue"]
-    assert "출력:" in body["content_html_ko"]
+    # 기대 출력은 싣지 않는다 — LeetCode 채점기가 계산해 준다.
+    assert body["samples"] == [{"input": "[2,7,11,15]\n9"}, {"input": "[3,3]\n6"}]
+    assert body["judge"] == "leetcode"
 
 
 def test_paid_problem_skips_translation_and_is_cached_permanently(minimal_app, monkeypatch):

@@ -19,7 +19,7 @@ from db.connection import session_scope
 from demo_mode import IS_DEMO
 from routes import (
     auth, review, pending_review, rereview, github_push, problem, problem_leetcode, execute, recommend,
-    history, solved, import_github, import_codeforces, import_leetcode,
+    history, solved, import_github, import_codeforces, import_leetcode, leetcode_judge,
     stats, report, themes, drafts,
 )
 
@@ -111,6 +111,7 @@ app.include_router(solved.router)
 app.include_router(import_github.router)
 app.include_router(import_codeforces.router)
 app.include_router(import_leetcode.router)
+app.include_router(leetcode_judge.router)
 app.include_router(stats.router)
 app.include_router(report.router)
 app.include_router(themes.router)

@@ -4,13 +4,13 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js — 21개)                                │
+│  Browser (static/js/*.js — 22개)                                │
 │  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
 │  modal-a11y · draft                                             │
 │  import-history · import-github · import-codeforces             │
-│  import-leetcode                                                │
+│  import-leetcode · leetcode-judge                               │
 └────────────────────────┬────────────────────────────────────────┘
                          │ HTTP (fetch)
 ┌────────────────────────▼────────────────────────────────────────┐
@@ -19,12 +19,14 @@
 │  problem · problem_leetcode · execute · recommend · themes      │
 │  history · solved · stats · report · drafts                     │
 │  import_github · import_codeforces · import_leetcode            │
+│  leetcode_judge                                                 │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
 │  Service Layer  │             │  External Clients (clients/)      │
 │  analyzer.py    │             │  solved_ac · codeforces           │
-│  recommender.py │             │  leetcode · github · utils        │
+│  recommender.py │             │  leetcode · leetcode_judge        │
+│                 │             │  github · utils                   │
 │ statement_      │             └──────────────┬────────────────────┘
 │   translator.py │                            │
 │  themes.py      │                            │
@@ -119,9 +121,9 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 |------|----------|
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 의 정본은 `constants.py` 다. `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
-| `clients/leetcode.py` | LeetCode 공개 GraphQL(문제 목록 스냅샷·본문·태그 검색) + 세션 쿠키로 내 제출 코드. 문제 식별자는 titleSlug, 번호는 스냅샷으로 대응. 스냅샷은 42 요청이라 `api_cache` 에 하루 저장한다 — clients 에서 `db` 를 부르는 유일한 곳(지연 import) |
+| `clients/leetcode.py` | LeetCode 공개 GraphQL(문제 목록 스냅샷·본문·태그 검색) + 세션 쿠키로 내 제출 코드. 문제 식별자는 titleSlug, 번호는 스냅샷으로 대응. 스냅샷은 42 요청이라 `api_cache` 에 하루 저장한다(`db` 는 지연 import) |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
-| `clients/leetcode_examples.py` | LeetCode 예제 케이스 추출 + Python 3 실행 하네스. `exampleTestcases`(인자 한 줄씩)·`metaData`(함수명·타입)·본문 `Output:` 줄을 `samples` 로 묶고, 제출 코드 앞뒤에 붙일 prelude(typing·ListNode·TreeNode)/epilogue(stdin JSON → `Solution().메서드` → JSON 한 줄) 를 만든다. 디자인 문제·미지원 타입·개수 불일치·JSON 이 아닌 기대 출력(커스텀 채점)은 None |
+| `clients/leetcode_judge.py` | LeetCode 채점기 클라이언트 — 예제 실행(`interpret_solution`)·제출(`submit`)·결과 폴링(`/submissions/detail/{id}/check/`). 자격증명은 `api_cache`(`lc:judge-session:v1`, 갱신 저장값) → 설정(`LEETCODE_SESSION`·`LEETCODE_CSRFTOKEN`) 순으로 시도하고(DB 를 못 읽으면 설정값만), 응답 쿠키(`resp.cookies`)로 갱신된 세션을 저장한다(슬라이딩 2주, 저장 실패는 경고만). `split_example_cases` 는 `exampleTestcases` 를 `metaData.params` 개수로(Database 문제는 한 줄에 하나) 케이스별로 나눈다. `run_examples` 는 채점기 판정 수(`compare_result`)가 보낸 케이스 수와 다르면 전체를 실패로 표시한다. 세션 만료 `LeetCodeSessionError`(→ 401) · Cloudflare 챌린지 `LeetCodeChallenged`(→ 502, 자격증명 폴백 없음) · 접수 뒤 폴링 실패는 제출 기록 URL 을 담아 502. 쿠키 값은 예외·로그에 싣지 않는다 |
 | `clients/utils.py` | `get_problem_url()`, 파일 확장자 매핑(`get_file_extension` — SQL 계열은 `.sql`), 브라우저 UA 단일 출처(`BROWSER_USER_AGENT` — solved.ac·CF·LeetCode 헤더가 공유), 예외 세 종 — `ProblemSearchError`(검색 **실패**를 빈 결과와 구분) · `UpstreamUnavailable`(외부 서비스 **도달 실패**를 입력 오류와 구분; `ValueError` 를 상속해 기존 핸들러를 깨지 않는다) · `ProblemNotFound`(형식은 맞지만 없는 문제 → 404) |
 | `clients/__init__.py` | 패키지 외부(라우터·서비스)에서 사용하는 함수 re-export |
 
@@ -135,7 +137,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
-| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. 알고리즘 문제는 `samples`(인자 한 줄씩 JSON / 기대 출력) + Python 3 `harness`(prelude·epilogue)를 함께 준다. SQL·미지원 타입 문제는 두 필드 없음. 유료 문제는 본문 없이 |
+| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. `samples`(공식 예제 입력만)와 `judge: "leetcode"` 를 함께 준다. 유료 문제는 본문 없이 |
+| `routes/leetcode_judge.py` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | 뷰어의 예제 실행·제출을 LeetCode 채점기로 위임. 언어는 `python3`·`cpp`·`mysql`(뷰어 select 값 = langSlug). 데모 403, 세션 없음·만료 401, 429(프로세스 전역 분당 20회 상한 또는 LeetCode 자체 제한 — 연속 실행 서너 번이면 걸린다), 상류 502 |
 | `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
@@ -179,7 +182,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
-| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `harness` 가 있으면 Python 3 에 한해 제출 코드를 prelude/epilogue 로 감싸 보낸다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다 |
+| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다 |
+| `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
@@ -210,7 +214,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem.py` | `clients.scrape_cf_problem` | CF 문제 본문 스크래핑 |
 | `routes/problem.py` | `statement_translator.translate_statement` | CF 본문 OpenAI 한국어 번역 |
 | `routes/problem.py` | `routes.problem_cache.run_deduplicated` · `cache_set` | 응답 캐시 조회·동시 요청 병합·저장 |
-| `routes/problem_leetcode.py` | `clients.scrape_lc_problem` · `clients.leetcode_examples.build_lc_examples` · `statement_translator.translate_statement(html=True)` · `routes.problem_cache` | LeetCode 본문 조회·예제 케이스/하네스 생성·HTML 보존 번역·캐시 |
+| `routes/problem_leetcode.py` | `clients.scrape_lc_problem` · `clients.leetcode_judge.split_example_cases` · `statement_translator.translate_statement(html=True)` · `routes.problem_cache` | LeetCode 본문 조회·예제 케이스 분할·HTML 보존 번역·캐시 |
+| `routes/leetcode_judge.py` | `clients.scrape_lc_problem`(question_id) · `clients.leetcode_judge.run_examples / submit_solution` | LeetCode 채점기 예제 실행·제출 |
 | `routes/import_leetcode.py` | `clients.get_leetcode_user_submissions` | LeetCode AC 제출 조회(세션 쿠키 유무에 따라 코드 포함 여부) |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
 | `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
@@ -229,7 +234,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/auth.py` | `clients.exchange_github_code` | GitHub OAuth 토큰 교환 |
 | `routes/auth.py` | `db.save_github_settings` | GitHub 토큰 저장 |
 | `problem-modal.js` | `GET /api/problem/cf/{ref}` · `GET /api/problem/lc/{slug}` | 문제 내용 조회 (플랫폼 표의 `viewerUrl`) |
-| `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행 |
+| `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행(CF) |
+| `leetcode-judge.js` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | LeetCode 채점기 예제 실행·제출 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
 | `review.js` | `POST /api/review/pending` | 리뷰 실패 시 리뷰 없이 GitHub 등록 |
 | `history.js` | `POST /api/rereview/{platform}/{ref}` | 대기 기록의 AI 리뷰 실행 + README 갱신 |
@@ -259,6 +265,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 11 | `executor/` · `.github/workflows/deploy.yml` | 실행 전용 Cloud Run 서비스 `algo-executor`. 이미지에 앱 코드·DB·시크릿이 없고(`--clear-env-vars`), 런타임 SA `algo-executor-run` 에는 **IAM 역할이 하나도 없다** — 제출 코드가 메타데이터 서버에서 토큰을 받아도 그 토큰으로 할 수 있는 일이 없다. NAT 없는 서브넷으로 Direct VPC egress(`--vpc-egress all-traffic`)를 걸어 외부 통신을 끊고, `--no-allow-unauthenticated` + 앱 SA 에만 `run.invoker` 로 호출자를 앱으로 제한한다 |
 | 12 | `executor/runner.py` | 실행 자원 상한 — 스트림당 출력 64KB(넘는 바이트는 읽어서 버린다: 파이프를 비워야 자식이 막히지 않는다), stdin 64KB, 실행 10초, 그리고 **프로세스 그룹째 종료**(`start_new_session` + `killpg`). 직접 자식만 죽이면 제출 코드가 남긴 손자가 인스턴스 수명 동안 CPU 를 계속 쓴다. `tests/test_executor_runner.py` 가 넷을 실측으로 고정 |
 | 13 | `routes/execute.py` | `/api/execute` 는 인증이 없는 공개 엔드포인트다 — `X-Forwarded-For` 첫 항목 당 분당 30회로 제한한다(`request.client` 는 GFE 다). Cloud Run 은 클라이언트가 보낸 `X-Forwarded-For` 를 버리지 않으므로 이 키는 요청자가 정할 수 있다 — 그래서 헤더가 무엇이든 성립하는 전역 분당 120회 상한을 함께 건다. 실행 서비스의 `--max-instances 5` 가 비용 상한이고, 이 전역 상한이 그 비용 상한을 지킨다 |
+| 14 | `routes/leetcode_judge.py` | `/api/leetcode/run`·`/api/leetcode/submit` 도 인증 없는 공개 엔드포인트인데, 서버에 설정된 **소유자의 LeetCode 세션**으로 코드를 실행·제출한다(제출은 계정 기록에 남는다). 요청자 구분 없는 프로세스 전역 분당 20회(run·submit 합산) 상한만 있다 — 익명 남용으로 계정이 제한되는 것을 막는 몫이고, 소진되면 소유자도 1분간 429 다. 데모는 403 |
 
 ### 남아 있는 위험 — 앱에 인증이 없다
 
@@ -276,6 +283,7 @@ GitHub OAuth 토큰(`scope=repo`)을 DB 에 저장하고 공개 엔드포인트�
 - `/api/report` · `/api/problem/cf/...` — 무제한 유료 LLM 호출
 - `DELETE /api/solved-history` — 가져온 기록 전량 삭제
 - `GET`·`POST /api/drafts/{key}` — 작성 중인 코드 열람·덮어쓰기(빈 코드로 삭제)
+- `POST /api/leetcode/run` · `/api/leetcode/submit` — 소유자의 LeetCode 세션으로 코드 실행·제출(제출 기록 오염, 인스턴스당 분당 20회)
 
 데모 서비스는 공개로 두어도 된다 — `DEMO_MODE` 가 과금·코드 실행·GitHub 접근을 차단하고
 DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리뷰 저장·임시 저장) — 그 임시 파일
@@ -326,7 +334,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 환경변수 필터 검증 | import 시점 상수로 두면 그 필터를 실효 검증할 수 없다 — 테스트가 센티넬을 심어도 이미 만들어진 dict 에는 반영되지 않아 필터를 통째로 지워도 통과한다 | `safe_env()` 가 호출 시점에 필터한다. 테스트가 실제 센티넬을 심어 5개 키를 각각 검증 |
 | 파이썬 테스트는 JS 를 파싱하지 않는다 | 스크립트로 JS 를 편집하다 개행 이스케이프가 실제 개행으로 치환되면 문자열이 끊겨 **그 파일 전체가 SyntaxError** 가 되고, 전역 스코프를 공유하므로 해당 기능이 통째로 사라진다. pytest 는 이걸 못 잡는다 | CI 의 node 게이트(`scripts/check_js.sh`) 또는 헤드리스 브라우저 실측이 유일한 방어선이다. 파이썬으로 JS 렉서를 흉내 내는 검사는 정규식 리터럴에 걸려 거짓 빨강이 난다 — 시도했다가 되돌렸다 |
 | 테스트 DB 격리 | `conftest` 가 `os.environ["DB_TYPE"]` 으로 방언을 판정하면 안 된다 — 실제 접속 대상은 `Settings.sqlalchemy_url` 이고 그것은 `.env` 의 `DATABASE_URL` 을 최우선으로 쓴다. 판정과 접속이 갈리면 sqlite 분기(`DB_PATH` 격리)를 타면서 실DB 에 붙고, `test_migrations` 의 `DROP TABLE` 이 그 DB 로 나간다 | 방언을 **해석된 URL** 에서 유도한다. sqlite 분기는 `DATABASE_URL` 을 지우는 게 아니라 **덮어쓴다** — pydantic-settings 우선순위가 init > OS 환경변수 > dotenv 라 `delenv` 는 `.env` 값을 못 누른다. `_assert_disposable_target()` 이 파일명이 정확히 `test.db` 인 임시 파일 / 로컬 CI postgres 가 아니면 즉시 중단한다(`"test" in name` 부분일치는 `contest.db` 를 통과시킨다) |
-| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "21개 파일 검사 완료" 가 실제 검사 수다 |
+| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "22개 파일 검사 완료" 가 실제 검사 수다 |
 | 늦은 응답의 정리 코드 | `finally` 에서 무조건 상태를 되돌리면, 무효화된 옛 실행이 **새로 진행 중인** 실행의 상태를 되살린다(예제 실행 버튼이 활성으로 바뀌고, 다시 누르면 진행 중인 결과가 지워진다) | 세대 토큰을 확인한 뒤에만 되돌린다. 열기·닫기 경로가 이미 복원을 부르므로 "고착 방지" 는 유지된다 |
 | 스냅샷 시점 | 테스트가 보는 값이 검증 대상 코드보다 **앞** 시점의 스냅샷이면 그 코드를 지워도 통과한다(`analyze_code` 호출 시점 dict 를 보면 그 뒤의 가드를 검증하지 못한다) | 응답 본문이나 DB 재조회로 확인한다 |
 | 필터를 겨냥한 픽스처 | 여러 필터가 순차로 걸리는 함수에서, 픽스처가 **앞선 필터**에 먼저 걸리면 뒤 필터를 지워도 결과가 같다(`4A. Watermelon` 은 루트 필터가 아니라 번호 경계에 걸렸다) | 각 필터마다 그 필터**만**이 이유가 되는 입력을 둔다 |
@@ -367,7 +375,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 부분 실패 정책 | 같은 예외에 소비처마다 정책이 반대면 한쪽이 틀린 것이다 — 테마는 밴드별로 부분 성공을 살리는데 추천은 첫 실패에서 던져 이미 성공한 태그의 결과까지 버렸다 | 태그별로 격리하고 **전부 실패했을 때만** 실패로 본다 |
 | 포커스가 body 로 이탈 | 포커스를 가진 요소가 disabled 되거나(`setLoading`) DOM 에서 사라지면 브라우저가 포커스를 `<body>` 로 옮긴다. keydown 리스너가 모달 root 에 걸려 있으므로 그 순간 **Esc 로 닫을 수 없고 Tab 트랩도 무효**가 된다(10~20초짜리 작업에서 실제로 발생) | `modal-a11y` 가 `focusout` 으로 이탈을 되돌린다. root 에 `tabIndex = -1` 이 필요하다 — 없으면 마지막 수단인 `root.focus()` 가 **조용히 무효**다(안의 버튼이 전부 disabled 면 실제로 그 상황이 된다) |
 | 테스트 픽스처의 범위 | "전 파일" 이라 적어 놓고 목록을 고정하면, 그 밖의 파일에는 무엇을 넣어도 통과한다 | glob 으로 읽고 **개수 하한**을 함께 둔다(경로가 틀리면 빈 dict 로 모든 루프가 조용히 통과한다) |
-| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 21개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
+| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 22개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
 
 ---
 
