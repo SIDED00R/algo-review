@@ -95,9 +95,11 @@ function renderLeetcodeSubmit(result) {
 
 async function submitToLeetcode() {
   if (_currentProblem?.judge !== 'leetcode') return;
-  const code = window.getEditorValue('pm-code').trim();
+  const raw = window.getEditorValue('pm-code');
+  const code = raw.trim();
   const resultsEl = document.getElementById('pm-test-results');
-  if (!code) {
+  // 손대지 않은 기본 코드 스텁도 막는다. 예제 실행은 막지 않는다.
+  if (!code || raw === _currentProblem.appliedSnippet) {
     resultsEl.innerHTML = '<div class="alert alert-info">코드를 먼저 작성해주세요.</div>';
     return;
   }

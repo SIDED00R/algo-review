@@ -67,7 +67,7 @@ _Q_LIST = (
 _Q_QUESTION = (
     "query($slug:String!){question(titleSlug:$slug){"
     "questionId questionFrontendId title titleSlug difficulty categoryTitle isPaidOnly content "
-    "exampleTestcases metaData topicTags{name slug}}}"
+    "exampleTestcases metaData codeSnippets{langSlug code} topicTags{name slug}}}"
 )
 _Q_RECENT_AC = (
     "query($u:String!,$n:Int!){recentAcSubmissionList(username:$u,limit:$n){"
@@ -288,8 +288,9 @@ _BLOCK_TAGS = ("p", "div", "pre", "li", "ul", "ol", "br", "h1", "h2", "h3", "h4"
                "tr", "table", "blockquote")
 
 
-def _lc_html_to_text(html: str) -> str:
-    """본문 HTML → LLM·README 용 텍스트. <pre>(표·예제) 줄바꿈을 지키고 <sup> 앞에 ^ 를 둔다."""
+def lc_html_to_text(html: str) -> str:
+    """본문 HTML → LLM·README 용 텍스트. <pre>(표·예제) 줄바꿈을 지키고 <sup> 앞에 ^ 를 둔다.
+    번역된 HTML 에도 그대로 쓴다(routes/problem_leetcode.py)."""
     soup = BeautifulSoup(html or "", "html.parser")
     for sup in soup.find_all("sup"):
         sup.insert_before("^")
@@ -314,7 +315,7 @@ def get_leetcode_problem_statement(problem_ref: str) -> str:
         return _STATEMENT_FAILURE
     if not question or not question.get("content"):
         return _STATEMENT_FAILURE
-    return _lc_html_to_text(question["content"])
+    return lc_html_to_text(question["content"])
 
 
 def get_lc_problem_sections(problem_ref: str) -> dict | None:
@@ -329,7 +330,8 @@ def scrape_lc_problem(problem_ref: str) -> dict:
     """뷰어용 원본. 형식 오류 ValueError, 없는 문제 ProblemNotFound. 유료 문제는 content_html 이 빈 문자열이다.
 
     question_id 는 채점기 호출용 내부 번호(문제 번호 problem_id 와 다르다). example_testcases 는 예제
-    인자 한 줄씩, meta_data 는 함수 시그니처 JSON — clients.leetcode_judge.split_example_cases 가 쓴다."""
+    인자 한 줄씩, meta_data 는 함수 시그니처 JSON — clients.leetcode_judge.split_example_cases 가 쓴다.
+    code_snippets 는 LeetCode langSlug → 공식 코드 스텁(에디터 초기 코드)이다."""
     from clients.utils import get_problem_url
     slug = normalize_leetcode_problem_ref(problem_ref)
     question = _fetch_lc_question(slug)
@@ -347,6 +349,8 @@ def scrape_lc_problem(problem_ref: str) -> dict:
         "content_html": question.get("content") or "",
         "example_testcases": question.get("exampleTestcases") or "",
         "meta_data": question.get("metaData") or "",
+        "code_snippets": {s["langSlug"]: s["code"]
+                          for s in (question.get("codeSnippets") or []) if s.get("langSlug") and s.get("code")},
         "tags": [t.get("name", "") for t in (question.get("topicTags") or []) if t.get("name")],
         "url": get_problem_url("leetcode", slug),
     }

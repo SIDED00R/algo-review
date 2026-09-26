@@ -146,6 +146,16 @@ DEMO_LC_PROBLEM = {
     ),
     "url": "https://leetcode.com/problems/two-sum/",
     "translated": True,
+    "statement_text_ko": (
+        "정수 배열 nums와 정수 target이 주어질 때, 두 수의 합이 target이 되는 두 원소의 인덱스를 반환하세요.\n"
+        "각 입력에는 정확히 하나의 답이 있으며, 같은 원소를 두 번 쓸 수 없습니다.\n\n"
+        "입력: nums = [2,7,11,15], target = 9\n출력: [0,1]"
+    ),
+    "code_snippets": {
+        "python3": "class Solution:\n    def twoSum(self, nums: List[int], target: int) -> List[int]:\n        ",
+        "cpp": ("class Solution {\npublic:\n"
+                "    vector<int> twoSum(vector<int>& nums, int target) {\n        \n    }\n};"),
+    },
 }
 
 DEMO_RECOMMENDATIONS_LC = {

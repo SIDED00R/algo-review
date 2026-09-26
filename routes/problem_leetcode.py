@@ -2,13 +2,14 @@
 
 예제 실행·제출은 LeetCode 채점기가 한다(`routes/leetcode_judge.py`). 응답의 `samples` 는 공식 예제의
 입력만 담고(`{"input": ...}`), 기대 출력은 채점기가 계산해 준다. `judge: "leetcode"` 가 프런트에
-그 경로를 알린다.
+그 경로를 알린다. `code_snippets` 는 뷰어 언어별 공식 코드 스텁(python3·cpp 는 `class Solution`, mysql 은 SQL 주석 한 줄)이고,
+`statement_text_ko` 는 번역 본문의 텍스트판(GitHub README 용)이다.
 """
 import asyncio
 
 import clients as api_client
-from clients.leetcode import normalize_leetcode_problem_ref
-from clients.leetcode_judge import split_example_cases
+from clients.leetcode import lc_html_to_text, normalize_leetcode_problem_ref
+from clients.leetcode_judge import JUDGE_LANGUAGES, split_example_cases
 from fastapi import APIRouter, HTTPException
 from routes import problem_cache
 from routes.helpers import upstream_failure
@@ -65,11 +66,18 @@ async def _fetch_and_translate(cache_key: str, slug: str) -> dict:
         "is_paid_only": raw["is_paid_only"],
         "tags": raw["tags"],
         "content_html_ko": content_ko,
+        # GitHub push 의 README 본문. 프런트가 push 요청의 description 으로 보낸다 — 없으면 서버가
+        # 영문 원문을 새로 긁어 넣는다(CF 의 statement_sections_ko 와 같은 역할).
+        "statement_text_ko": lc_html_to_text(content_ko) if content_ko else "",
         "url": raw["url"],
         "translated": translated,
         "judge": "leetcode",
         "samples": [{"input": case}
                     for case in split_example_cases(raw.get("example_testcases", ""), raw.get("meta_data", ""))],
+        # 에디터 초기 코드. 임시 저장본이 없을 때만 프런트가 채운다. 뷰어 언어 select 값 = 채점 언어라
+        # 그 밖의 스텁은 싣지 않는다.
+        "code_snippets": {lang: code for lang, code in (raw.get("code_snippets") or {}).items()
+                          if lang in JUDGE_LANGUAGES},
     }
     # 번역 성공 시 영구 캐시, 실패 시 60초 뒤 재시도. 본문이 없는 유료 문제는 번역할 것이 없어 영구 캐시한다.
     problem_cache.cache_set(cache_key, result, translated or not html)

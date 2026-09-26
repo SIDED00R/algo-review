@@ -15,12 +15,13 @@
   //   saved   : 서버에 있다고 아는 코드. 같으면 저장하지 않는다.
   //   loaded  : 저장본을 읽었는지. 읽었을 때만 자동 저장한다.
   //   token   : 자리 세대. 늦게 온 응답을 버리는 데 쓴다.
+  //   blank   : 빈 코드로 취급하는 내용(프로그램이 채운 문제 스텁). 저장 때 '' 로 바꾼다.
   const _drafts = {};
 
   function draftState(editorId) {
     if (!_drafts[editorId]) {
       _drafts[editorId] = { key: null, token: 0, saved: '', loaded: false,
-                            timer: null, dirtySince: 0 };
+                            timer: null, dirtySince: 0, blank: '' };
     }
     return _drafts[editorId];
   }
@@ -68,7 +69,9 @@
     if (!st.key) return;
     // 저장본을 읽지 못한 자리는 자동으로 쓰지 않는다.
     if (!st.loaded && !manual) return;
-    const code = window.getEditorValue(editorId);
+    let code = window.getEditorValue(editorId);
+    // 손대지 않은 스텁은 빈 코드다 — 서버가 비어 있으면 건너뛰고, 저장본이 있으면 지운다.
+    if (st.blank && code === st.blank) code = '';
     if (code === st.saved && !manual) return;
     const key = st.key;
     const token = st.token;
@@ -104,7 +107,17 @@
     st.timer = setTimeout(() => saveDraft(editorId, false), DEBOUNCE_MS);
   }
 
-  /** 에디터를 임시 저장 키에 붙이고, 저장본이 있으면 복원한다. */
+  /**
+   * 주어진 코드를 빈 코드로 취급하게 한다 — 프로그램이 채운 기본 코드(문제 스텁)가 손대지 않은 채
+   * 저장되지 않게 하고, 그 상태로 저장하면 기존 저장본을 지운다. 바인딩된 자리에서만 뜻이 있다.
+   */
+  function setDraftBlank(editorId, code) {
+    const st = draftState(editorId);
+    if (!st.key) return;
+    st.blank = code;
+  }
+
+  /** 에디터를 임시 저장 키에 붙이고, 저장본이 있으면 복원한다. 조회가 끝나면 resolve 된다. */
   async function bindDraft(editorId, key) {
     // 에디터가 없으면(CodeMirror 미로드) 붙지 않는다.
     if (!window.cmEditors?.[editorId]) return;
@@ -113,6 +126,7 @@
     const token = ++st.token;
     st.key = key;
     st.saved = '';
+    st.blank = '';
     st.loaded = false;
     st.dirtySince = 0;
     setDraftStatus(editorId, '임시 저장본 확인 중...');
@@ -153,6 +167,7 @@
 
   window.bindDraft = bindDraft;
   window.unbindDraft = unbindDraft;
+  window.setDraftBlank = setDraftBlank;
 
   Object.keys(LANG_SELECT).forEach(editorId => {
     const cm = window.cmEditors[editorId];

@@ -65,6 +65,23 @@ function renderHtmlStatement(data) {
 }
 
 let _currentProblem = null;
+
+// 선택 언어의 기본 코드(LeetCode 공식 스텁)를 에디터에 채운다. 사용자가 쓴 코드는
+// 덮지 않는다 — 비어 있거나, 직전에 이 함수가 채운 스텁 그대로일 때만 바꾼다. 문제 응답과 임시
+// 저장본 조회가 둘 다 끝난 뒤에만 동작한다(임시 저장본이 스텁보다 우선이다).
+function fillCodeSnippet() {
+  const p = _currentProblem;
+  if (!p || !p.snippets || !p.draftChecked) return;
+  const current = window.getEditorValue('pm-code');
+  if (current.trim() && current !== p.appliedSnippet) return;
+  const snippet = p.snippets[document.getElementById('pm-language').value] || '';
+  window.setEditorValue('pm-code', snippet);
+  // setEditorValue 는 들여쓰기를 바꾸므로 비교 기준은 에디터에서 다시 읽는다.
+  p.appliedSnippet = window.getEditorValue('pm-code');
+  // 손대지 않은 스텁은 빈 코드로 취급한다 — 임시 저장하지 않고, 지운 저장본은 지워진다.
+  window.setDraftBlank('pm-code', p.appliedSnippet);
+}
+
 // 예제 실행 세대. 실행 중 모달을 닫거나 다른 문제를 열면 결과 노드가 사라지므로,
 // 진행 중인 루프가 자기 세대가 지났는지 확인해 멈춘다.
 let _runToken = 0;
@@ -81,7 +98,11 @@ function resetRunButton() {
 
 async function openProblemModal(platform, ref, title, tierName) {
   const spec = platformSpec(platform);
-  _currentProblem = { platform, ref, samples: [], judge: null };
+  // snippets 는 응답이 오면 언어 → 기본 코드 사전이 된다(없는 플랫폼은 빈 사전). draftChecked 는
+  // 임시 저장본 조회가 끝나면 선다. appliedSnippet 은 fillCodeSnippet 이 마지막에 채운 값이다.
+  const problem = { platform, ref, samples: [], judge: null,
+                    snippets: null, draftChecked: false, appliedSnippet: undefined };
+  _currentProblem = problem;
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
@@ -106,7 +127,12 @@ async function openProblemModal(platform, ref, title, tierName) {
   setReviewOutcome(true);
   window.setEditorValue('pm-code', '');
   // 임시 저장 키는 문제마다 다르다. bindDraft 는 에디터를 비운 뒤에 부른다.
-  window.bindDraft('pm-code', `${platform}:${ref}`);
+  // 조회가 끝난 뒤에야 기본 코드를 채울 수 있다 — 먼저 채우면 저장본 복원이 "이미 내용 있음"으로 막힌다.
+  window.bindDraft('pm-code', `${platform}:${ref}`).then(() => {
+    if (_currentProblem !== problem) return;
+    problem.draftChecked = true;
+    fillCodeSnippet();
+  });
 
   try {
     const data = await fetchJsonOk(spec.viewerUrl(ref), undefined, '문제 로딩 실패');
@@ -120,7 +146,11 @@ async function openProblemModal(platform, ref, title, tierName) {
     const hasSamples = Array.isArray(data.samples);
     _currentProblem.samples  = hasSamples ? data.samples : [];
     _currentProblem.judge    = data.judge || null;
-    _currentProblem.sections = data.statement_sections_ko || {};
+    // sections 는 GitHub push 의 README 본문이 된다(review.js). LeetCode 는 본문이 HTML 한 덩어리라
+    // 서버가 텍스트판(statement_text_ko)을 따로 준다 — 없으면 push 서버가 영문 원문을 긁어 넣는다.
+    _currentProblem.sections = data.statement_sections_ko
+      || (data.statement_text_ko ? { statement: data.statement_text_ko } : {});
+    _currentProblem.snippets = data.code_snippets || {};
     setSampleUiVisible(hasSamples);
     document.getElementById('pm-submit-btn').classList.toggle('hidden', _currentProblem.judge !== 'leetcode');
 
@@ -129,7 +159,8 @@ async function openProblemModal(platform, ref, title, tierName) {
     langSel.querySelector('option[value="mysql"]').hidden = !spec.sqlViewer;
     if (data.category === 'Database') langSel.value = 'mysql';
     else if (langSel.value === 'mysql') langSel.value = 'python3';
-    langSel.dispatchEvent(new Event('change'));   // editor.js 가 CodeMirror 모드를 바꾼다
+    // editor.js 가 CodeMirror 모드를 바꾸고, 아래 change 리스너가 기본 코드를 채운다.
+    langSel.dispatchEvent(new Event('change'));
 
     // 식별자가 slug 인 플랫폼은 응답의 번호(problem_id)를 제목에 쓴다. CF 응답에는 없어 ref 그대로다.
     document.getElementById('pm-title').textContent = `${data.problem_id ?? ref}. ${data.title}`;
@@ -370,6 +401,8 @@ document.getElementById('pm-close-btn').addEventListener('click', closeProblemMo
 document.getElementById('pm-run-btn').addEventListener('click', runSamples);
 document.getElementById('pm-review-btn').addEventListener('click', proceedToReview);
 document.getElementById('pm-custom-add-btn').addEventListener('click', addCustomCase);
+// 언어를 바꾸면 손대지 않은 스텁을 그 언어의 스텁으로 바꾼다.
+document.getElementById('pm-language').addEventListener('change', fillCodeSnippet);
 
 // 커스텀 예제는 동적으로 늘어나므로 컨테이너에서 위임한다.
 document.getElementById('pm-custom-cases').addEventListener('click', e => {

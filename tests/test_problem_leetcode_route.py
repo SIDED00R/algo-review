@@ -36,6 +36,8 @@ def test_viewer_translates_html_and_caches_by_normalized_slug(minimal_app, monke
     first = client.get("/api/problem/lc/Two-Sum").json()
     assert first["content_html_ko"] == "[ko]<p>hi</p>"
     assert first["translated"] is True
+    # README 용 텍스트판은 번역 HTML 에서 만든다(원문이 아니다).
+    assert first["statement_text_ko"] == "[ko]\nhi"
     assert (first["difficulty"], first["category"], first["problem_id"]) == ("Easy", "Algorithms", 1)
     # 예제 원문이 없는 응답도 judge 는 알리고 samples 는 빈 목록이다 — 프런트는 samples 배열 유무로 실행 영역을 켠다.
     assert (first["judge"], first["samples"]) == ("leetcode", [])
@@ -54,11 +56,29 @@ def test_samples_are_example_inputs_split_per_case(minimal_app, monkeypatch):
     assert body["judge"] == "leetcode"
 
 
+def test_code_snippets_are_limited_to_viewer_languages(minimal_app, monkeypatch):
+    raw = dict(_RAW, code_snippets={"python3": "class Solution:\n    pass", "cpp": "class Solution {};",
+                                    "mysql": "# Write your MySQL query statement below", "java": "class Solution {}"})
+    monkeypatch.setattr(api_client, "scrape_lc_problem", lambda slug: raw)
+    monkeypatch.setattr(lc_route, "translate_statement", lambda text, title, **kw: text)
+    body = minimal_app(lc_route.router).get("/api/problem/lc/two-sum").json()
+    # 뷰어 언어 select 에 있는 언어만 싣는다.
+    assert body["code_snippets"] == {"python3": "class Solution:\n    pass", "cpp": "class Solution {};",
+                                     "mysql": "# Write your MySQL query statement below"}
+
+
+def test_missing_code_snippets_yield_an_empty_dict(minimal_app, monkeypatch):
+    monkeypatch.setattr(api_client, "scrape_lc_problem", lambda slug: dict(_RAW))
+    monkeypatch.setattr(lc_route, "translate_statement", lambda text, title, **kw: text)
+    assert minimal_app(lc_route.router).get("/api/problem/lc/two-sum").json()["code_snippets"] == {}
+
+
 def test_paid_problem_skips_translation_and_is_cached_permanently(minimal_app, monkeypatch):
     monkeypatch.setattr(api_client, "scrape_lc_problem", lambda slug: dict(_RAW, is_paid_only=True, content_html=""))
     monkeypatch.setattr(lc_route, "translate_statement", lambda *a, **k: pytest.fail("유료 문제인데 번역을 불렀다"))
     body = minimal_app(lc_route.router).get("/api/problem/lc/x").json()
     assert body["is_paid_only"] and body["content_html_ko"] == "" and body["translated"] is False
+    assert body["statement_text_ko"] == ""
     assert problem_cache._CACHE["lc:x"]["expires"] is None
 
 
