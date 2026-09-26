@@ -137,7 +137,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/github_push.py` | `POST /api/push-review` | GitHub 저장소에 코드+README push (최신 리뷰 내용 포함) |
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
-| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. `samples`(공식 예제 입력만)와 `judge: "leetcode"` 를 함께 준다. 유료 문제는 본문 없이 |
+| `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. `samples`(공식 예제 입력만)와 `judge: "leetcode"`, `code_snippets`(뷰어 언어별 공식 코드 스텁), `statement_text_ko`(번역 본문의 텍스트판 — GitHub README 본문. 없으면 push 가 영문 원문을 긁어 넣는다)를 함께 준다. 유료 문제는 본문 없이 |
 | `routes/leetcode_judge.py` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | 뷰어의 예제 실행·제출을 LeetCode 채점기로 위임. 언어는 `python3`·`cpp`·`mysql`(뷰어 select 값 = langSlug). 데모 403, 세션 없음·만료 401, 429(프로세스 전역 분당 20회 상한 또는 LeetCode 자체 제한 — 연속 실행 서너 번이면 걸린다), 상류 502 |
 | `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
@@ -178,11 +178,11 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `github.js` | GitHub OAuth 연결 UI |
 | `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
 | `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다. `escapeCloses: false` 는 Esc 닫기만 끈다(에디터가 든 모달용) |
-| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 문제 뷰어만 열 때 `{platform}:{ref}` 에 붙는다. 코드 리뷰 탭 에디터는 저장하지 않는다 |
+| `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 문제 뷰어만 열 때 `{platform}:{ref}` 에 붙는다. 코드 리뷰 탭 에디터는 저장하지 않는다. `setDraftBlank` 로 등록한 내용(문제 스텁)은 빈 코드로 취급한다 |
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
-| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다 |
+| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만) |
 | `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
@@ -321,7 +321,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | ARIA 선언 vs 동작 | `role="tablist"` 를 선언하면 보조기술 사용자는 화살표 키 이동을 기대한다. 선언만 있고 동작이 없으면 없는 것보다 나쁘다 | 화살표·Home·End + roving tabindex 를 `tabs.js` 에 둔다. 마크업의 초기 `tabindex` 도 맞춘다(JS 실행 전 상태) |
 | 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달 셋 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |
 | 에디터 안의 Esc | CodeMirror 의 Esc(포커스 탈출)는 기본 동작만 막고 keydown 을 위로 흘려보낸다 — 모달 루트가 그것으로 닫히면 **작성 중이던 코드가 그대로 사라진다**(모달의 에디터 값은 닫는 순간 어디에도 남지 않는다) | 문제 뷰어만 `escapeCloses: false` 로 등록한다(닫기는 ✕ 버튼·바깥 클릭). 에디터가 없는 모달은 그대로 Esc 로 닫힌다 |
-| 임시 저장 바인딩 순서 | 문제 뷰어는 열 때 에디터를 비운다. 임시 저장에 **먼저** 붙이면 그 비우기가 변경으로 잡혀 복원본이 빈 값으로 덮인다 | `setEditorValue('pm-code', '')` **뒤에** `bindDraft` 한다. 닫을 때는 `unbindDraft` 가 디바운스 대기분을 먼저 넘긴다 |
+| 임시 저장 바인딩 순서 | 문제 뷰어는 열 때 에디터를 비운다. 임시 저장에 **먼저** 붙이면 그 비우기가 변경으로 잡혀 복원본이 빈 값으로 덮인다 | `setEditorValue('pm-code', '')` **뒤에** `bindDraft` 한다. 닫을 때는 `unbindDraft` 가 디바운스 대기분을 먼저 넘긴다. 기본 코드 스텁은 저장본 조회가 끝난 **뒤에** 채운다 — 먼저 채우면 복원이 "이미 내용 있음"으로 막힌다 |
 | 못 읽은 임시 저장본 | 조회가 실패했는데(온디맨드 DB 정지 등) 자동 저장을 켜면 **첫 타이핑이 읽지 못한 저장본을 덮어쓴다** — 실패한 순간이 곧 유실이다 | 조회 성공 시에만 `loaded` 를 세우고, 그때만 자동 저장한다. 실패한 자리는 '임시 저장' 버튼(수동)으로만 쓴다 |
 | 문자열 수준 테스트 | 빌드 스텝이 없어 JS/CSS 배선은 문자열 검사가 유일한 방어선이다. 정확 문자열은 공백·인용부호에 깨지고, 느슨한 부분문자열은 `ArrowRightX` 같은 오타를 통과시킨다. **결함을 설명하는 주석에 그 결함의 코드 형태가 적혀 있어** 거짓 빨강도 난다 | 정규식으로 쓰고, 규칙을 찾는 검사는 주석을 제거한 사본을 본다(`tests/test_frontend_invariants.py`) |
 | CSS 형제 결합자 | 인접(`+`)은 DOM 구조 기준이라 `display:none` 형제도 인접을 끊는다 — 가져오기 목록은 행마다 코드 패널 div 를 형제로 끼워 넣으므로 그 탭에서만 구분선이 겹친다 | 목록 행에는 일반 형제(`~`)를 쓴다 |

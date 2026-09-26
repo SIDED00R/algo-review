@@ -59,9 +59,18 @@ def fake_api(monkeypatch):
             found = next((q for q in _QUESTIONS if q["titleSlug"] == variables["slug"]), None)
             if found is None:
                 return _Resp({"data": {"question": None}})
-            return _Resp({"data": {"question": {**found, "questionId": str(int(found["questionFrontendId"]) + 1000),
-                                                "content": None if found["isPaidOnly"] else _CONTENT,
-                                                "exampleTestcases": "[2,7]\n9", "metaData": '{"params":[{},{}]}'}}})
+            question = {**found, "questionId": str(int(found["questionFrontendId"]) + 1000),
+                        "content": None if found["isPaidOnly"] else _CONTENT,
+                        "exampleTestcases": "[2,7]\n9", "metaData": '{"params":[{},{}]}'}
+            # 쿼리가 실제로 요청할 때만 싣는다 — 쿼리에서 필드가 빠지면 테스트가 빨개져야 한다.
+            if "codeSnippets{langSlug code}" in query:
+                question["codeSnippets"] = [
+                    {"langSlug": "python3", "code": "class Solution:\n    pass"},
+                    {"langSlug": "java", "code": "class Solution {}"},
+                    {"langSlug": "", "code": "x"},
+                    {"langSlug": "rust", "code": ""},
+                ]
+            return _Resp({"data": {"question": question}})
         if "recentAcSubmissionList" in query:
             return _Resp({"data": {"recentAcSubmissionList": [
                 {"id": "1", "title": "Two Sum", "titleSlug": "two-sum", "timestamp": "2", "lang": "python3"},
@@ -190,6 +199,9 @@ def test_scrape_returns_viewer_fields_and_not_found(fake_api):
     assert "<sup>" in raw["content_html"]
     # 채점기 호출용 내부 번호는 문제 번호와 다르고 문자열이다. 예제 원문도 그대로 실린다.
     assert (raw["question_id"], raw["example_testcases"], raw["meta_data"]) == ("1001", "[2,7]\n9", '{"params":[{},{}]}')
+    # 코드 스텁은 langSlug → code 사전. 슬러그나 코드가 빈 항목은 버린다.
+    assert raw["code_snippets"] == {"python3": "class Solution:\n    pass",
+                                    "java": "class Solution {}"}
     with pytest.raises(ProblemNotFound):
         lc.scrape_lc_problem("no-such-slug")
 
