@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     openai_max_retries: int = 1
     openai_timeout: int = 15
 
+    # --- Claude 구독 (Claude Agent SDK) ---
+    # `claude setup-token` 으로 발급한 장기 토큰. claude_client 가 CLI 환경변수로 넘긴다.
+    # 비어 있으면 모든 LLM 호출이 위의 OpenAI 호환 엔드포인트로 간다.
+    claude_code_oauth_token: str = ""
+    # CLI 모델 별칭(sonnet·opus 등). 비우면 구독 계정의 기본 모델.
+    claude_model: str | None = None
+    # 소유자 열쇠. 이 값과 같은 `owner_key` 쿠키를 가진 요청만 Claude 구독을 쓴다.
+    owner_key: str = ""
+
     # --- GitHub OAuth ---
     github_client_id: str = ""
     github_client_secret: str = ""

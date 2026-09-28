@@ -46,6 +46,15 @@ def test_valid_escapes_next_to_a_stray_backslash():
     assert parse_review_json(raw)["feedback"] == "C:\\Users 와 \\log 와 줄\n뒤"
 
 
+@pytest.mark.parametrize("raw", [
+    '```json\n{"efficiency": "ok"}\n```',
+    '```\n{"efficiency": "ok"}\n```',
+    '  ```JSON \n{"efficiency": "ok"}\n```\n',
+])
+def test_a_fence_around_the_whole_body_is_stripped(raw):
+    assert parse_review_json(raw) == {"efficiency": "ok"}
+
+
 def test_unrepairable_body_raises_the_user_facing_message():
     with pytest.raises(ValueError, match="JSON 으로 해석하지 못했습니다"):
         parse_review_json("```json\n{잘린 응답")

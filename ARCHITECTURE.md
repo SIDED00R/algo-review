@@ -4,11 +4,11 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js — 22개)                                │
+│  Browser (static/js/*.js — 23개)                                │
 │  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
-│  modal-a11y · draft                                             │
+│  modal-a11y · draft · owner-key                                 │
 │  import-history · import-github · import-codeforces             │
 │  import-leetcode · leetcode-judge                               │
 └────────────────────────┬────────────────────────────────────────┘
@@ -19,7 +19,7 @@
 │  problem · problem_leetcode · execute · recommend · themes      │
 │  history · solved · stats · report · drafts                     │
 │  import_github · import_codeforces · import_leetcode            │
-│  leetcode_judge                                                 │
+│  leetcode_judge · owner                                         │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
@@ -30,14 +30,16 @@
 │ statement_      │             └──────────────┬────────────────────┘
 │   translator.py │                            │
 │  themes.py      │                            │
+│  claude_gate.py │                            │
+│ claude_client.py│                            │
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
 │  DB Layer (db/) — SQLAlchemy │       │  External APIs                   │
 │  models · connection         │       │  solved.ac · Codeforces          │
 │  reviews · solved · cache    │       │  LeetCode · GitHub · OpenAI      │
-│  github_settings · migrate   │       └──────────────────────────────────┘
-│  normalize · paging          │
+│  github_settings · migrate   │       │  Claude (Agent SDK -> CLI)       │
+│  normalize · paging          │       └──────────────────────────────────┘
 └────────┬────────────────────┘
          │   (단순 상수는 constants.py — 레이어 간 상호 import 없이 어느 쪽에서도 참조)
          │
@@ -69,6 +71,8 @@
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/LeetCode 세션/CORS 등 |
 | `constants.py` | 플랫폼 화이트리스트·티어 이름·LeetCode 난이도 라벨(`lc_difficulty_label`)·`normalize_platform()`·`unsupported_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
 | `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`statement_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
+| `claude_client.py` | Claude 구독 원샷 호출 — Claude Agent SDK 가 CLI 를 띄워 답 한 덩어리를 받는다. 도구 0개(`--tools ""`)·프롬프트 글자 그대로(`verbatim_prompts` — `@<경로>` 파일 펼치기 끔)·설정 파일/MCP 미사용·1턴·세션 미저장. 호출마다 CLI 프로세스(약 230MB)가 떠서 동시 호출을 2개로 묶고, 30초 안에 자리가 안 나거나 120초 안에 답이 없으면 `ClaudeUnavailable` |
+| `owner_access.py` | 소유자 판정 — `OwnerContextMiddleware` 가 요청의 `owner_key` 쿠키를 `OWNER_KEY` 와 비교해 요청 범위 contextvar 에 둔다. 스레드풀·`asyncio.to_thread` 워커에도 그대로 보인다 |
 | `warmup.py` | 기동 직후 백그라운드로 플랫폼×테마 문제 풀 캐시 예열 |
 | `timestamps.py` | 저장 시각의 단일 규약 — 항상 오프셋 있는 UTC 로 저장(`utc_now_iso`), 읽을 때 오프셋 없는 값은 UTC 로 해석(`parse_stored`) |
 | `backfill_statements.py` | 기존 기록의 `problem_statement` 백필(일회성 CLI). BOJ 는 GitHub README, CF 는 codeforces.com 재수집. dry-run 기본, `--apply` 로만 기록 |
@@ -76,10 +80,11 @@
 ### 서비스 레이어
 | 파일 | 단일 책임 |
 |------|----------|
-| `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json`)·정규화(`normalize_review_result`). 제출 언어가 SQL 이면 쿼리 리뷰 프롬프트를 쓴다(`build_review_prompts` — JSON 키는 동일). 클라이언트는 `llm_client` 를 쓴다 |
+| `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json` — 본문 전체를 감싼 코드 펜스는 벗긴다)·정규화(`normalize_review_result`). 제출 언어가 SQL 이면 쿼리 리뷰 프롬프트를 쓴다(`build_review_prompts` — JSON 키는 동일). `claude_gate` 의 답을 먼저 쓰고, 없거나 JSON 객체로 못 읽으면 `llm_client` |
+| `claude_gate.py` | LLM 제공자 선택 — 소유자 요청이고 토큰이 있으면 `claude_client` 로 답을 받고, 아니거나 어떤 이유로든 실패하면 None(호출부가 `llm_client` 로 진행). 실패 사유는 warning 로그로만 남긴다 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 — 밴드는 BOJ 티어 / CF 레이팅 / LeetCode 난이도(1~3) |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준/LeetCode) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시. 테마 목록은 플랫폼별이다(`SQL (Database)` 는 LeetCode 전용) |
-| `statement_translator.py` | 문제 본문 한국어 번역(출처·HTML 보존 여부는 호출자가 지정). `llm_client` 를 쓴다 — CF 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
+| `statement_translator.py` | 문제 본문 한국어 번역(출처·HTML 보존 여부는 호출자가 지정). `claude_gate` 의 답을 먼저 쓰고, 없으면 `llm_client` 를 쓴다 — CF 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
 
 ### 데모 인프라
 | 파일 | 단일 책임 |
@@ -151,6 +156,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/import_github.py` | `POST /api/import-github` | BaekjoonHub 저장소 가져오기 |
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/import_leetcode.py` | `POST /api/import-leetcode` | LeetCode AC 기록 가져오기 — 세션 쿠키(요청 > `.env`)가 있으면 코드까지, 없으면 공개 최근 AC 목록 |
+| `routes/owner.py` | `POST /api/owner/key` | 소유자 열쇠 등록 — 맞으면 `owner_key` 쿠키(HttpOnly·SameSite=Strict·1년)를 심는다. 틀리거나 `OWNER_KEY` 미설정이면 403, 데모 403 |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
 | `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) · 요청 검증(`require_platform`·`require_language`·`require_reviewable_code`) · 상류 실패 매핑(`upstream_failure`·`run_llm`) · LLM 전제 검사(`require_openai_key`) · 평균 난이도 표기(`average_difficulty`) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
@@ -176,6 +182,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `command-palette.js` | ⌘K 팔레트 — 탭 이동 + 문제 검색 → 회차 선택 → 불러오기 |
 | `theme.js` | 다크/라이트 테마 토글 (`html[data-theme]`). 첫 페인트 전 확정은 `index.html` `<head>` 인라인 스크립트가 담당 |
 | `github.js` | GitHub OAuth 연결 UI |
+| `owner-key.js` | 소유자 열쇠 등록 — `/#owner=<열쇠>` 로 열면 해시를 지우고 `POST /api/owner/key` 로 보낸다(해시는 서버 요청 로그에 남지 않는다) |
 | `tabs.js` | 탭 전환 네비게이션. `activateTab(name)` 이 유일한 전환 경로다 — 탭별 lazy loader 와 모바일 메뉴 닫기를 반드시 통과한다 |
 | `modal-a11y.js` | 모달 접근성 공통 — Esc 닫기·포커스 트랩·초기 포커스·복원을 `registerModal()` 한 곳에서 등록한다. 모달마다 복제하면 새 모달에서 또 빠진다. `escapeCloses: false` 는 Esc 닫기만 끈다(에디터가 든 모달용) |
 | `draft.js` | 에디터 임시 저장 — 디바운스 자동 저장·복원·'임시 저장' 버튼. 문제 뷰어만 열 때 `{platform}:{ref}` 에 붙는다. 코드 리뷰 탭 에디터는 저장하지 않는다. `setDraftBlank` 로 등록한 내용(문제 스텁)은 빈 코드로 취급한다 |
@@ -221,6 +228,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/execute.py` | 실행 전용 서비스 POST /run | ID 토큰을 붙여 코드 실행을 위임(EXECUTOR_URL) |
 | `routes/stats.py`·`routes/recommend.py` | `helpers.average_difficulty` | 평균 난이도 조회 + 표시 라벨(내부에서 `db.get_average_tier`/`get_average_cf_rating`) |
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | LLM 종합 리포트 생성 |
+| `analyzer.py` · `statement_translator.py` | `claude_gate.claude_answer` | 소유자 요청이면 Claude 구독 답을 먼저 받는다(None 이면 `llm_client`) |
+| `claude_gate.py` | `claude_client.complete` | Claude Agent SDK → CLI 원샷 호출 |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
 | `routes/import_github.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_codeforces.py` | `clients.get_codeforces_user_submissions` | CF 제출 기록 조회 |
@@ -246,6 +255,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `load-submission.js` | `GET /api/reviews/problem/{platform}/{ref}` | 지난 제출 코드·언어·문제 설명 조회 |
 | `command-palette.js` | `GET /api/reviews/grouped` | 팔레트 문제 검색 목록 |
 | `draft.js` | `GET /api/drafts/{key}` · `POST /api/drafts/{key}` | 임시 저장본 복원 / 자동·수동 저장 |
+| `owner-key.js` | `POST /api/owner/key` | 소유자 열쇠 쿠키 등록 |
 
 ---
 
@@ -266,6 +276,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 12 | `executor/runner.py` | 실행 자원 상한 — 스트림당 출력 64KB(넘는 바이트는 읽어서 버린다: 파이프를 비워야 자식이 막히지 않는다), stdin 64KB, 실행 10초, 그리고 **프로세스 그룹째 종료**(`start_new_session` + `killpg`). 직접 자식만 죽이면 제출 코드가 남긴 손자가 인스턴스 수명 동안 CPU 를 계속 쓴다. `tests/test_executor_runner.py` 가 넷을 실측으로 고정 |
 | 13 | `routes/execute.py` | `/api/execute` 는 인증이 없는 공개 엔드포인트다 — `X-Forwarded-For` 첫 항목 당 분당 30회로 제한한다(`request.client` 는 GFE 다). Cloud Run 은 클라이언트가 보낸 `X-Forwarded-For` 를 버리지 않으므로 이 키는 요청자가 정할 수 있다 — 그래서 헤더가 무엇이든 성립하는 전역 분당 120회 상한을 함께 건다. 실행 서비스의 `--max-instances 5` 가 비용 상한이고, 이 전역 상한이 그 비용 상한을 지킨다 |
 | 14 | `routes/leetcode_judge.py` | `/api/leetcode/run`·`/api/leetcode/submit` 도 인증 없는 공개 엔드포인트인데, 서버에 설정된 **소유자의 LeetCode 세션**으로 코드를 실행·제출한다(제출은 계정 기록에 남는다). 요청자 구분 없는 프로세스 전역 분당 20회(run·submit 합산) 상한만 있다 — 익명 남용으로 계정이 제한되는 것을 막는 몫이고, 소진되면 소유자도 1분간 429 다. 데모는 403 |
+| 15 | `claude_client.py` · `owner_access.py` | Claude 구독 호출에는 **도구를 하나도 주지 않는다**(`--tools ""`, 설정 파일·MCP 미사용, 1턴). 프롬프트에 외부 문제 본문과 사용자 코드가 실려서, 도구가 있으면 그 안의 지시문이 컨테이너에서 명령을 실행하거나 `/proc/1/environ` 같은 파일을 읽게 할 수 있다. 도구가 없어도 CLI 는 기본값으로 프롬프트 속 `@<경로>` 를 추론 전에 파일 내용으로 펼친다(로컬 재현) — `verbatim_prompts=True` 로 끈다(CLI 2.1.248 이상이어야 먹으므로 SDK 버전 고정을 유지한다). 구독은 소유자 본인 요청에만 쓴다 — `OWNER_KEY` 와 같은 HttpOnly·SameSite=Strict 쿠키가 있는 요청만 Claude 로 가고, 나머지는 OpenAI 호환 경로다. `tests/test_claude_client.py`(SDK 가 만드는 CLI 인자까지)·`tests/test_owner_access.py` 가 고정 |
 
 ### 남아 있는 위험 — 앱에 인증이 없다
 

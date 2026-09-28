@@ -278,6 +278,11 @@ class DraftSaveRequest(BaseModel):
         return validate_code_length(v)
 
 
+class OwnerKeyRequest(BaseModel):
+    """소유자 열쇠 등록 요청. 열쇠는 `secrets.token_hex(32)` 같은 64자 문자열이다."""
+    key: str = Field(max_length=200)
+
+
 class ReviewResponse(BaseModel):
     problem_id: int
     platform: str
