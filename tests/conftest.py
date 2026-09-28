@@ -39,10 +39,10 @@ _DEMO_AWARE_MODULES = [
     # server 도 넣는다 — client 픽스처가 lifespan 을 실제로 태우므로, 빠뜨리면
     # DEMO_MODE=true 환경에서 demo_seed.seed() 가 테스트 DB 에 행을 심고 마이그레이션이
     # 스킵된다.
-    "server",
-    "routes.auth", "routes.execute", "routes.github_push",
+    "server", "login_gate",
+    "routes.auth", "routes.execute", "routes.github_push", "routes.google_auth",
     "routes.import_codeforces", "routes.import_github", "routes.import_leetcode", "routes.leetcode_judge",
-    "routes.owner", "routes.pending_review", "routes.problem", "routes.problem_ask", "routes.problem_leetcode",
+    "routes.pending_review", "routes.problem", "routes.problem_ask", "routes.problem_leetcode",
     "routes.recommend", "routes.report", "routes.rereview",
     "routes.review", "routes.solved", "routes.themes",
 ]
@@ -77,6 +77,20 @@ def isolated_execute_route(monkeypatch):
     monkeypatch.setattr(execute_route.settings, "executor_url", None)
     monkeypatch.setattr(execute_route, "_recent_calls", {})
     monkeypatch.setattr(execute_route, "_global_calls", [])
+
+
+@pytest.fixture(autouse=True)
+def no_login_gate(monkeypatch):
+    """로그인 게이트를 끈 상태를 전제로 한다.
+
+    개발자 `.env` 에 GOOGLE_*·AUTH_ALLOWED_EMAILS 가 있거나 K_SERVICE 가 잡혀 있으면 앱 전체가
+    401·503 이 된다. 게이트를 보는 테스트는 스스로 설정을 넣는다.
+    """
+    from config import settings
+    monkeypatch.setattr(settings, "google_client_id", "")
+    monkeypatch.setattr(settings, "google_client_secret", "")
+    monkeypatch.setattr(settings, "auth_allowed_emails", "")
+    monkeypatch.delenv("K_SERVICE", raising=False)
 
 
 def _assert_disposable_target(url):

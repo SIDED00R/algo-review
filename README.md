@@ -5,6 +5,7 @@
 **라이브 데모**: https://algo-review-demo-707325519995.asia-northeast3.run.app/
 
 > 데모는 실제 API 없이 샘플 데이터로 동작합니다. 모든 기능을 자유롭게 체험해보세요.
+> 운영 서비스는 허용한 구글 계정으로 로그인해야 들어갈 수 있습니다(데모는 로그인 없이).
 
 현재 지원 범위:
 - `BOJ`: 코드 리뷰, 문제 추천, 통계
@@ -25,7 +26,7 @@
   - 문제를 앱 내에서 바로 보고 한국어 번역까지 제공합니다.
   - Codeforces 는 예제 입출력 직접 실행 (Python / C++) 지원. LeetCode 는 **LeetCode 채점기**로 예제 실행(Python 3 / C++ / MySQL 전부, 기대 출력은 LeetCode 가 계산)과 **실제 제출**(`LeetCode 에 제출` 버튼 → Accepted/오답·통과 케이스 수·실행 시간·제출 기록 링크)을 지원합니다. 커스텀 예제는 입력만(인자당 한 줄) 넣습니다. 유료(Premium) 문제는 본문 없이 링크만 보여줍니다. Database 문제는 에디터 언어가 MySQL 로 시작합니다. LeetCode 문제를 처음 열면 에디터에 LeetCode 공식 코드 스텁(알고리즘 문제는 `class Solution` 시그니처, Database 문제는 SQL 주석 한 줄)이 채워지고, 언어를 바꾸면 그 언어 스텁으로 바뀝니다. 임시 저장본이 있으면 스텁 대신 그 코드가 복원되며, 손대지 않은 스텁은 저장·제출되지 않습니다.
   - 코드를 쓰는 창이라 `Esc` 로는 닫히지 않습니다 (닫기는 ✕ 버튼 또는 바깥 클릭). 에디터 안에서 `Esc` 는 포커스만 빼냅니다.
-  - 본문 아래 **질문하기** 칸에서 그 문제에 대해 묻고 답을 받습니다(힌트·풀이 방향·반례 등, `Ctrl+Enter` 로 보내기). '에디터 코드 함께 보내기'를 켜면 작성 중인 코드도 함께 보냅니다. 같은 창 안에서는 앞선 문답을 이어 받고, 다른 문제를 열면 대화가 새로 시작됩니다. 답 위에 답한 모델 이름이 표시됩니다(소유자 브라우저는 Claude, 그 밖에는 설정된 OpenAI 호환 모델).
+  - 본문 아래 **질문하기** 칸에서 그 문제에 대해 묻고 답을 받습니다(힌트·풀이 방향·반례 등, `Ctrl+Enter` 로 보내기). '에디터 코드 함께 보내기'를 켜면 작성 중인 코드도 함께 보냅니다. 같은 창 안에서는 앞선 문답을 이어 받고, 다른 문제를 열면 대화가 새로 시작됩니다. 답 위에 답한 모델 이름이 표시됩니다(Claude 구독 토큰이 설정돼 있으면 Claude, 없거나 실패하면 설정된 OpenAI 호환 모델).
 - **코드 임시 저장**
   - 문제 뷰어 에디터(문제 추천·테마별 문제에서 여는 창)에서 작성 중인 코드가 서버에 자동 저장됩니다(입력이 멎으면 1.5초 뒤, 계속 입력해도 5초마다). 코드 리뷰 탭 에디터는 저장하지 않습니다.
   - 창을 닫거나 새로고침해도 같은 문제를 다시 열면 코드와 언어 선택이 복원됩니다. 임시 저장본은 문제마다 따로 남습니다.
@@ -182,6 +183,11 @@ gcloud run deploy algo-review \
 
 ```env
 OPENAI_API_KEY=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+AUTH_ALLOWED_EMAILS=you@gmail.com
+# 서버 공개 https 주소 — 구글 로그인·GitHub OAuth 콜백 주소와 쿠키 Secure 판정의 기준
+APP_URL=https://your-cloud-run-url
 DB_TYPE=postgres
 DB_NAME=boj_review
 DB_USER=boj_user
@@ -191,7 +197,6 @@ DB_SOCKET=/cloudsql/PROJECT:REGION:INSTANCE
 # GitHub OAuth (선택)
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
-APP_URL=https://your-cloud-run-url
 
 # CF import (선택)
 CODEFORCES_API_KEY=...
@@ -254,9 +259,9 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 ├── constants.py            # 플랫폼·티어 상수
 ├── llm_client.py           # OpenAI 클라이언트 싱글턴·응답 가드
 ├── claude_client.py        # Claude 구독 원샷 호출 (Claude Agent SDK, 도구 없음)
-├── claude_gate.py          # 소유자 요청이면 Claude 먼저, 실패하면 OpenAI 호환 경로로
+├── claude_gate.py          # 토큰이 있으면 Claude 먼저, 실패하면 OpenAI 호환 경로로
+├── login_gate.py           # 운영 구글 로그인 게이트 (세션 쿠키 검증 미들웨어)
 ├── problem_tutor.py        # 문제 뷰어 질문 답변 (본문·질문·앞선 문답 → 답)
-├── owner_access.py         # 소유자 열쇠 쿠키 판정 미들웨어
 ├── timestamps.py           # 저장 시각 규약
 ├── backfill_statements.py  # 문제 설명 백필 CLI
 ├── ARCHITECTURE.md         # 레이어 다이어그램 & 호출관계 문서
@@ -295,7 +300,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 
 - **Backend**: FastAPI + Uvicorn
 - **Frontend**: HTML / CSS / Vanilla JS
-- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, 문제 번역(CF·LeetCode): GPT-4o-mini) — 소유자 요청은 Claude 구독(Claude Agent SDK)을 먼저 쓴다
+- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, 문제 번역(CF·LeetCode): GPT-4o-mini) — Claude 구독 토큰이 설정돼 있으면 Claude 구독(Claude Agent SDK)을 먼저 쓴다
 - **BOJ 데이터**: solved.ac API
 - **Codeforces 데이터**: Codeforces API + 크롤링
 - **LeetCode 데이터**: LeetCode GraphQL(공개) + 구 REST 문제 목록, 내 제출은 세션 쿠키
@@ -309,7 +314,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `OPENAI_API_KEY` | ✅ (DEMO_MODE=false 일 때) | AI 코드 리뷰·리포트 및 문제 번역(CF·LeetCode) |
 | `GITHUB_CLIENT_ID` | 선택 | GitHub OAuth 앱 Client ID |
 | `GITHUB_CLIENT_SECRET` | 선택 | GitHub OAuth 앱 Client Secret |
-| `APP_URL` | 선택 | 서버 공개 URL (OAuth redirect 용) |
+| `APP_URL` | 운영 필수 | 서버 공개 https 주소. 구글 로그인·GitHub OAuth 콜백 주소, 미로그인 `/` 를 보내는 로그인 주소, 쿠키 Secure 판정의 기준이다. 설정하지 않으면 기본값 `http://localhost:8080` 이 쓰인다 — Cloud Run 에서 https 주소가 아니면 로그인 게이트가 예외 경로(`/health` 등) 밖의 모든 요청을 503 으로 막는다 |
 | `CODEFORCES_API_KEY` | 선택 | CF 소스코드 import용 |
 | `CODEFORCES_API_SECRET` | 선택 | CF 소스코드 import용 |
 | `LEETCODE_SESSION` | 선택 | LeetCode 브라우저 로그인 쿠키. 내 제출 코드 import(없으면 최근 AC 목록만, 코드 없음)와 뷰어의 예제 실행·제출(LeetCode 채점기)에 쓴다 |
@@ -321,9 +326,11 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `OPENAI_TEMPERATURE` | 선택 | 문제 번역 temperature (기본값: `0.3`) |
 | `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·번역) 공통 타임아웃(초) (기본값: `15`) |
 | `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `1`) |
-| `CLAUDE_CODE_OAUTH_TOKEN` | 선택 | `claude setup-token` 으로 발급한 Claude 구독 장기 토큰. 설정하면 소유자 요청의 LLM 호출이 Claude 를 먼저 쓰고, 실패하면(사용량 한도·토큰 만료 등) OpenAI 호환 경로로 넘어간다 |
+| `GOOGLE_CLIENT_ID` | 운영 필수 | 구글 로그인 OAuth 클라이언트 ID(웹 애플리케이션, 리디렉션 URI `<APP_URL>/auth/google/callback`) |
+| `GOOGLE_CLIENT_SECRET` | 운영 필수 | 구글 로그인 OAuth 클라이언트 보안 비밀. 세션 쿠키 서명 키도 여기서 파생한다 — 바꾸면 모든 로그인이 풀린다 |
+| `AUTH_ALLOWED_EMAILS` | 운영 필수 | 로그인을 허용할 구글 이메일(쉼표 구분). 위 셋이 모두 있어야 로그인이 켜진다 — 로컬에서 비우면 로그인 없이 열리고, Cloud Run 에서 비면 모든 요청이 503 으로 막힌다. 데모(`DEMO_MODE=true`)는 로그인 없이 |
+| `CLAUDE_CODE_OAUTH_TOKEN` | 선택 | `claude setup-token` 으로 발급한 Claude 구독 장기 토큰. 설정하면 모든 LLM 호출이 Claude 를 먼저 쓰고, 실패하면(사용량 한도·토큰 만료 등) OpenAI 호환 경로로 넘어간다. 서비스에 들어올 수 있는 누구의 요청이든 이 구독으로 처리된다 |
 | `CLAUDE_MODEL` | 선택 | Claude CLI 모델 별칭(`sonnet`·`opus` 등) — 비우면 구독 계정의 기본 모델 |
-| `OWNER_KEY` | 선택 | 소유자 열쇠. 브라우저에서 한 번 `<APP_URL>/#owner=<열쇠>` 로 열면 HttpOnly 쿠키가 심기고, 그 쿠키가 있는 요청만 Claude 구독을 쓴다 |
 | `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. `/api/execute` 는 이 서비스로 위임한다 — 비워 두면 403 이다 |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |
