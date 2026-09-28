@@ -9,6 +9,9 @@ DB 레이어와 외부 클라이언트는 레이어 다이어그램에서 형제
 
 PLATFORMS = ("codeforces", "boj", "leetcode")
 
+# LLM 프롬프트에 적는 플랫폼 이름(리뷰·문제 질문).
+PLATFORM_LABELS = {"boj": "백준", "codeforces": "Codeforces", "leetcode": "LeetCode"}
+
 # LeetCode 난이도. reviews.tier 에 1~3 으로 저장하고 tier_name 은 아래 라벨을 쓴다.
 LC_DIFFICULTY_NAMES = {1: "Easy", 2: "Medium", 3: "Hard"}
 

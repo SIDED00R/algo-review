@@ -463,6 +463,17 @@
             <span class="spinner"></span> 문제 불러오는 중...
           </div>
           <div id="pm-statement" class="hidden"></div>
+          <section id="pm-ask" class="pm-ask hidden" aria-labelledby="pm-ask-title">
+            <h3 id="pm-ask-title" class="pm-ask-title">이 문제에 대해 질문하기</h3>
+            <div id="pm-ask-thread" class="pm-ask-thread" aria-live="polite"></div>
+            <textarea id="pm-ask-input" rows="3" aria-labelledby="pm-ask-title"
+                      placeholder="예) 접근 방향 힌트만 주세요 / 제 코드의 반례가 있을까요? (Ctrl+Enter 로 보내기)"></textarea>
+            <div class="pm-ask-row">
+              <label class="pm-ask-code"><input type="checkbox" id="pm-ask-with-code"> 에디터 코드 함께 보내기</label>
+              <button type="button" id="pm-ask-btn" class="btn-primary btn-sm"
+                      data-label="질문하기" data-loading-label="답을 기다리는 중...">질문하기</button>
+            </div>
+          </section>
         </div>
         <!-- 오른쪽: 코드 에디터 + 실행 -->
         <div class="pm-right">
@@ -559,6 +570,7 @@
   <script src="/static/js/recommend.js?v=__V__"></script>
   <script src="/static/js/themes.js?v=__V__"></script>
   <script src="/static/js/problem-modal.js?v=__V__"></script>
+  <script src="/static/js/problem-ask.js?v=__V__"></script>
   <script src="/static/js/leetcode-judge.js?v=__V__"></script>
   <script src="/static/js/stats.js?v=__V__"></script>
   <script src="/static/js/history.js?v=__V__"></script>

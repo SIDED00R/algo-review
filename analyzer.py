@@ -4,7 +4,7 @@ import re
 
 from claude_gate import claude_answer
 from config import settings
-from constants import unsupported_platform
+from constants import PLATFORM_LABELS, unsupported_platform
 from llm_client import choice_text, get_client, require_choice
 
 logger = logging.getLogger("uvicorn.error")
@@ -12,9 +12,6 @@ logger = logging.getLogger("uvicorn.error")
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
 _MAX_TOKENS_REPORT = settings.openai_report_max_tokens
-
-# 프롬프트에 적는 플랫폼 이름. 없는 플랫폼은 분석하지 않는다.
-_PLATFORM_LABELS = {"boj": "백준", "codeforces": "Codeforces", "leetcode": "LeetCode"}
 
 # 언어 select 값과 LeetCode 언어명(mysql·mssql·postgresql·oraclesql) 모두 "sql" 을 포함한다.
 _SQL_LANG_RE = re.compile(r"sql", re.I)
@@ -148,9 +145,9 @@ def build_review_prompts(problem_info: dict, problem_statement: str, code: str,
     """(system, user) 프롬프트. SQL 언어면 쿼리 리뷰 판을, 아니면 알고리즘 판을 쓴다 — JSON 키는 같다."""
     tags_str = ", ".join(problem_info["tags"]) if problem_info["tags"] else "태그 없음"
     platform = (problem_info.get("platform") or "boj").lower()
-    if platform not in _PLATFORM_LABELS:
+    if platform not in PLATFORM_LABELS:
         raise unsupported_platform(platform)
-    platform_label = _PLATFORM_LABELS[platform]
+    platform_label = PLATFORM_LABELS[platform]
     problem_label = problem_info.get("problem_ref") or problem_info.get("id")
     sql = is_sql_language(language)
     kind = "SQL 문제와 쿼리" if sql else "문제와 풀이 코드"

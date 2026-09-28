@@ -100,9 +100,11 @@ async function openProblemModal(platform, ref, title, tierName) {
   const spec = platformSpec(platform);
   // snippets 는 응답이 오면 언어 → 기본 코드 사전이 된다(없는 플랫폼은 빈 사전). draftChecked 는
   // 임시 저장본 조회가 끝나면 선다. appliedSnippet 은 fillCodeSnippet 이 마지막에 채운 값이다.
-  const problem = { platform, ref, samples: [], judge: null,
+  const problem = { platform, ref, title, samples: [], judge: null,
                     snippets: null, draftChecked: false, appliedSnippet: undefined };
   _currentProblem = problem;
+  // 질문 대화는 문제마다 새로 시작한다(problem-ask.js).
+  resetProblemAsk(problem);
 
   const modal = document.getElementById('problem-modal');
   modal.classList.remove('hidden');
@@ -164,6 +166,7 @@ async function openProblemModal(platform, ref, title, tierName) {
 
     // 식별자가 slug 인 플랫폼은 응답의 번호(problem_id)를 제목에 쓴다. CF 응답에는 없어 ref 그대로다.
     document.getElementById('pm-title').textContent = `${data.problem_id ?? ref}. ${data.title}`;
+    _currentProblem.title = data.title;
     const pUrl = problemUrl({ platform, problem_ref: ref, problem_url: data.url });
     document.getElementById('pm-link').innerHTML =
       `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer">문제 링크 열기</a>`;
@@ -174,6 +177,7 @@ async function openProblemModal(platform, ref, title, tierName) {
       document.getElementById('pm-meta').textContent = [data.difficulty, data.category].filter(Boolean).join(' · ');
       stmtEl.innerHTML = renderHtmlStatement(data);
       stmtEl.classList.remove('hidden');
+      showProblemAsk();
       return;
     }
     document.getElementById('pm-meta').textContent = `${data.time_limit} · ${data.memory_limit}`;
@@ -216,6 +220,7 @@ async function openProblemModal(platform, ref, title, tierName) {
 
     stmtEl.innerHTML = sectionsHtml + samplesHtml;
     stmtEl.classList.remove('hidden');
+    showProblemAsk();
     if (typeof renderMathInElement !== 'undefined') {
       renderMathInElement(stmtEl, {
         delimiters: [
