@@ -1,9 +1,13 @@
 import json
+import logging
 import re
 
+from claude_gate import claude_answer
 from config import settings
 from constants import unsupported_platform
 from llm_client import choice_text, get_client, require_choice
+
+logger = logging.getLogger("uvicorn.error")
 
 GPT_MODEL = settings.openai_model or "gpt-4o"
 _MAX_TOKENS_REVIEW = settings.openai_max_tokens or 2048
@@ -82,6 +86,9 @@ efficiency 기준:
 
 # JSON 의 유효한 이스케이프 하나, 또는 그 밖의 백슬래시 하나.
 _ESCAPE_OR_STRAY_BACKSLASH = re.compile(r'\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4})|\\')
+# 본문 전체를 감싼 코드 펜스. Claude 경로(claude_client)는 JSON 모드 없이 부르므로 답을
+# ```json … ``` 로 감싸 줄 때가 있다.
+_WHOLE_CODE_FENCE = re.compile(r"^```[A-Za-z]*[ \t]*\n(.*)\n```$", re.S)
 
 
 def _escape_stray_backslashes(raw: str) -> str:
@@ -95,7 +102,11 @@ def _escape_stray_backslashes(raw: str) -> str:
 
 
 def parse_review_json(raw: str) -> dict:
-    """LLM 응답 본문을 dict 로 읽는다. 실패하면 백슬래시를 복구해 한 번 더 시도한다."""
+    """LLM 응답 본문을 dict 로 읽는다. 본문 전체를 감싼 코드 펜스는 벗긴다.
+    실패하면 백슬래시를 복구해 한 번 더 시도한다."""
+    fenced = _WHOLE_CODE_FENCE.match(raw.strip())
+    if fenced:
+        raw = fenced.group(1)
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -167,9 +178,20 @@ def build_review_prompts(problem_info: dict, problem_statement: str, code: str,
 
 
 def analyze_code(problem_info: dict, problem_statement: str, code: str, language: str = "") -> dict:
-    client = get_client()
     system_prompt, user_prompt = build_review_prompts(problem_info, problem_statement, code, language)
 
+    claude_raw = claude_answer(system_prompt, user_prompt)
+    if claude_raw is not None:
+        try:
+            parsed = parse_review_json(claude_raw)
+        except ValueError:
+            parsed = None
+        # Claude 경로는 JSON 모드 없이 부르므로 `[]`·`null` 같은 객체 아닌 JSON 도 올 수 있다.
+        if isinstance(parsed, dict):
+            return normalize_review_result(parsed)
+        logger.warning("Claude 리뷰 응답을 JSON 객체로 읽지 못함 — OpenAI 호환 엔드포인트로 넘어간다")
+
+    client = get_client()
     response = client.chat.completions.create(
         model=GPT_MODEL,
         messages=[
@@ -196,8 +218,6 @@ def analyze_code(problem_info: dict, problem_statement: str, code: str, language
 
 def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -> str:
     # 빈 입력 안내는 라우터(routes/report.py)가 400 으로 낸다.
-
-    client = get_client()
 
     stats_text = "\n".join(
         f"- {s['tag']}: 총 {s['total_count']}회 (잘함 {s['good_count']}회, 부족 {s['poor_count']}회)"
@@ -227,6 +247,11 @@ def get_cumulative_analysis(tag_stats: list[dict], review_history: list[dict]) -
 
 을 300자 이상으로 설명해주세요."""
 
+    claude_text = claude_answer("", prompt)
+    if claude_text is not None:
+        return claude_text
+
+    client = get_client()
     response = client.chat.completions.create(
         model=GPT_MODEL,
         messages=[{"role": "user", "content": prompt}],

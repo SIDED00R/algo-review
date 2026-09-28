@@ -1,5 +1,6 @@
 import re
 
+from claude_gate import claude_answer
 from clients.codeforces import TEX_IMG_MARKER_RE
 from config import settings
 from llm_client import choice_text, get_client, require_choice
@@ -87,11 +88,18 @@ def translate_statement(text: str, title: str, *, source: str, html: bool = Fals
     CF 입력은 이미 clients.codeforces.normalize_cf_math 를 거친 $…$ 형식이다.
     """
     text, image_urls = _mask_image_markers(text)
+    system_prompt = _system_prompt(source, html)
+    user_prompt = f"Problem: {title}\n\nTranslate this text:\n\n{text}"
+
+    claude_text = claude_answer(system_prompt, user_prompt)
+    if claude_text is not None:
+        return _unmask_image_markers(claude_text, image_urls)
+
     resp = get_client().chat.completions.create(
         model=settings.openai_model or "gpt-4o-mini",
         messages=[
-            {"role": "system", "content": _system_prompt(source, html)},
-            {"role": "user", "content": f"Problem: {title}\n\nTranslate this text:\n\n{text}"},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
         max_tokens=_MAX_TOKENS,
         temperature=_TEMPERATURE,

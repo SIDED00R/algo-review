@@ -252,6 +252,9 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 ├── warmup.py               # 기동 직후 테마 캐시 백그라운드 예열
 ├── constants.py            # 플랫폼·티어 상수
 ├── llm_client.py           # OpenAI 클라이언트 싱글턴·응답 가드
+├── claude_client.py        # Claude 구독 원샷 호출 (Claude Agent SDK, 도구 없음)
+├── claude_gate.py          # 소유자 요청이면 Claude 먼저, 실패하면 OpenAI 호환 경로로
+├── owner_access.py         # 소유자 열쇠 쿠키 판정 미들웨어
 ├── timestamps.py           # 저장 시각 규약
 ├── backfill_statements.py  # 문제 설명 백필 CLI
 ├── ARCHITECTURE.md         # 레이어 다이어그램 & 호출관계 문서
@@ -290,7 +293,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 
 - **Backend**: FastAPI + Uvicorn
 - **Frontend**: HTML / CSS / Vanilla JS
-- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, 문제 번역(CF·LeetCode): GPT-4o-mini)
+- **AI**: OpenAI API (코드 리뷰·리포트: GPT-4o, 문제 번역(CF·LeetCode): GPT-4o-mini) — 소유자 요청은 Claude 구독(Claude Agent SDK)을 먼저 쓴다
 - **BOJ 데이터**: solved.ac API
 - **Codeforces 데이터**: Codeforces API + 크롤링
 - **LeetCode 데이터**: LeetCode GraphQL(공개) + 구 REST 문제 목록, 내 제출은 세션 쿠키
@@ -316,6 +319,9 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 | `OPENAI_TEMPERATURE` | 선택 | 문제 번역 temperature (기본값: `0.3`) |
 | `OPENAI_TIMEOUT` | 선택 | LLM 호출(리뷰·리포트·번역) 공통 타임아웃(초) (기본값: `15`) |
 | `OPENAI_MAX_RETRIES` | 선택 | LLM 호출 재시도 횟수 (기본값: `1`) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | 선택 | `claude setup-token` 으로 발급한 Claude 구독 장기 토큰. 설정하면 소유자 요청의 LLM 호출이 Claude 를 먼저 쓰고, 실패하면(사용량 한도·토큰 만료 등) OpenAI 호환 경로로 넘어간다 |
+| `CLAUDE_MODEL` | 선택 | Claude CLI 모델 별칭(`sonnet`·`opus` 등) — 비우면 구독 계정의 기본 모델 |
+| `OWNER_KEY` | 선택 | 소유자 열쇠. 브라우저에서 한 번 `<APP_URL>/#owner=<열쇠>` 로 열면 HttpOnly 쿠키가 심기고, 그 쿠키가 있는 요청만 Claude 구독을 쓴다 |
 | `EXECUTOR_URL` | 선택 | 격리된 실행 전용 서비스(`executor/`)의 URL. `/api/execute` 는 이 서비스로 위임한다 — 비워 두면 403 이다 |
 | `CORS_ORIGINS` | 선택 | 허용 CORS 출처 (기본값: `http://localhost:8080`) |
 | `DEMO_MODE` | 선택 | `true` 설정 시 mock 데이터로 동작 (API 키 불필요) |

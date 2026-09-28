@@ -17,10 +17,11 @@ import warmup
 from config import settings
 from db.connection import session_scope
 from demo_mode import IS_DEMO
+from owner_access import OwnerContextMiddleware
 from routes import (
     auth, review, pending_review, rereview, github_push, problem, problem_leetcode, execute, recommend,
     history, solved, import_github, import_codeforces, import_leetcode, leetcode_judge,
-    stats, report, themes, drafts,
+    stats, report, themes, drafts, owner,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -77,6 +78,9 @@ async def _unhandled_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "서버 내부 오류가 발생했습니다."})
 
 
+# 요청마다 소유자 열쇠 쿠키를 판정한다 — Claude 구독은 소유자 요청에만 쓴다(claude_gate).
+app.add_middleware(OwnerContextMiddleware)
+
 # 목록 응답이 커질 수 있다. minimum_size 아래는 그대로 통과한다.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
@@ -116,6 +120,7 @@ app.include_router(stats.router)
 app.include_router(report.router)
 app.include_router(themes.router)
 app.include_router(drafts.router)
+app.include_router(owner.router)
 
 
 @app.get("/health")
