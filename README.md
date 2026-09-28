@@ -25,6 +25,7 @@
   - 문제를 앱 내에서 바로 보고 한국어 번역까지 제공합니다.
   - Codeforces 는 예제 입출력 직접 실행 (Python / C++) 지원. LeetCode 는 **LeetCode 채점기**로 예제 실행(Python 3 / C++ / MySQL 전부, 기대 출력은 LeetCode 가 계산)과 **실제 제출**(`LeetCode 에 제출` 버튼 → Accepted/오답·통과 케이스 수·실행 시간·제출 기록 링크)을 지원합니다. 커스텀 예제는 입력만(인자당 한 줄) 넣습니다. 유료(Premium) 문제는 본문 없이 링크만 보여줍니다. Database 문제는 에디터 언어가 MySQL 로 시작합니다. LeetCode 문제를 처음 열면 에디터에 LeetCode 공식 코드 스텁(알고리즘 문제는 `class Solution` 시그니처, Database 문제는 SQL 주석 한 줄)이 채워지고, 언어를 바꾸면 그 언어 스텁으로 바뀝니다. 임시 저장본이 있으면 스텁 대신 그 코드가 복원되며, 손대지 않은 스텁은 저장·제출되지 않습니다.
   - 코드를 쓰는 창이라 `Esc` 로는 닫히지 않습니다 (닫기는 ✕ 버튼 또는 바깥 클릭). 에디터 안에서 `Esc` 는 포커스만 빼냅니다.
+  - 본문 아래 **질문하기** 칸에서 그 문제에 대해 묻고 답을 받습니다(힌트·풀이 방향·반례 등, `Ctrl+Enter` 로 보내기). '에디터 코드 함께 보내기'를 켜면 작성 중인 코드도 함께 보냅니다. 같은 창 안에서는 앞선 문답을 이어 받고, 다른 문제를 열면 대화가 새로 시작됩니다. 답 위에 답한 모델 이름이 표시됩니다(소유자 브라우저는 Claude, 그 밖에는 설정된 OpenAI 호환 모델).
 - **코드 임시 저장**
   - 문제 뷰어 에디터(문제 추천·테마별 문제에서 여는 창)에서 작성 중인 코드가 서버에 자동 저장됩니다(입력이 멎으면 1.5초 뒤, 계속 입력해도 5초마다). 코드 리뷰 탭 에디터는 저장하지 않습니다.
   - 창을 닫거나 새로고침해도 같은 문제를 다시 열면 코드와 언어 선택이 복원됩니다. 임시 저장본은 문제마다 따로 남습니다.
@@ -254,6 +255,7 @@ gcloud run services update algo-review --region asia-northeast3   --update-env-v
 ├── llm_client.py           # OpenAI 클라이언트 싱글턴·응답 가드
 ├── claude_client.py        # Claude 구독 원샷 호출 (Claude Agent SDK, 도구 없음)
 ├── claude_gate.py          # 소유자 요청이면 Claude 먼저, 실패하면 OpenAI 호환 경로로
+├── problem_tutor.py        # 문제 뷰어 질문 답변 (본문·질문·앞선 문답 → 답)
 ├── owner_access.py         # 소유자 열쇠 쿠키 판정 미들웨어
 ├── timestamps.py           # 저장 시각 규약
 ├── backfill_statements.py  # 문제 설명 백필 CLI

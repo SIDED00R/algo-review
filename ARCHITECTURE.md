@@ -4,11 +4,11 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js — 23개)                                │
+│  Browser (static/js/*.js — 24개)                                │
 │  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
-│  modal-a11y · draft · owner-key                                 │
+│  modal-a11y · draft · owner-key · problem-ask                   │
 │  import-history · import-github · import-codeforces             │
 │  import-leetcode · leetcode-judge                               │
 └────────────────────────┬────────────────────────────────────────┘
@@ -19,7 +19,7 @@
 │  problem · problem_leetcode · execute · recommend · themes      │
 │  history · solved · stats · report · drafts                     │
 │  import_github · import_codeforces · import_leetcode            │
-│  leetcode_judge · owner                                         │
+│  leetcode_judge · owner · problem_ask                           │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
@@ -32,6 +32,7 @@
 │  themes.py      │                            │
 │  claude_gate.py │                            │
 │ claude_client.py│                            │
+│ problem_tutor.py│                            │
 └────────┬────────┘                            │
          │                                     │ HTTP
 ┌────────▼────────────────────┐       ┌────────▼─────────────────────────┐
@@ -69,7 +70,7 @@
 |------|----------|
 | `server.py` | FastAPI 앱 초기화, 미들웨어·라우터 등록, `lifespan`으로 DB 마이그레이션/데모 시드 + 테마 캐시 예열 기동, `GET /`(index.html 서빙 + `__V__` 자산 캐시 버전 치환), `GET /health`, 전역 예외 핸들러 |
 | `config.py` | 모든 환경변수를 읽는 중앙 설정(pydantic-settings) — DB URL + OpenAI/GitHub/CF/LeetCode 세션/CORS 등 |
-| `constants.py` | 플랫폼 화이트리스트·티어 이름·LeetCode 난이도 라벨(`lc_difficulty_label`)·`normalize_platform()`·`unsupported_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
+| `constants.py` | 플랫폼 화이트리스트·LLM 프롬프트용 플랫폼 이름(`PLATFORM_LABELS`)·티어 이름·LeetCode 난이도 라벨(`lc_difficulty_label`)·`normalize_platform()`·`unsupported_platform()` — 레이어 어디서나 참조하는 순수 값. `clients` 에 두면 `import db` 만 해도 `requests`·`bs4` 가 함께 로드되는 레이어 역의존이 생긴다 |
 | `llm_client.py` | OpenAI 호환 클라이언트 싱글턴 + 응답 가드 — LLM 을 부르는 모듈(`analyzer`·`statement_translator`)이 공유한다. 호출마다 클라이언트를 만들면 httpx 커넥션 풀과 TLS 핸드셰이크를 매번 버리고, `max_retries` 를 안 박으면 실효 상한이 3×timeout + 백오프가 된다 |
 | `claude_client.py` | Claude 구독 원샷 호출 — Claude Agent SDK 가 CLI 를 띄워 답 한 덩어리를 받는다. 도구 0개(`--tools ""`)·프롬프트 글자 그대로(`verbatim_prompts` — `@<경로>` 파일 펼치기 끔)·설정 파일/MCP 미사용·1턴·세션 미저장. 호출마다 CLI 프로세스(약 230MB)가 떠서 동시 호출을 2개로 묶고, 30초 안에 자리가 안 나거나 120초 안에 답이 없으면 `ClaudeUnavailable` |
 | `owner_access.py` | 소유자 판정 — `OwnerContextMiddleware` 가 요청의 `owner_key` 쿠키를 `OWNER_KEY` 와 비교해 요청 범위 contextvar 에 둔다. 스레드풀·`asyncio.to_thread` 워커에도 그대로 보인다 |
@@ -82,6 +83,7 @@
 |------|----------|
 | `analyzer.py` | LLM 코드 분석 + 응답 파싱(`parse_review_json` — 본문 전체를 감싼 코드 펜스는 벗긴다)·정규화(`normalize_review_result`). 제출 언어가 SQL 이면 쿼리 리뷰 프롬프트를 쓴다(`build_review_prompts` — JSON 키는 동일). `claude_gate` 의 답을 먼저 쓰고, 없거나 JSON 객체로 못 읽으면 `llm_client` |
 | `claude_gate.py` | LLM 제공자 선택 — 소유자 요청이고 토큰이 있으면 `claude_client` 로 답을 받고, 아니거나 어떤 이유로든 실패하면 None(호출부가 `llm_client` 로 진행). 실패 사유는 warning 로그로만 남긴다 |
+| `problem_tutor.py` | 문제 질문 답변 — 뷰어가 보낸 본문·질문·(선택) 코드·앞선 문답으로 프롬프트를 조립하고, `claude_gate` 답을 먼저 쓰고 없으면 `llm_client`. (답, 답한 모델 표시 이름)을 돌려준다 |
 | `recommender.py` | 취약 태그 기반 문제 추천 알고리즘 — 밴드는 BOJ 티어 / CF 레이팅 / LeetCode 난이도(1~3) |
 | `themes.py` | 테마(알고리즘 분야)별 플랫폼별(CF/백준/LeetCode) 대표 문제 풀 조회, 네이티브 난이도 밴드 분류 + DB 캐시. 테마 목록은 플랫폼별이다(`SQL (Database)` 는 LeetCode 전용) |
 | `statement_translator.py` | 문제 본문 한국어 번역(출처·HTML 보존 여부는 호출자가 지정). `claude_gate` 의 답을 먼저 쓰고, 없으면 `llm_client` 를 쓴다 — CF 뷰어는 한 요청에 섹션 4개를 동시 번역하므로 싱글턴의 근거가 가장 큰 곳이다 |
@@ -157,6 +159,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/import_codeforces.py` | `POST /api/import-codeforces` | Codeforces 제출 기록 가져오기 |
 | `routes/import_leetcode.py` | `POST /api/import-leetcode` | LeetCode AC 기록 가져오기 — 세션 쿠키(요청 > `.env`)가 있으면 코드까지, 없으면 공개 최근 AC 목록 |
 | `routes/owner.py` | `POST /api/owner/key` | 소유자 열쇠 등록 — 맞으면 `owner_key` 쿠키(HttpOnly·SameSite=Strict·1년)를 심는다. 틀리거나 `OWNER_KEY` 미설정이면 403, 데모 403 |
+| `routes/problem_ask.py` | `POST /api/problem/ask` | 문제 뷰어 질문 → 답 + 답한 모델 이름. 본문은 뷰어가 이미 받은 번역본을 보내고 서버는 다시 긁지 않는다. 대화는 저장하지 않아 앞선 문답(최대 5개)을 요청마다 받는다. 빈 질문·지원 밖 플랫폼 422, 데모는 플랫폼별 고정 답변(데모 뷰어가 보여주는 문제에 맞춘다) |
 | `routes/models.py` | — | Pydantic 요청/응답 스키마 |
 | `routes/helpers.py` | — | GitHub push 공용 헬퍼 (README 빌더 + 리뷰 섹션, 저장 폴더·커밋 메시지 조립, 설정+override 병합, README+코드 번들 push) · 요청 검증(`require_platform`·`require_language`·`require_reviewable_code`) · 상류 실패 매핑(`upstream_failure`·`run_llm`) · LLM 전제 검사(`require_openai_key`) · 평균 난이도 표기(`average_difficulty`) |
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
@@ -190,6 +193,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
 | `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만) |
+| `problem-ask.js` | 문제 뷰어 질문 — 본문 아래 질문 칸. 뷰어가 받은 섹션·예제를 텍스트로 묶고 질문·(선택) 에디터 코드·앞선 문답과 함께 `/api/problem/ask` 로 보낸다. 답은 `renderMarkdown` + KaTeX. 문제를 새로 열면(`resetProblemAsk`) 대화를 비우고, 늦게 온 답은 `_askProblem` 세대 확인으로 버린다 |
 | `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
@@ -230,6 +234,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/report.py` | `analyzer.get_cumulative_analysis` | LLM 종합 리포트 생성 |
 | `analyzer.py` · `statement_translator.py` | `claude_gate.claude_answer` | 소유자 요청이면 Claude 구독 답을 먼저 받는다(None 이면 `llm_client`) |
 | `claude_gate.py` | `claude_client.complete` | Claude Agent SDK → CLI 원샷 호출 |
+| `routes/problem_ask.py` | `problem_tutor.answer_question` | 문제 질문 답변(내부에서 `claude_gate.claude_answer` → 없으면 `llm_client`) |
 | `routes/import_github.py` | `clients.get_baekjoonhub_problems` | BaekjoonHub 저장소 트리 파싱 |
 | `routes/import_github.py` | `clients.get_problems_bulk` | 대량 문제 정보 조회 |
 | `routes/import_codeforces.py` | `clients.get_codeforces_user_submissions` | CF 제출 기록 조회 |
@@ -256,6 +261,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `command-palette.js` | `GET /api/reviews/grouped` | 팔레트 문제 검색 목록 |
 | `draft.js` | `GET /api/drafts/{key}` · `POST /api/drafts/{key}` | 임시 저장본 복원 / 자동·수동 저장 |
 | `owner-key.js` | `POST /api/owner/key` | 소유자 열쇠 쿠키 등록 |
+| `problem-ask.js` | `POST /api/problem/ask` | 문제 뷰어 질문 |
 
 ---
 

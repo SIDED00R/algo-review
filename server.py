@@ -21,7 +21,7 @@ from owner_access import OwnerContextMiddleware
 from routes import (
     auth, review, pending_review, rereview, github_push, problem, problem_leetcode, execute, recommend,
     history, solved, import_github, import_codeforces, import_leetcode, leetcode_judge,
-    stats, report, themes, drafts, owner,
+    stats, report, themes, drafts, owner, problem_ask,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -121,6 +121,7 @@ app.include_router(report.router)
 app.include_router(themes.router)
 app.include_router(drafts.router)
 app.include_router(owner.router)
+app.include_router(problem_ask.router)
 
 
 @app.get("/health")

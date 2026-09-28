@@ -283,6 +283,50 @@ class OwnerKeyRequest(BaseModel):
     key: str = Field(max_length=200)
 
 
+MAX_QUESTION_LENGTH = 2_000
+MAX_ANSWER_LENGTH = 20_000
+MAX_ASK_TURNS = 5
+
+
+class ProblemAskTurn(BaseModel):
+    """앞선 질문 한 번과 그 답. 서버는 대화를 저장하지 않아 뷰어가 매번 보낸다."""
+    question: str = Field(max_length=MAX_QUESTION_LENGTH)
+    answer: str = Field(max_length=MAX_ANSWER_LENGTH)
+
+
+class ProblemAskRequest(BaseModel):
+    """문제 뷰어의 질문. 본문은 뷰어가 이미 받아 그린 번역본이다 — 서버가 다시 긁지 않는다."""
+    platform: str
+    problem_ref: str = Field(min_length=1, max_length=100)
+    title: str = Field(default="", max_length=MAX_TITLE_LENGTH)
+    statement: str = ""
+    question: str = Field(max_length=MAX_QUESTION_LENGTH)
+    code: str = ""
+    history: list[ProblemAskTurn] = Field(default_factory=list, max_length=MAX_ASK_TURNS)
+
+    @field_validator("platform")
+    @classmethod
+    def _validate_platform(cls, v):
+        return validate_platform(v)
+
+    @field_validator("question")
+    @classmethod
+    def question_not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("질문을 입력해주세요.")
+        return v.strip()
+
+    @field_validator("statement")
+    @classmethod
+    def statement_max_length(cls, v):
+        return validate_statement_length(v)
+
+    @field_validator("code")
+    @classmethod
+    def code_max_length(cls, v):
+        return validate_code_length(v)
+
+
 class ReviewResponse(BaseModel):
     problem_id: int
     platform: str

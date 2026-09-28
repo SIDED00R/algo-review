@@ -601,6 +601,7 @@ def test_every_async_render_path_checks_its_generation_token(js):
     """
     guarded = [
         ("problem-modal.js", "async function openProblemModal", r"_currentProblem\?\.ref !== ref"),
+        ("problem-ask.js", "async function askAboutProblem", r"_askProblem !== problem"),
         ("tier-chart.js", "async function loadTierChart", r"token !== _chartToken"),
         ("themes.js", "async function loadThemeProblems", r"token !== _themeToken"),
         ("stats.js", "async function loadStats", r"token !== _statsToken"),
