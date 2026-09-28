@@ -42,12 +42,18 @@ class Settings(BaseSettings):
     claude_code_oauth_token: str = ""
     # CLI 모델 별칭(sonnet·opus 등). 비우면 구독 계정의 기본 모델.
     claude_model: str | None = None
-    # 소유자 열쇠. 이 값과 같은 `owner_key` 쿠키를 가진 요청만 Claude 구독을 쓴다.
-    owner_key: str = ""
+
+    # --- Google 로그인 (운영 접근 제어, login_gate) ---
+    # 셋 다 설정되면 허용 이메일로 로그인한 요청만 앱을 쓴다(데모 제외).
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # 쉼표로 구분한 허용 구글 이메일.
+    auth_allowed_emails: str = ""
 
     # --- GitHub OAuth ---
     github_client_id: str = ""
     github_client_secret: str = ""
+    # 서버 공개 URL — 구글 로그인·GitHub OAuth 콜백 주소와 쿠키 Secure 판정의 기준.
     app_url: str = "http://localhost:8080"
 
     # --- Codeforces ---

@@ -1,6 +1,6 @@
 """문제 질문 답변 — 뷰어가 보낸 문제 본문·질문(앞선 대화 포함)으로 답을 만든다.
 
-소유자 요청이면 claude_gate 의 Claude 답을 쓰고, 없으면 OpenAI 호환 엔드포인트(llm_client)로 묻는다.
+claude_gate 의 Claude 답을 먼저 쓰고, 없으면 OpenAI 호환 엔드포인트(llm_client)로 묻는다.
 답과 함께 답한 모델의 표시 이름을 돌려준다(뷰어가 답 옆에 적는다).
 """
 from claude_gate import claude_answer

@@ -37,6 +37,10 @@ from clients.github import (
     get_boj_readme_paths,
     get_raw_github_content,
 )
+from clients.google_oauth import (
+    exchange_google_code,
+    google_auth_url,
+)
 from clients.utils import (
     ProblemNotFound,
     ProblemSearchError,
@@ -60,5 +64,6 @@ __all__ = [
     "normalize_codeforces_problem_ref",
     "get_github_file_sha", "push_file_to_github", "push_files_to_github",
     "get_baekjoonhub_problems", "get_boj_readme_paths", "get_raw_github_content",
+    "exchange_google_code", "google_auth_url",
     "ProblemNotFound", "ProblemSearchError", "UpstreamUnavailable", "get_problem_url", "get_file_extension",
 ]
