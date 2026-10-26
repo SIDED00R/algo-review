@@ -37,9 +37,13 @@ const PM_LANGUAGE_NAMES = { python3: 'Python 3', cpp: 'GNU C++17', mysql: 'MySQL
 
 // 예제 실행 영역(실행 버튼·결과·커스텀 예제). samples 가 있는 응답에서만 보인다.
 function setSampleUiVisible(visible) {
-  for (const sel of ['#pm-run-btn', '#pm-test-results', '#problem-modal .pm-custom-section']) {
+  for (const sel of ['#pm-run-btn', '#pm-test-results', '#problem-modal .pm-custom-section',
+                     '#pm-split-h', '#pm-pane-results']) {
     document.querySelector(sel).classList.toggle('hidden', !visible);
   }
+  // 예제가 없으면 아래 패널·손잡이가 사라지므로 에디터 패널이 열을 채운다(.pm-editor-only).
+  document.querySelector('#problem-modal .pm-right').classList.toggle('pm-editor-only', !visible);
+  refreshViewerEditor();
 }
 
 // 예제 결과에 따라 리뷰 버튼 문구를 바꾼다. 리뷰 버튼은 숨기지 않는다 — 예제가 실패해도
@@ -94,6 +98,12 @@ function resetRunButton() {
   const submitBtn = document.getElementById('pm-submit-btn');
   submitBtn.disabled = false;
   submitBtn.textContent = 'LeetCode 에 제출';
+}
+
+// CodeMirror 는 자기 컨테이너 크기 변화를 감지하지 않는다 — 패널 크기가 바뀌면 직접 refresh 한다.
+// refresh 는 change 를 내지 않아 임시 저장(draft.js)에 잡히지 않는다.
+function refreshViewerEditor() {
+  setTimeout(() => window.cmEditors['pm-code']?.refresh(), 0);
 }
 
 async function openProblemModal(platform, ref, title, tierName) {
@@ -447,12 +457,21 @@ document.getElementById('pm-custom-cases').addEventListener('click', e => {
   if (id) removeCustomCase(id);
 });
 
-const problemModalEl = document.getElementById('problem-modal');
-problemModalEl.addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeProblemModal();
+// ── 분할 손잡이 ── 상수(최소 px)는 surfaces.css 의 clamp() 와 같은 값이다. 비율(%)은 localStorage 에 남는다.
+attachPaneSplitter({
+  handle: document.getElementById('pm-split-v'),
+  container: document.querySelector('#problem-modal .pm-body'),
+  orientation: 'vertical', cssVar: '--pm-left-w', storageKey: 'viewer:split:v1:left',
+  defaultPct: 50, minPx: 280, minRemainingPx: 368, onResize: refreshViewerEditor,
+});
+attachPaneSplitter({
+  handle: document.getElementById('pm-split-h'),
+  container: document.querySelector('#problem-modal .pm-right'),
+  orientation: 'horizontal', cssVar: '--pm-editor-h', storageKey: 'viewer:split:v1:editor',
+  defaultPct: 55, minPx: 260, minRemainingPx: 164, onResize: refreshViewerEditor,
 });
 // Esc·포커스 트랩·초기 포커스는 공통 모듈이 담당한다. Esc 리스너는 모달 루트에 걸려야
 // 한다 — document 레벨이면 위에 열린 ⌘K 팔레트와 함께 닫힌다.
-// 이 모달은 코드 에디터를 담고 있어 Esc 로 닫지 않는다 — 닫기는 ✕ 버튼과 바깥 클릭이다.
+// 이 모달은 코드 에디터를 담고 있어 Esc 로 닫지 않는다 — 닫기는 ✕ 버튼이다(전체 화면이라 바깥이 없다).
 registerModal('problem-modal', closeProblemModal,
               { initial: '#pm-close-btn', escapeCloses: false });

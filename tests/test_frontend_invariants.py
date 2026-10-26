@@ -600,6 +600,72 @@ def test_problem_modal_has_a_height_ceiling(css):
         assert rule and "min-height: 0" in rule.group(1), f"{col} 에 min-height:0 이 없다"
 
 
+def test_problem_viewer_fills_the_viewport(css):
+    """뷰어는 전체 화면이다 — 바깥 여백·폭 상한·둥근 모서리가 없고 높이 상한은 뷰포트다."""
+    src = css["surfaces.css"]
+    overlay = re.search(r"^\.pm-overlay\s*\{([^}]*)\}", src, re.M)
+    assert overlay and re.search(r"padding:\s*0", overlay.group(1)), ".pm-overlay 에 바깥 여백이 남아 있다"
+    box = re.search(r"^\.pm-box\s*\{([^}]*)\}", src, re.M).group(1)
+    assert re.search(r"(?<!max-)height:\s*100%", box) and re.search(r"max-width:\s*none", box)
+    assert re.search(r"border-radius:\s*0", box)
+
+
+def test_problem_viewer_panes_are_split_by_accessible_handles(html, js):
+    """손잡이 둘 — role=separator, 방향, 이름, 키보드 포커스. 위치도 고정한다(문제문·에디터 사이, 에디터·결과 사이)."""
+    for hid, orient, pane in (("pm-split-v", "vertical", "pm-pane-statement"),
+                              ("pm-split-h", "horizontal", "pm-pane-editor")):
+        tag = re.search(rf'<div id="{hid}"[^>]*>', html)
+        assert tag, f"#{hid} 가 없다"
+        for attr in ('role="separator"', f'aria-orientation="{orient}"', 'aria-label="',
+                     f'aria-controls="{pane}"', 'tabindex="0"'):
+            assert attr in tag.group(0), f"#{hid} 에 {attr} 가 없다"
+    i = html.index
+    assert i('class="pm-left"') < i('id="pm-split-v"') < i('class="pm-right"')
+    assert i('id="pm-pane-editor"') < i('id="pm-code"') < i('id="pm-split-h"') \
+        < i('id="pm-pane-results"') < i('id="pm-test-results"')
+    sp = js["pane-splitter.js"]
+    assert re.search(r"window\.attachPaneSplitter\s*=", sp)
+    assert "setPointerCapture(" in sp and "pointercancel" in sp
+    for key in ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"):
+        assert re.search(rf"['\"]{key}['\"]", sp), f"{key} 처리가 없다"
+    assert re.search(r"setAttribute\(\s*['\"]aria-valuenow['\"]", sp)
+    assert "_lsGet(" in sp and "_lsSet(" in sp
+    assert not re.search(r"^\s*function _ls(Get|Set)\b", sp, re.M), "저장 헬퍼를 재선언했다 — 전역 충돌"
+    pm = js["problem-modal.js"]
+    assert len(re.findall(r"attachPaneSplitter\(\{", pm)) == 2
+    assert "viewer:split:v1:" in pm and "cssVar: '--pm-left-w'" in pm and "cssVar: '--pm-editor-h'" in pm
+    assert re.search(r"cmEditors\['pm-code'\]\?\.refresh\(\)", pm), "패널 크기가 바뀐 뒤 CodeMirror 를 refresh 하지 않는다"
+    order = re.findall(r"js/([a-z0-9-]+\.js)\?v=__V__", html)
+    assert order.index("editor.js") < order.index("pane-splitter.js") < order.index("problem-modal.js")
+
+
+def test_editor_pane_has_a_fixed_height_and_results_scroll_independently(css):
+    """위 패널은 clamp 높이, 아래 패널은 최소 140 에 독립 스크롤 — 두 최소 합이 열보다 크면 오른쪽 열이 스크롤한다.
+
+    아래 패널 최소가 0 이면 낮은 창(높이 약 540px 미만)에서 결과 패널이 140 아래로 줄고 약 400px 이하면 0 으로
+    눌리며, 오른쪽 열이 overflow:hidden 이면 스크롤로도 닿을 수 없다 — 실행 결과를 볼 길이 없다.
+    """
+    src = css["surfaces.css"]
+    body = re.search(r"^\.pm-body\s*\{([^}]*)\}", src, re.M).group(1)
+    assert "var(--pm-left-w" in body
+    top = re.search(r"^\.pm-pane-top\s*\{([^}]*)\}", src, re.M).group(1)
+    assert "var(--pm-editor-h" in top and "clamp(" in top
+    bottom = re.search(r"^\.pm-pane-bottom\s*\{([^}]*)\}", src, re.M).group(1)
+    assert "overflow-y: auto" in bottom and re.search(r"min-height:\s*140px", bottom), \
+        "결과 패널에 최소 높이가 없다 — 낮은 창에서 0 으로 눌린다"
+    right = re.search(r"^\.pm-right\s*\{([^}]*)\}", src, re.M).group(1)
+    assert re.search(r"overflow-y:\s*auto", right), "두 패널 최소 합보다 낮은 창에서 결과 패널에 닿을 수 없다"
+    assert re.search(r"^\.pm-code \.CodeMirror\s*\{[^}]*height:\s*100%", src, re.M)
+    mobile = src[src.index("@media (max-width: 860px)"):]
+    assert re.search(r"\.pm-splitter\s*\{\s*display:\s*none", mobile), "좁은 화면에서 손잡이를 숨기지 않는다"
+    assert re.search(r"\.pm-pane-bottom\s*\{[^}]*min-height:\s*0", mobile), "좁은 화면에서 결과 패널이 빈칸을 남긴다"
+
+
+def test_the_problem_viewer_closes_only_via_its_close_button(js):
+    """전체 화면이라 '바깥' 이 없다 — 백드롭 클릭 리스너는 죽은 코드다."""
+    assert not re.search(r"e\.target\s*===\s*e\.currentTarget", js["problem-modal.js"])
+
+
 def test_row_activation_does_not_swallow_child_control_keys(js):
     """행 안의 링크·버튼은 자기 동작을 해야 한다.
 
@@ -1108,6 +1174,7 @@ def test_the_load_order_check_sees_every_known_dependency(html):
     expected = {
         ("history.js", "registerModal"),
         ("problem-modal.js", "registerModal"),
+        ("problem-modal.js", "attachPaneSplitter"),
         ("command-palette.js", "registerModal"),
     }
     assert expected <= cross, f"검사가 놓친 의존: {sorted(expected - cross)}"
