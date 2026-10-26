@@ -9,6 +9,8 @@
   padding: var(--s-6) var(--s-4);
   overflow-y: auto;
 }
+/* 문제 풀기 모달은 뷰포트를 꽉 채운다 — 바깥 여백·폭 상한·둥근 모서리가 없다(닫기는 ✕ 버튼). */
+.pm-overlay { padding: 0; align-items: stretch; overflow: hidden; }
 .modal-box, .pm-box {
   background: var(--surface-1);
   border: 1px solid var(--line-strong);
@@ -18,11 +20,14 @@
 }
 .modal-box { max-width: 860px; padding: var(--s-6); }
 .pm-box {
-  max-width: 1240px;
+  max-width: none;
   /* 상한이 없으면 박스가 문제문 길이만큼 자라 .pm-body 의 overflow:hidden 과 두 열의
-     overflow-y:auto 가 전부 무효가 된다. 오버레이 패딩(--s-6 × 2)과 맞춘다. */
-  min-height: min(80vh, calc(100vh - 2 * var(--s-6)));
-  max-height: calc(100vh - 2 * var(--s-6));
+     overflow 가 전부 무효가 된다. 전체 화면이라 상한 = 뷰포트다(오버레이가 fixed; inset:0). */
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
   display: flex; flex-direction: column;
 }
 .modal-close { position: absolute; top: var(--s-4); right: var(--s-4); }
@@ -72,14 +77,53 @@
   text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 .pm-link a:hover { text-decoration-color: var(--fg); }
 
-.pm-body { display: grid; grid-template-columns: 1fr 1fr; flex: 1; overflow: hidden; }
-@media (max-width: 860px) { .pm-body { grid-template-columns: 1fr; } }
+/* 세 열: 문제문 · 손잡이 · 에디터. 왼쪽 폭은 JS(pane-splitter.js)가 쓰는 % 변수다 — % 라서 창 크기가
+   바뀌어도 비율이 따라온다. clamp() 의 두 상수(왼쪽 최소 280 · 오른쪽 최소 360 + 손잡이 8)는
+   problem-modal.js 의 attachPaneSplitter 인자와 같은 값이어야 한다. */
+.pm-body {
+  --pm-split-w: 8px;
+  display: grid;
+  grid-template-columns:
+    clamp(280px, var(--pm-left-w, 50%), calc(100% - 368px)) var(--pm-split-w) minmax(0, 1fr);
+  flex: 1; overflow: hidden;
+}
 /* 높이는 .pm-box 의 max-height 와 flex/grid 가 배분한다 — 열마다 calc(90vh - 헤더) 를
    들면 헤더 높이가 매직넘버가 된다. */
-.pm-left { padding: var(--s-5); border-right: 1px solid var(--line);
-  overflow-y: auto; min-height: 0; }
+.pm-left { padding: var(--s-5); overflow-y: auto; min-height: 0; }
+/* 위 패널은 고정 높이, 아래 패널이 독립 스크롤한다. 오른쪽 열은 두 패널 최소 높이 합(260 + 8 + 16 + 140)이
+   열보다 클 때(낮은 창)만 스크롤한다 — 숨기면 결과 패널이 화면 밖으로 밀려 닿을 수 없다. */
 .pm-right { padding: var(--s-5); display: flex; flex-direction: column;
   gap: var(--s-2); overflow-y: auto; min-height: 0; }
+
+/* 위 패널(언어·에디터·임시 저장·실행 버튼) — 높이는 .pm-right content-box 의 %. 두 상수(위 최소 260 ·
+   아래 최소 140 + 손잡이 8 + gap 16)는 attachPaneSplitter 인자와 같다. overflow:hidden 을 주지 않는다 —
+   .pm-code:focus-within 링(outline-offset 1px)이 잘린다. */
+.pm-pane-top {
+  flex: none;
+  height: clamp(260px, var(--pm-editor-h, 55%), calc(100% - 164px));
+  display: flex; flex-direction: column; gap: var(--s-2); min-height: 0;
+}
+/* 예제가 없는 응답(setSampleUiVisible(false))이면 아래 패널·손잡이가 숨고 에디터가 열을 채운다. */
+.pm-right.pm-editor-only .pm-pane-top { height: auto; flex: 1 1 0; }
+/* 아래 패널(결과·커스텀 예제) — 최소 140px 은 위 패널 clamp() 의 '아래 최소 140' 이다(0 이면 낮은 창에서
+   0 으로 눌린다). 4px 패딩은 버튼 포커스 링(2px + offset 2px)이 overflow 에 잘리지 않을 여유. */
+.pm-pane-bottom { flex: 1 1 0; min-height: 140px; overflow-y: auto; padding: var(--s-1); }
+
+/* 손잡이 — 8px 히트 영역에 1px 헤어라인. 크롬이라 무채색이다. touch-action:none 이 없으면 터치 드래그가
+   스크롤로 취소된다. */
+.pm-splitter { position: relative; flex: none; touch-action: none;
+  transition: background var(--dur) var(--ease); }
+.pm-splitter::before { content: ''; position: absolute; background: var(--line); }
+.pm-splitter-v { cursor: col-resize; }
+.pm-splitter-v::before { top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); }
+.pm-splitter-h { cursor: row-resize; height: var(--pm-split-w, 8px); border-radius: var(--r); }
+.pm-splitter-h::before { left: 0; right: 0; top: 50%; height: 1px; transform: translateY(-50%); }
+.pm-splitter:hover, .pm-splitter.is-dragging, .pm-splitter:focus-visible { background: var(--surface-2); }
+.pm-splitter:hover::before, .pm-splitter.is-dragging::before { background: var(--line-strong); }
+/* 드래그 중 — 텍스트 선택을 막고 커서를 컨테이너 전체에 유지한다. */
+.pm-body.is-resizing, .pm-right.is-resizing { user-select: none; }
+.pm-body.is-resizing { cursor: col-resize; }
+.pm-right.is-resizing { cursor: row-resize; }
 
 .pm-text { font-size: var(--fs-md); line-height: 1.7;
   white-space: normal; word-break: break-word; }
@@ -154,9 +198,9 @@
 /* ═══ CodeMirror ═══
    .cm-wrap 과 .pm-code 는 높이만 다르므로 공통 규칙으로 묶는다. */
 .cm-wrap, .pm-code { border-radius: var(--r); overflow: hidden; }
-/* min-height 를 래퍼에도 준다 — overflow:hidden 이 flex 자동 최소 크기를 0 으로 만들어
-   래퍼만 안쪽 min-height 아래로 축소되고, 그 차이를 잘라낸다(좁은 화면에서 35px). */
-.pm-code { flex: 1; display: flex; flex-direction: column; min-height: 260px; }
+/* 뷰어 에디터는 패널을 채우고 안에서 스크롤한다(높이는 사용자가 손잡이로 정한다). 코드 리뷰 탭(.cm-wrap)은
+   그대로 내용만큼 자란다. 좁은 화면은 아래 860px 규칙이 고정 높이로 되돌린다. */
+.pm-code { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .cm-wrap .CodeMirror, .pm-code .CodeMirror {
   height: auto;
   border: 1px solid var(--line-control);
@@ -166,8 +210,18 @@
   line-height: 1.6;
 }
 .cm-wrap .CodeMirror, .cm-wrap .CodeMirror-scroll { min-height: 380px; }
-.pm-code .CodeMirror, .pm-code .CodeMirror-scroll { min-height: 260px; }
-.pm-code .CodeMirror { flex: 1; }
+.pm-code .CodeMirror { height: 100%; flex: 1; min-height: 0; }
+
+@media (max-width: 860px) {
+  /* 한 열 — 손잡이는 숨기고(포커스도 받지 않는다), 에디터는 고정 320px 로 안에서 스크롤, 오른쪽 열이 스크롤한다.
+     .pm-code 의 flex/height 는 위 규칙을 덮어야 하므로 이 블록은 그 뒤에 둔다. */
+  .pm-body { grid-template-columns: 1fr; }
+  .pm-splitter { display: none; }
+  .pm-right { overflow-y: auto; }
+  .pm-pane-top { height: auto; flex: none; }
+  .pm-code { flex: none; height: 320px; }
+  .pm-pane-bottom { flex: none; overflow: visible; min-height: 0; }
+}
 /* CodeMirror 는 숨은 textarea 로 입력을 받아 링이 보이지 않는다 — 래퍼에 링을 그린다.
    내부 .CodeMirror 에 주면 위 overflow:hidden 에 클리핑된다(자기 overflow 는 자기
    outline 을 자르지 않는다). */

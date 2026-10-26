@@ -481,7 +481,7 @@
       </div>
       <div class="pm-body">
         <!-- 왼쪽: 문제문 -->
-        <div class="pm-left">
+        <div class="pm-left" id="pm-pane-statement">
           <div id="pm-loading" class="alert alert-info">
             <span class="spinner"></span> 문제 불러오는 중...
           </div>
@@ -497,34 +497,44 @@
             </div>
           </section>
         </div>
-        <!-- 오른쪽: 코드 에디터 + 실행 -->
+        <!-- 좌우 분할 손잡이 — pane-splitter.js 가 .pm-body 의 --pm-left-w 를 쓴다 -->
+        <div id="pm-split-v" class="pm-splitter pm-splitter-v" role="separator" aria-orientation="vertical"
+             aria-label="문제와 에디터 영역 너비 조절" aria-controls="pm-pane-statement" tabindex="0"></div>
+        <!-- 오른쪽: 코드 에디터(위, 고정 높이) + 실행 결과(아래, 독립 스크롤) -->
         <div class="pm-right">
-          <div>
-            <label class="label" for="pm-language">언어</label>
-            <select id="pm-language">
-              <option value="python3">Python 3</option>
-              <option value="cpp">C++ (GNU C++17)</option>
-              <option value="mysql" hidden>MySQL</option>
-            </select>
-          </div>
-          <div id="pm-code" class="pm-code"></div>
-          <p id="pm-code-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다. 이 창은 Esc 로 닫히지 않습니다.</p>
-          <div class="draft-row">
-            <button type="button" id="pm-code-draft-btn" class="btn-ghost">임시 저장</button>
-            <span id="pm-code-draft-status" class="hint" aria-live="polite"></span>
-          </div>
-          <div class="pm-run-row">
-            <button id="pm-run-btn" class="btn-primary btn-sm">예제 실행</button>
-            <button id="pm-submit-btn" class="btn-primary btn-sm hidden">LeetCode 에 제출</button>
-            <button id="pm-review-btn" class="btn-primary btn-sm btn-review">코드 리뷰 진행</button>
-          </div>
-          <div id="pm-test-results" aria-live="polite"></div>
-          <div class="pm-custom-section">
-            <div class="pm-custom-header">
-              <span class="pm-custom-label">커스텀 예제</span>
-              <button id="pm-custom-add-btn" class="pm-custom-add-btn">예제 추가</button>
+          <div class="pm-pane pm-pane-top" id="pm-pane-editor">
+            <div>
+              <label class="label" for="pm-language">언어</label>
+              <select id="pm-language">
+                <option value="python3">Python 3</option>
+                <option value="cpp">C++ (GNU C++17)</option>
+                <option value="mysql" hidden>MySQL</option>
+              </select>
             </div>
-            <div id="pm-custom-cases"></div>
+            <div id="pm-code" class="pm-code"></div>
+            <p id="pm-code-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다. 이 창은 Esc 로 닫히지 않습니다.</p>
+            <div class="draft-row">
+              <button type="button" id="pm-code-draft-btn" class="btn-ghost">임시 저장</button>
+              <span id="pm-code-draft-status" class="hint" aria-live="polite"></span>
+            </div>
+            <div class="pm-run-row">
+              <button id="pm-run-btn" class="btn-primary btn-sm">예제 실행</button>
+              <button id="pm-submit-btn" class="btn-primary btn-sm hidden">LeetCode 에 제출</button>
+              <button id="pm-review-btn" class="btn-primary btn-sm btn-review">코드 리뷰 진행</button>
+            </div>
+          </div>
+          <!-- 상하 분할 손잡이 — .pm-right 의 --pm-editor-h -->
+          <div id="pm-split-h" class="pm-splitter pm-splitter-h" role="separator" aria-orientation="horizontal"
+               aria-label="에디터와 결과 영역 높이 조절" aria-controls="pm-pane-editor" tabindex="0"></div>
+          <div class="pm-pane pm-pane-bottom" id="pm-pane-results">
+            <div id="pm-test-results" aria-live="polite"></div>
+            <div class="pm-custom-section">
+              <div class="pm-custom-header">
+                <span class="pm-custom-label">커스텀 예제</span>
+                <button id="pm-custom-add-btn" class="pm-custom-add-btn">예제 추가</button>
+              </div>
+              <div id="pm-custom-cases"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -590,6 +600,8 @@
   <script src="/static/js/review.js?v=__V__"></script>
   <script src="/static/js/recommend.js?v=__V__"></script>
   <script src="/static/js/themes.js?v=__V__"></script>
+  <!-- 분할 손잡이 (themes.js 의 _lsGet/_lsSet 를 호출 시점에 쓴다) — 소비자 problem-modal 보다 먼저 -->
+  <script src="/static/js/pane-splitter.js?v=__V__"></script>
   <script src="/static/js/problem-modal.js?v=__V__"></script>
   <!-- 문제 직접 열기 카드 (problem-modal 의 openProblemModal·utils 의 platformSpec 의존) -->
   <script src="/static/js/problem-open.js?v=__V__"></script>
