@@ -200,7 +200,10 @@ def _run_cpp(code: str, stdin: bytes, timeout: int, compile_timeout: int) -> dic
         for worker in workers:
             worker.join(timeout=1)
         if returncode != 0:
-            return {"stdout": "", "stderr": _decode(err, err_truncated[0]), "exit_code": returncode}
+            # stage 는 프런트가 컴파일 실패를 런타임 오류와 구분해 표시하는 데 쓴다 — g++ 의 returncode 는
+            # 제출 프로그램의 종료 코드와 같은 자리에 실린다.
+            return {"stdout": "", "stderr": _decode(err, err_truncated[0]), "exit_code": returncode,
+                    "stage": "compile"}
         return _execute([exe], stdin, timeout, tmpdir)
 
 

@@ -96,6 +96,33 @@ def test_run_samples_guards_the_result_node_before_writing(js):
     assert re.search(r"const\s+cell\s*=\s*document\.getElementById\(tcId\)[\s\S]{0,120}?if\s*\(cell\)", src)
 
 
+def test_sample_results_show_stderr_and_exit_code_regardless_of_stdout(js, css):
+    """`actual || result.stderr` 는 stdout 이 비었을 때만 stderr 를 보인다 — 몇 줄 찍고 난 트레이스백이
+    통째로 사라지고, 종료 코드는 어디에도 없어 예상·실제가 같은데 '실패' 만 남는 경우까지 생긴다."""
+    src = js["problem-modal.js"]
+    assert not re.search(r"actual\s*\|\|\s*result\.stderr", src), "stderr 가 stdout 의 폴백으로만 보인다"
+    render = _js_function_body(src, "function renderSampleResult")
+    assert re.search(r'class="tc-stderr"[\s\S]*?escapeHtml\(result\.stderr\)', render), "stderr 블록이 없다"
+    assert re.search(r'data-exit-code="\$\{result\.exit_code\}"', render), "exit_code 가 마크업에 닿지 않는다"
+    assert re.search(r"escapeHtml\(actual \|\| '\(없음\)'\)", render), "부분 출력이 '실제 출력' 에 남지 않는다"
+    # 통과한 케이스의 stderr 는 접힌다 — open 이 유일한 분기다.
+    assert re.search(r"tc-stderr\"\$\{passed \? '' : ' open'\}", render)
+    verdict = _js_function_body(src, "function sampleVerdict")
+    assert re.search(r"exit_code\s*===\s*-1", verdict) and "시간 초과" in verdict, \
+        "시간 초과를 -1 만으로 판정하면 안 된다"
+    # 마커 없는 -1(SIGHUP 으로 죽은 프로그램의 returncode)은 -1 블록을 빠져나가 런타임 오류가 된다.
+    minus_one = re.search(r"if\s*\(\s*result\.exit_code\s*===\s*-1\s*\)", verdict)
+    block = _js_function_body(verdict[minus_one.start():], minus_one.group(0))
+    assert "return" not in re.sub(r"if\s*\([\s\S]*?\)\s*return\s+'\w+';", "", block), \
+        "마커 없는 -1 이 -1 블록 안에서 판정된다"
+    assert re.search(r"찾을 수 없습니다\]'\)[\s\S]*?return\s+'unavailable'", block), \
+        "실행 불가가 실행기 마커로 갈리지 않는다"
+    for label in ("통과", "출력 불일치", "런타임 오류", "컴파일 오류", "시간 초과", "실행 불가"):
+        assert label in src, f"판정 라벨 '{label}' 이 없다"
+    assert re.search(r"\.tc-detail pre, \.tc-stderr pre\s*\{", css["components.css"]), \
+        "stderr pre 가 코드 블록 스타일을 받지 않는다"
+
+
 def test_all_fill_review_form_entry_points_confirm_overwrite():
     """진입점 넷이 같은 규약을 따라야 한다.
 
