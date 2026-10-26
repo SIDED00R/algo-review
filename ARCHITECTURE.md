@@ -96,13 +96,13 @@
 
 ### 실행 전용 서비스 (`executor/`)
 앱과 **다른 Cloud Run 서비스**로 배포한다(`--source executor`). 앱 모듈을 import 하지 않는다 —
-이미지에 앱 코드가 들어가지 않기 때문이다. 로컬 개발에서는 `routes/execute.py` 가 `runner` 를
-직접 import 해 같은 구현을 쓴다.
+이미지에 앱 코드가 들어가지 않기 때문이다. 앱도 어떤 환경에서든 `runner` 를 import 하지 않는다 —
+`EXECUTOR_URL` 이 없으면 `/api/execute` 는 403 이고, 있으면 메타데이터 서버의 ID 토큰을 붙여 위임한다.
 
 | 파일 | 단일 책임 |
 |------|----------|
 | `executor/main.py` | HTTP 경계(`POST /run`, `GET /health`)와 요청 상한 재검증 — 호출자를 믿지 않는다 |
-| `executor/runner.py` | 자식 프로세스 실행(Python/C++)과 자원 상한(출력·stdin·시간·프로세스 그룹 종료) |
+| `executor/runner.py` | 자식 프로세스 실행(Python/C++)과 자원 상한(출력·stdin·시간·프로세스 그룹 종료). 응답은 `{stdout, stderr, exit_code, time_ms}` — 시간 초과·실행 환경 없음은 `exit_code -1` + stderr 의 `[…]` 마커, C++ 컴파일 실패는 g++ returncode + `stage: "compile"` |
 
 ### DB 레이어 (`db/`)
 SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 접속 URL 만 다르고
@@ -192,7 +192,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `review.js` | 코드 리뷰 제출 및 결과 표시 |
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
-| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만) |
+| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 샘플 결과는 `sampleVerdict` 가 판정(통과·출력 불일치·런타임 오류·컴파일 오류·시간 초과·실행 불가)하고 `renderSampleResult` 가 그린다 — stderr 는 stdout 과 별개의 블록에 항상 보인다(통과 케이스는 접힘). 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만) |
 | `problem-ask.js` | 문제 뷰어 질문 — 본문 아래 질문 칸. 뷰어가 받은 섹션·예제를 텍스트로 묶고 질문·(선택) 에디터 코드·앞선 문답과 함께 `/api/problem/ask` 로 보낸다. 답은 `renderMarkdown` + KaTeX. 문제를 새로 열면(`resetProblemAsk`) 대화를 비우고, 늦게 온 답은 `_askProblem` 세대 확인으로 버린다 |
 | `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
 | `stats.js` | 태그 통계 시각화 |
@@ -397,6 +397,8 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 포커스가 body 로 이탈 | 포커스를 가진 요소가 disabled 되거나(`setLoading`) DOM 에서 사라지면 브라우저가 포커스를 `<body>` 로 옮긴다. keydown 리스너가 모달 root 에 걸려 있으므로 그 순간 **Esc 로 닫을 수 없고 Tab 트랩도 무효**가 된다(10~20초짜리 작업에서 실제로 발생) | `modal-a11y` 가 `focusout` 으로 이탈을 되돌린다. root 에 `tabIndex = -1` 이 필요하다 — 없으면 마지막 수단인 `root.focus()` 가 **조용히 무효**다(안의 버튼이 전부 disabled 면 실제로 그 상황이 된다) |
 | 테스트 픽스처의 범위 | "전 파일" 이라 적어 놓고 목록을 고정하면, 그 밖의 파일에는 무엇을 넣어도 통과한다 | glob 으로 읽고 **개수 하한**을 함께 둔다(경로가 틀리면 빈 dict 로 모든 루프가 조용히 통과한다) |
 | 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 22개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
+| stdout 폴백의 stderr | 예제 실행 결과를 `actual \|\| result.stderr` 로 그리면 stdout 이 비었을 때만 stderr 가 보인다 — 몇 줄 출력한 뒤 난 예외의 트레이스백이 통째로 사라지고, 부분 출력이 예상과 같으면 예상·실제가 같은 '실패' 만 남는다 | stderr 는 자기 블록(`.tc-stderr`)에 stdout 과 무관하게 그리고, `exit_code` 와 판정 라벨을 마크업에 싣는다. `tests/test_frontend_invariants.py` 가 폴백 패턴의 부재를 고정 |
+| `exit_code -1` 의 중의성 | 실행기는 시간 초과·컴파일 시간 초과·Python 없음·g++ 없음 네 경우에 같은 `-1` 을 주고, SIGHUP 으로 죽은 프로그램의 returncode 도 `-1` 이다(POSIX 시그널 종료는 `-N`). `-1` 만 보고 '시간 초과' 나 '실행 불가' 라고 쓰면 실행 환경 문제와 프로그램 종료가 뒤섞인다 | stderr 가 실행기 마커(`[시간 초과`·`[컴파일 시간 초과`·`[Python 실행 환경을 찾을 수 없습니다]`·`[g++ 컴파일러를 찾을 수 없습니다]`)로 시작할 때만 시간 초과·실행 불가로 가르고, 마커 없는 `-1` 은 런타임 오류다(`stage` 가 `compile` 이면 컴파일 오류, `sampleVerdict`). 컴파일 실패는 g++ returncode 가 그대로 실리므로 `stage: "compile"` 로 표시한다 |
 
 ---
 

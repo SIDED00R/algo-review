@@ -293,6 +293,53 @@ function getCustomCases() {
   });
 }
 
+// 실행기 응답 → 판정. exit_code -1 은 실행기의 시간 초과·실행 환경 없음 응답(stderr 가 `[…]` 마커로 시작한다,
+// executor/runner.py)이기도 하고 SIGHUP 으로 죽은 프로그램의 returncode(-시그널 번호)이기도 하다 — 마커가 있을 때만
+// 앞의 둘로 가르고, 그 외 0 이 아니면 프로그램이 비정상 종료한 것이다(stage 가 'compile' 이면 g++ 가 실패한 것).
+const SAMPLE_VERDICT_LABELS = {
+  pass: '통과', mismatch: '출력 불일치', runtime: '런타임 오류', compile: '컴파일 오류',
+  timeout: '시간 초과', unavailable: '실행 불가',
+};
+
+function sampleVerdict(result, matched) {
+  const stderr = result.stderr || '';
+  if (result.exit_code === -1) {
+    if (stderr.startsWith('[시간 초과') || stderr.startsWith('[컴파일 시간 초과')) return 'timeout';
+    if (stderr.startsWith('[Python 실행 환경을 찾을 수 없습니다]')
+        || stderr.startsWith('[g++ 컴파일러를 찾을 수 없습니다]')) return 'unavailable';
+  }
+  if (result.exit_code !== 0) return result.stage === 'compile' ? 'compile' : 'runtime';
+  return matched ? 'pass' : 'mismatch';
+}
+
+// 케이스 하나의 결과 마크업. stderr 는 stdout 유무와 무관하게 자기 블록에 보인다 — 통과했으면 접혀 있고
+// (경고·디버그 출력일 뿐이다), 아니면 열려 있다. 부분 출력은 '실제 출력' 에 그대로 남는다.
+function renderSampleResult(sample, label, result) {
+  const actual = (result.stdout || '').trimEnd();
+  const expected = sample.output.trimEnd();
+  const verdict = sampleVerdict(result, outputMatches(actual, expected));
+  const passed = verdict === 'pass';
+  const exitHtml = result.exit_code !== 0 ? `<span class="tc-exit">exit ${result.exit_code}</span>` : '';
+  const detailHtml = passed ? '' : `
+      <div class="tc-detail">
+        <div><b>입력</b><pre>${escapeHtml(sample.input)}</pre></div>
+        <div><b>예상 출력</b><pre>${escapeHtml(expected)}</pre></div>
+        <div><b>실제 출력</b><pre>${escapeHtml(actual || '(없음)')}</pre></div>
+      </div>`;
+  const stderrHtml = result.stderr ? `
+      <details class="tc-stderr"${passed ? '' : ' open'}>
+        <summary>오류 출력 (stderr)</summary>
+        <pre>${escapeHtml(result.stderr)}</pre>
+      </details>` : '';
+  const html = `
+      <div class="test-case ${passed ? 'pass' : 'fail'}" data-verdict="${verdict}" data-exit-code="${result.exit_code}">
+        <span class="tc-badge">${SAMPLE_VERDICT_LABELS[verdict]}</span>${label}
+        <span class="tc-time">${result.time_ms}ms</span>${exitHtml}
+        ${detailHtml}${stderrHtml}
+      </div>`;
+  return { passed, html };
+}
+
 async function runSamples() {
   const builtinSamples = _currentProblem?.samples || [];
   const customCases = getCustomCases();
@@ -347,24 +394,9 @@ async function runSamples() {
           body: JSON.stringify({ code, language, stdin: sample.input, timeout_sec: 5 }),
         }, '실행 실패');
 
-        const actual = (result.stdout || '').trimEnd();
-        const expected = sample.output.trimEnd();
-        const passed = outputMatches(actual, expected) && result.exit_code === 0;
-        if (!passed) allPassed = false;
-
-        const detailHtml = !passed ? `
-          <div class="tc-detail">
-            <div><b>입력</b><pre>${escapeHtml(sample.input)}</pre></div>
-            <div><b>예상 출력</b><pre>${escapeHtml(expected)}</pre></div>
-            <div><b>실제 출력</b><pre>${escapeHtml(actual || result.stderr || '(없음)')}</pre></div>
-          </div>` : '';
-
-        html = `
-          <div class="test-case ${passed ? 'pass' : 'fail'}">
-            <span class="tc-badge">${passed ? '통과' : '실패'}</span>${label}
-            <span class="tc-time">${result.time_ms}ms</span>
-            ${detailHtml}
-          </div>`;
+        const rendered = renderSampleResult(sample, label, result);
+        if (!rendered.passed) allPassed = false;
+        html = rendered.html;
       } catch (e) {
         allPassed = false;
         html = `<div class="test-case fail"><span class="tc-badge">실패</span>${label} — 오류: ${escapeHtml(e.message)}</div>`;

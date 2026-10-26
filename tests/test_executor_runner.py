@@ -91,6 +91,51 @@ def test_exit_code_and_elapsed_time_are_reported():
     assert isinstance(r["time_ms"], int)
 
 
+def test_partial_stdout_and_traceback_are_both_reported():
+    """프론트가 '실제 출력' 과 stderr 를 따로 그리려면 둘이 **함께** 와야 한다."""
+    r = _py("for i in range(3): print(i)\nraise ValueError('boom')")
+
+    assert r["exit_code"] == 1
+    assert r["stdout"] == "0\n1\n2\n"
+    assert "Traceback" in r["stderr"] and "ValueError: boom" in r["stderr"]
+    assert "stage" not in r, "실행 단계의 응답에는 stage 가 없어야 한다 — 프런트가 compile 만 구분한다"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="시그널 종료의 returncode(-N)는 POSIX 경로다")
+def test_sighup_killed_child_reports_minus_one_without_a_marker():
+    """시그널 N 으로 죽은 자식의 exit_code 는 -N 이다 — SIGHUP(1) 이면 시간 초과·실행 환경 없음과 같은 -1 이고
+    stderr 에 실행기 마커가 없다. 프런트(`sampleVerdict`)는 마커로만 둘을 가른다."""
+    r = _py("import os, signal\nos.kill(os.getpid(), signal.SIGHUP)")
+
+    assert r["exit_code"] == -1
+    assert r["stderr"] == ""
+
+
+def test_cpp_compile_failure_is_flagged_as_the_compile_stage(monkeypatch):
+    """g++ 의 returncode 는 제출 프로그램의 종료 코드와 같은 자리에 실린다 — 프런트가 둘을 구분하려면
+    컴파일 실패에만 stage 가 있어야 한다."""
+
+    class _FakeFailedCompileProc:
+        def __init__(self):
+            self.pid = 999999
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO(b"")
+            self.stderr = io.BytesIO(b"sol.cpp:1:11: error: expected '}'\n")
+
+        def wait(self, timeout=None):
+            return 1
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(runner, "_spawn", lambda cmd, cwd: _FakeFailedCompileProc())
+
+    r = runner._run_cpp("int main(){", b"", timeout=5, compile_timeout=5)
+
+    assert r["stage"] == "compile"
+    assert r["exit_code"] == 1
+
+
 @pytest.mark.skipif(os.name != "posix", reason="프로세스 그룹 종료는 POSIX 경로다")
 def test_orphaned_grandchildren_are_killed_with_the_group():
     """자식이 손자를 남기고 먼저 끝나도 손자가 살아남으면 안 된다.

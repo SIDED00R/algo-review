@@ -313,9 +313,9 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═══ 코드 ═══
-   네 계통(.code-block / .pm-pre / .tc-detail pre / .markdown-body pre)을 공통으로 묶고,
+   다섯 계통(.code-block / .pm-pre / .tc-detail pre / .tc-stderr pre / .markdown-body pre)을 공통으로 묶고,
    산문 안의 코드 블록만 아래에서 배경·세로 여백을 덮는다. */
-.code-block, .pm-pre, .markdown-body pre, .tc-detail pre {
+.code-block, .pm-pre, .markdown-body pre, .tc-detail pre, .tc-stderr pre {
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -329,7 +329,7 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 }
 .code-block { max-height: 420px; overflow-y: auto; }
 .code-section { margin-top: var(--s-4); }
-.tc-detail pre { white-space: pre-wrap; word-break: break-all; font-size: var(--fs-xs);
+.tc-detail pre, .tc-stderr pre { white-space: pre-wrap; word-break: break-all; font-size: var(--fs-xs);
   padding: var(--s-2); margin: 2px 0 var(--s-2); }
 
 /* ═══ 요약·강약점·피드백 ═══ */
@@ -432,8 +432,16 @@ textarea { resize: vertical; font-family: var(--font-mono); font-size: var(--fs-
 /* 웹폰트는 mono 400/500 만 로드한다 — 600 을 지정하면 합성(faux) 볼드가 된다. */
 .tc-badge { font-weight: 500; margin-right: var(--s-2); font-family: var(--font-mono); }
 .tc-detail { margin-top: var(--s-2); font-size: var(--fs-xs); }
-.tc-time { color: var(--fg-dim); font-size: var(--fs-xs); margin-left: var(--s-2);
+.tc-time, .tc-exit { color: var(--fg-dim); font-size: var(--fs-xs); margin-left: var(--s-2);
   font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+/* stderr 블록 — 통과한 케이스에서는 접히고, 아니면 마크업의 open 으로 열려 온다.
+   색은 두지 않는다 — 판정 색은 .test-case.fail 의 경계·배경이 이미 맡는다. */
+.tc-stderr { margin-top: var(--s-2); }
+.tc-stderr > summary { cursor: pointer; font-size: var(--fs-label); font-weight: 600;
+  color: var(--fg-dim); letter-spacing: .02em; }
+.tc-stderr > summary::before { content: '▸'; display: inline-block; width: 1em; }
+.tc-stderr[open] > summary::before { content: '▾'; }
+.tc-stderr > summary + pre { margin-top: var(--s-1); }
 
 /* ═══ 아코디언 ═══ */
 details summary::-webkit-details-marker { display: none; }
