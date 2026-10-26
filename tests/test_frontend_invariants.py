@@ -444,7 +444,8 @@ def test_every_form_control_has_an_accessible_name(html, js):
 def test_hints_are_linked_to_their_controls(html):
     """id 는 있는데 아무도 참조하지 않으면 스크린리더가 읽지 않는다."""
     for control, hint in (("problem-id", "problem-id-help"),
-                          ("code-language", "code-language-help")):
+                          ("code-language", "code-language-help"),
+                          ("open-problem-ref", "open-problem-help")):
         block = html.split(f'id="{control}"')[1][:200]
         assert f'aria-describedby="{hint}"' in block, control
 
@@ -638,6 +639,7 @@ def test_every_async_render_path_checks_its_generation_token(js):
         ("command-palette.js", "async function showLedger", r"token !== _paletteToken"),
         ("draft.js", "async function bindDraft", r"token !== st\.token"),
         ("draft.js", "async function saveDraft", r"token !== st\.token"),
+        ("problem-open.js", "async function openProblemByRef", r"token !== _openProblemToken"),
     ]
     for name, signature, pattern in guarded:
         body = _js_function_body(js[name], signature)
@@ -650,6 +652,24 @@ def test_every_async_render_path_checks_its_generation_token(js):
     # report.js 는 화살표 함수 핸들러라 시그니처로 자를 수 없다 — 파일 단위로 확인한다.
     assert js["report.js"].count("token !== _reportToken") >= 2, (
         "report.js 의 성공·실패 경로 중 한쪽에 세대 가드가 없다")
+
+
+def test_open_problem_lookup_is_not_assumed_to_be_single_flight(js):
+    """`openProblemByRef` 는 버튼 외에 입력칸 Enter 에서도 불린다 — 버튼 disabled 를 단일 조회의 근거로 삼을 수 없다.
+
+    늦게 온 이전 조회가 openProblemModal 을 다시 부르면 최신 문제를 덮고 에디터를 비운다. 세대는 빈 입력 return
+    뒤에서 올린다 — 앞에서 올리면 진행 중 조회의 finally 가 버튼을 되돌리지 않아 disabled 로 고착된다.
+    """
+    src = js["problem-open.js"]
+    body = _js_function_body(src, "async function openProblemByRef")
+    empty = re.search(r"if\s*\(\s*!ref\s*\)", body)
+    bump = re.search(r"const token = \+\+_openProblemToken", body)
+    assert empty and bump and empty.start() < bump.start(), "세대를 빈 입력 검사 전에 올린다"
+    try_part = body[:body.index("catch")]
+    assert re.search(r"await[\s\S]*token !== _openProblemToken[\s\S]*openProblemModal\(", try_part), \
+        "성공 경로에서 세대를 확인하기 전에 뷰어를 연다"
+    assert re.search(r"token === _openProblemToken", body.split("finally", 1)[1]), \
+        "finally 가 세대 확인 없이 버튼을 되돌린다"
 
 
 def test_history_load_is_not_assumed_to_be_single_flight(js):
@@ -1270,7 +1290,7 @@ def test_leetcode_is_wired_into_every_platform_control(html, js):
     """플랫폼을 고르는 곳 전부에 LeetCode 가 있어야 한다 — 한 곳이라도 빠지면 그 탭만 LeetCode 를 모른다."""
     for attr in ("data-platform", "data-themes-platform", "data-report-platform"):
         assert re.search(rf'{attr}="leetcode"[^>]*aria-pressed=', html), f"{attr} 토글에 leetcode 버튼이 없다"
-    for select_id in ("problem-platform", "recommend-platform"):
+    for select_id in ("problem-platform", "recommend-platform", "open-problem-platform"):
         block = html[html.index(f'id="{select_id}"'):]
         block = block[:block.index("</select>")]
         assert 'value="leetcode"' in block, f"#{select_id} 에 leetcode 가 없다"
@@ -1281,6 +1301,26 @@ def test_leetcode_is_wired_into_every_platform_control(html, js):
     assert "import-leetcode.js?v=__V__" in html
     assert "fetchJsonOk('/api/import-leetcode'" in js["import-leetcode.js"]
     assert 'value="leetcode"' in js["import-history.js"], "가져온 기록 플랫폼 필터에 leetcode 가 없다"
+
+
+def test_open_problem_card_goes_through_lookup_and_the_shared_modal_opener(html, js):
+    """번호로 여는 경로도 추천 카드와 같은 openProblemModal 을 쓴다 — 정규 ref 는 서버(lookup)가 준다.
+
+    입력값을 그대로 ref 로 넘기면 임시 저장 키(`codeforces:4/a` 는 경로가 갈려 404)·LeetCode 채점기(번호는 400)·
+    push 본문 매칭이 어긋난다. BOJ 는 뷰어가 없으므로 select 에 있으면 안 된다.
+    """
+    src = js["problem-open.js"]
+    assert re.search(r"fetchJsonOk\(\s*[`'\"]/api/problem/lookup", src), "lookup 라우트를 거치지 않는다"
+    assert re.search(r"openProblemModal\(\s*info\.platform,\s*info\.problem_ref,\s*info\.title,\s*info\.tier_name\s*\)",
+                     src), "서버가 준 정규 ref 가 아니라 다른 값으로 뷰어를 연다"
+    assert re.search(r"platformSpec\(", src) and "placeholder" in src, "플랫폼 표의 입력 규약을 쓰지 않는다"
+    block = html[html.index('id="open-problem-platform"'):]
+    block = block[:block.index("</select>")]
+    assert 'value="boj"' not in block, "뷰어 없는 백준이 직접 열기 select 에 있다"
+    assert 'value="codeforces"' in block and 'value="leetcode"' in block
+    order = re.findall(r"js/([a-z0-9-]+\.js)\?v=__V__", html)
+    assert order.index("problem-modal.js") < order.index("problem-open.js"), "소비자가 정의 파일보다 먼저 실린다"
+    assert order.index("utils.js") < order.index("problem-open.js")
 
 
 def test_viewer_hides_sample_execution_when_the_response_has_no_samples(js):

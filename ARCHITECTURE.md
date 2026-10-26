@@ -4,11 +4,11 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js — 23개)                                │
+│  Browser (static/js/*.js — 24개)                                │
 │  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
-│  modal-a11y · draft · problem-ask                               │
+│  modal-a11y · draft · problem-ask · problem-open                │
 │  import-history · import-github · import-codeforces             │
 │  import-leetcode · leetcode-judge                               │
 └────────────────────────┬────────────────────────────────────────┘
@@ -17,7 +17,7 @@
 │  FastAPI Routes (routes/)                                       │
 │  auth · review · pending_review · rereview · github_push        │
 │  problem · problem_leetcode · execute · recommend · themes      │
-│  history · solved · stats · report · drafts                     │
+│  history · solved · stats · report · drafts · problem_lookup    │
 │  import_github · import_codeforces · import_leetcode            │
 │  leetcode_judge · problem_ask · google_auth                     │
 └────────┬───────────────────────────────┬───────────────────────┘
@@ -147,6 +147,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
 | `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. `samples`(공식 예제 입력만)와 `judge: "leetcode"`, `code_snippets`(뷰어 언어별 공식 코드 스텁), `statement_text_ko`(번역 본문의 텍스트판 — GitHub README 본문. 없으면 push 가 영문 원문을 긁어 넣는다)를 함께 준다. 유료 문제는 본문 없이 |
+| `routes/problem_lookup.py` | `GET /api/problem/lookup?platform=&ref=` | 문제 번호·slug·URL → 뷰어가 여는 정규 ref + 제목·난이도 라벨(`resolve_problem_info` 재사용, LLM 미사용). 뷰어가 없는 플랫폼(BOJ)·미지원 플랫폼·빈 입력·없는 문제 400, 상류 502. 데모는 조회 없이 입력을 그대로(비어 있으면 `4A`) 돌려준다(데모 뷰어는 고정 문제를 보여준다) |
 | `routes/leetcode_judge.py` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | 뷰어의 예제 실행·제출을 LeetCode 채점기로 위임. 언어는 `python3`·`cpp`·`mysql`(뷰어 select 값 = langSlug). 데모 403, 세션 없음·만료 401, 429(프로세스 전역 분당 20회 상한 또는 LeetCode 자체 제한 — 연속 실행 서너 번이면 걸린다), 상류 502 |
 | `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
@@ -193,6 +194,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
 | `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 샘플 결과는 `sampleVerdict` 가 판정(통과·출력 불일치·런타임 오류·컴파일 오류·시간 초과·실행 불가)하고 `renderSampleResult` 가 그린다 — stderr 는 stdout 과 별개의 블록에 항상 보인다(통과 케이스는 접힘). 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만) |
+| `problem-open.js` | 추천 탭 '문제 직접 열기' 카드 — 번호·slug·URL 을 `/api/problem/lookup` 으로 정규 ref·제목·난이도로 풀어 추천 카드와 같은 `openProblemModal` 로 뷰어를 연다. 플랫폼 select 는 뷰어가 있는 CF·LeetCode 만 |
 | `problem-ask.js` | 문제 뷰어 질문 — 본문 아래 질문 칸. 뷰어가 받은 섹션·예제를 텍스트로 묶고 질문·(선택) 에디터 코드·앞선 문답과 함께 `/api/problem/ask` 로 보낸다. 답은 `renderMarkdown` + KaTeX. 문제를 새로 열면(`resetProblemAsk`) 대화를 비우고, 늦게 온 답은 `_askProblem` 세대 확인으로 버린다 |
 | `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
 | `stats.js` | 태그 통계 시각화 |
@@ -250,6 +252,8 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/auth.py` | `db.save_github_settings` | GitHub 토큰 저장 |
 | `problem-modal.js` | `GET /api/problem/cf/{ref}` · `GET /api/problem/lc/{slug}` | 문제 내용 조회 (플랫폼 표의 `viewerUrl`) |
 | `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행(CF) |
+| `problem-open.js` | `GET /api/problem/lookup` | 번호·slug·URL → 정규 ref·제목·난이도(뷰어 열기용) |
+| `routes/problem_lookup.py` | `routes.problem_resolve.resolve_problem_info` | CF·LeetCode 문제 메타 조회(스냅샷) |
 | `leetcode-judge.js` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | LeetCode 채점기 예제 실행·제출 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
 | `review.js` | `POST /api/review/pending` | 리뷰 실패 시 리뷰 없이 GitHub 등록 |
@@ -355,7 +359,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 환경변수 필터 검증 | import 시점 상수로 두면 그 필터를 실효 검증할 수 없다 — 테스트가 센티넬을 심어도 이미 만들어진 dict 에는 반영되지 않아 필터를 통째로 지워도 통과한다 | `safe_env()` 가 호출 시점에 필터한다. 테스트가 실제 센티넬을 심어 5개 키를 각각 검증 |
 | 파이썬 테스트는 JS 를 파싱하지 않는다 | 스크립트로 JS 를 편집하다 개행 이스케이프가 실제 개행으로 치환되면 문자열이 끊겨 **그 파일 전체가 SyntaxError** 가 되고, 전역 스코프를 공유하므로 해당 기능이 통째로 사라진다. pytest 는 이걸 못 잡는다 | CI 의 node 게이트(`scripts/check_js.sh`) 또는 헤드리스 브라우저 실측이 유일한 방어선이다. 파이썬으로 JS 렉서를 흉내 내는 검사는 정규식 리터럴에 걸려 거짓 빨강이 난다 — 시도했다가 되돌렸다 |
 | 테스트 DB 격리 | `conftest` 가 `os.environ["DB_TYPE"]` 으로 방언을 판정하면 안 된다 — 실제 접속 대상은 `Settings.sqlalchemy_url` 이고 그것은 `.env` 의 `DATABASE_URL` 을 최우선으로 쓴다. 판정과 접속이 갈리면 sqlite 분기(`DB_PATH` 격리)를 타면서 실DB 에 붙고, `test_migrations` 의 `DROP TABLE` 이 그 DB 로 나간다 | 방언을 **해석된 URL** 에서 유도한다. sqlite 분기는 `DATABASE_URL` 을 지우는 게 아니라 **덮어쓴다** — pydantic-settings 우선순위가 init > OS 환경변수 > dotenv 라 `delenv` 는 `.env` 값을 못 누른다. `_assert_disposable_target()` 이 파일명이 정확히 `test.db` 인 임시 파일 / 로컬 CI postgres 가 아니면 즉시 중단한다(`"test" in name` 부분일치는 `contest.db` 를 통과시킨다) |
-| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "22개 파일 검사 완료" 가 실제 검사 수다 |
+| 게이트의 개수 보고 | bash 는 `nullglob` 이 꺼져 있어 매치가 없으면 glob 이 리터럴로 남고 루프가 1회 돈다 — 경로가 틀렸는데 "1개 파일 검사 완료" 가 찍혀 개수를 신뢰할 수 없다 | `scripts/check_js.sh` 가 `shopt -s nullglob` 을 켠다. CI 로그의 "24개 파일 검사 완료" 가 실제 검사 수다 |
 | 늦은 응답의 정리 코드 | `finally` 에서 무조건 상태를 되돌리면, 무효화된 옛 실행이 **새로 진행 중인** 실행의 상태를 되살린다(예제 실행 버튼이 활성으로 바뀌고, 다시 누르면 진행 중인 결과가 지워진다) | 세대 토큰을 확인한 뒤에만 되돌린다. 열기·닫기 경로가 이미 복원을 부르므로 "고착 방지" 는 유지된다 |
 | 스냅샷 시점 | 테스트가 보는 값이 검증 대상 코드보다 **앞** 시점의 스냅샷이면 그 코드를 지워도 통과한다(`analyze_code` 호출 시점 dict 를 보면 그 뒤의 가드를 검증하지 못한다) | 응답 본문이나 DB 재조회로 확인한다 |
 | 필터를 겨냥한 픽스처 | 여러 필터가 순차로 걸리는 함수에서, 픽스처가 **앞선 필터**에 먼저 걸리면 뒤 필터를 지워도 결과가 같다(`4A. Watermelon` 은 루트 필터가 아니라 번호 경계에 걸렸다) | 각 필터마다 그 필터**만**이 이유가 되는 입력을 둔다 |
@@ -396,7 +400,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 부분 실패 정책 | 같은 예외에 소비처마다 정책이 반대면 한쪽이 틀린 것이다 — 테마는 밴드별로 부분 성공을 살리는데 추천은 첫 실패에서 던져 이미 성공한 태그의 결과까지 버렸다 | 태그별로 격리하고 **전부 실패했을 때만** 실패로 본다 |
 | 포커스가 body 로 이탈 | 포커스를 가진 요소가 disabled 되거나(`setLoading`) DOM 에서 사라지면 브라우저가 포커스를 `<body>` 로 옮긴다. keydown 리스너가 모달 root 에 걸려 있으므로 그 순간 **Esc 로 닫을 수 없고 Tab 트랩도 무효**가 된다(10~20초짜리 작업에서 실제로 발생) | `modal-a11y` 가 `focusout` 으로 이탈을 되돌린다. root 에 `tabIndex = -1` 이 필요하다 — 없으면 마지막 수단인 `root.focus()` 가 **조용히 무효**다(안의 버튼이 전부 disabled 면 실제로 그 상황이 된다) |
 | 테스트 픽스처의 범위 | "전 파일" 이라 적어 놓고 목록을 고정하면, 그 밖의 파일에는 무엇을 넣어도 통과한다 | glob 으로 읽고 **개수 하한**을 함께 둔다(경로가 틀리면 빈 dict 로 모든 루프가 조용히 통과한다) |
-| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 22개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
+| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 24개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
 | stdout 폴백의 stderr | 예제 실행 결과를 `actual \|\| result.stderr` 로 그리면 stdout 이 비었을 때만 stderr 가 보인다 — 몇 줄 출력한 뒤 난 예외의 트레이스백이 통째로 사라지고, 부분 출력이 예상과 같으면 예상·실제가 같은 '실패' 만 남는다 | stderr 는 자기 블록(`.tc-stderr`)에 stdout 과 무관하게 그리고, `exit_code` 와 판정 라벨을 마크업에 싣는다. `tests/test_frontend_invariants.py` 가 폴백 패턴의 부재를 고정 |
 | `exit_code -1` 의 중의성 | 실행기는 시간 초과·컴파일 시간 초과·Python 없음·g++ 없음 네 경우에 같은 `-1` 을 주고, SIGHUP 으로 죽은 프로그램의 returncode 도 `-1` 이다(POSIX 시그널 종료는 `-N`). `-1` 만 보고 '시간 초과' 나 '실행 불가' 라고 쓰면 실행 환경 문제와 프로그램 종료가 뒤섞인다 | stderr 가 실행기 마커(`[시간 초과`·`[컴파일 시간 초과`·`[Python 실행 환경을 찾을 수 없습니다]`·`[g++ 컴파일러를 찾을 수 없습니다]`)로 시작할 때만 시간 초과·실행 불가로 가르고, 마커 없는 `-1` 은 런타임 오류다(`stage` 가 `compile` 이면 컴파일 오류, `sampleVerdict`). 컴파일 실패는 g++ returncode 가 그대로 실리므로 `stage: "compile"` 로 표시한다 |
 

@@ -19,8 +19,8 @@ from db.connection import session_scope
 from demo_mode import IS_DEMO
 from login_gate import LoginGateMiddleware
 from routes import (
-    auth, review, pending_review, rereview, github_push, problem, problem_leetcode, execute, recommend,
-    history, solved, import_github, import_codeforces, import_leetcode, leetcode_judge,
+    auth, review, pending_review, rereview, github_push, problem, problem_leetcode, problem_lookup, execute,
+    recommend, history, solved, import_github, import_codeforces, import_leetcode, leetcode_judge,
     stats, report, themes, drafts, problem_ask, google_auth,
 )
 
@@ -108,6 +108,7 @@ app.include_router(rereview.router)
 app.include_router(github_push.router)
 app.include_router(problem.router)
 app.include_router(problem_leetcode.router)
+app.include_router(problem_lookup.router)
 app.include_router(execute.router)
 app.include_router(recommend.router)
 app.include_router(history.router)

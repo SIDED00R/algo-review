@@ -43,7 +43,7 @@ _DEMO_AWARE_MODULES = [
     "routes.auth", "routes.execute", "routes.github_push", "routes.google_auth",
     "routes.import_codeforces", "routes.import_github", "routes.import_leetcode", "routes.leetcode_judge",
     "routes.pending_review", "routes.problem", "routes.problem_ask", "routes.problem_leetcode",
-    "routes.recommend", "routes.report", "routes.rereview",
+    "routes.problem_lookup", "routes.recommend", "routes.report", "routes.rereview",
     "routes.review", "routes.solved", "routes.themes",
 ]
 
