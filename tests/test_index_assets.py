@@ -29,7 +29,7 @@ def test_all_local_asset_references_are_versioned(client):
 def test_every_referenced_asset_is_actually_served(client):
     """참조가 실제로 200 인지 본다 — 버전 검사만으로는 파일이 없어도 통과한다.
 
-    CSS 5개는 index.html 의 로드 순서가 곧 캐스케이드 순서라, 하나를 지우거나 이름을
+    CSS 6개는 index.html 의 로드 순서가 곧 캐스케이드 순서라, 하나를 지우거나 이름을
     바꾸면 페이지가 통째로 무스타일이 된다. scripts/check_js.sh 의 고아 파일 검사는
     JS 만 보고, 이 파일의 나머지 검사는 존재 여부를 보지 않는다.
     """

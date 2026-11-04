@@ -196,12 +196,12 @@
   align-items: center; gap: var(--s-1); }
 
 /* ═══ CodeMirror ═══
-   .cm-wrap 과 .pm-code 는 높이만 다르므로 공통 규칙으로 묶는다. */
-.cm-wrap, .pm-code { border-radius: var(--r); overflow: hidden; }
+   .cm-wrap · .pm-code · .scratch-code(코드 연습장, 높이는 scratchpad.css) 는 높이만 다르므로 공통 규칙으로 묶는다. */
+.cm-wrap, .pm-code, .scratch-code { border-radius: var(--r); overflow: hidden; }
 /* 뷰어 에디터는 패널을 채우고 안에서 스크롤한다(높이는 사용자가 손잡이로 정한다). 코드 리뷰 탭(.cm-wrap)은
    그대로 내용만큼 자란다. 좁은 화면은 아래 860px 규칙이 고정 높이로 되돌린다. */
 .pm-code { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-.cm-wrap .CodeMirror, .pm-code .CodeMirror {
+.cm-wrap .CodeMirror, .pm-code .CodeMirror, .scratch-code .CodeMirror {
   height: auto;
   border: 1px solid var(--line-control);
   border-radius: var(--r);
@@ -225,11 +225,12 @@
 /* CodeMirror 는 숨은 textarea 로 입력을 받아 링이 보이지 않는다 — 래퍼에 링을 그린다.
    내부 .CodeMirror 에 주면 위 overflow:hidden 에 클리핑된다(자기 overflow 는 자기
    outline 을 자르지 않는다). */
-.cm-wrap:focus-within, .pm-code:focus-within {
+.scratch-code:focus-within, .cm-wrap:focus-within, .pm-code:focus-within {
   outline: 2px solid var(--fg);
   outline-offset: 1px;
 }
-.cm-wrap:focus-within .CodeMirror, .pm-code:focus-within .CodeMirror {
+.cm-wrap:focus-within .CodeMirror, .pm-code:focus-within .CodeMirror,
+.scratch-code:focus-within .CodeMirror {
   border-color: var(--fg);
 }
 
@@ -243,7 +244,8 @@
 .cm-s-dracula .CodeMirror-activeline-background { background: var(--surface-2); }
 .cm-s-dracula .CodeMirror-selected { background: var(--line-strong); }
 /* 라이트(default 테마)도 같은 자리를 맞춘다 */
-.cm-wrap .CodeMirror-gutters, .pm-code .CodeMirror-gutters { border-right-color: var(--line); }
+.cm-wrap .CodeMirror-gutters, .pm-code .CodeMirror-gutters,
+.scratch-code .CodeMirror-gutters { border-right-color: var(--line); }
 
 /* 자동완성 힌트 — 색은 토큰에서 받는다. 하드코딩하면 테마 전환에 따라오지 않는다. */
 .CodeMirror-hints {

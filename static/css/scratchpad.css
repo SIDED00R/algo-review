@@ -1,0 +1,61 @@
+/* ── 코드 연습장 — 화면 위에 떠 있는 창(scratchpad.js) ──
+   위치(left/top)는 JS 가 인라인으로 쓴다. 크기는 오른쪽 아래 resize 손잡이로 바꾸고, 상한은 뷰포트다. */
+
+/* 여는 버튼 — 상단 헤더와 문제 뷰어 헤더에 같은 모양으로 둔다. 테두리가 유일한 식별 수단이라 --line-control 이다. */
+.scratch-open-btn {
+  display: inline-flex; align-items: center; height: 32px; flex-shrink: 0;
+  padding: 0 var(--s-3); white-space: nowrap; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-xs); color: var(--fg-muted);
+  background: transparent; border: 1px solid var(--line-control); border-radius: var(--r);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.scratch-open-btn:hover { color: var(--fg); border-color: var(--fg); }
+
+.scratch-window {
+  position: fixed;
+  z-index: var(--z-overlay);
+  width: min(520px, calc(100vw - 32px));
+  height: min(640px, calc(100vh - 32px));
+  min-width: min(320px, 100vw);
+  min-height: min(360px, 100vh);
+  max-width: 100vw;
+  max-height: 100vh;
+  resize: both;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--line-control);
+  border-radius: var(--r);
+}
+
+/* 머리 줄이 끌기 손잡이다(버튼·select 위에서는 끌지 않는다). touch-action:none 은 터치 끌기를 스크롤로 넘기지 않는다. */
+.scratch-head {
+  flex: none;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+  cursor: move; touch-action: none; user-select: none;
+}
+.scratch-head h2 { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scratch-head select { width: auto; font-size: var(--fs-sm); padding: var(--s-1) var(--s-2); }
+
+/* 에디터와 결과가 남는 높이를 반씩 나눈다. 입력칸은 자기 높이(사용자가 세로로 늘릴 수 있다)를 갖는다.
+   최소 높이 합이 창보다 크면(낮은 창·늘린 입력칸) 본문이 스크롤한다. */
+.scratch-body { flex: 1; min-height: 0; display: flex; flex-direction: column;
+  gap: var(--s-1); padding: var(--s-3); overflow-y: auto; }
+.scratch-code { flex: 1 1 0; min-height: 96px; display: flex; flex-direction: column; }
+.scratch-code .CodeMirror { height: 100%; flex: 1; min-height: 0; }
+.scratch-body textarea { flex: none; min-height: 48px; resize: vertical;
+  font-family: var(--font-mono); font-size: var(--fs-sm); }
+.scratch-body > .label { margin: var(--s-2) 0 0; }
+/* 결과는 자기 영역에서 스크롤한다 — .code-block 의 자체 높이 상한은 풀어 이중 스크롤을 없앤다. */
+.scratch-result { flex: 1 1 0; min-height: 72px; overflow-y: auto; margin-top: var(--s-2); }
+.scratch-result .code-block { max-height: none; margin-bottom: var(--s-2); }
+.scratch-result .test-case { margin-bottom: var(--s-1); }
+
+/* 좁은 화면에서는 입력칸 글꼴을 16px 로 둔다 — components.css 의 모바일 규칙(iOS Safari 의 16px 미만 입력칸 자동 확대
+   방지)을 위 두 선택자가 특이도로 이기므로 여기서 되돌린다. */
+@media (max-width: 860px) {
+  .scratch-body textarea, .scratch-head select { font-size: var(--fs-base); }
+}

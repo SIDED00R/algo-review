@@ -4,13 +4,14 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Browser (static/js/*.js — 25개)                                │
+│  Browser (static/js/*.js — 26개)                                │
 │  editor · utils · theme · github · tier-chart · tabs            │
 │  review · recommend · themes · problem-modal · stats            │
 │  history · report · load-submission · command-palette           │
 │  modal-a11y · draft · problem-ask · problem-open                │
 │  import-history · import-github · import-codeforces             │
 │  import-leetcode · leetcode-judge · pane-splitter               │
+│  scratchpad                                                     │
 └────────────────────────┬────────────────────────────────────────┘
                          │ HTTP (fetch)
 ┌────────────────────────▼────────────────────────────────────────┐
@@ -167,7 +168,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/review_response.py` | — | 리뷰 저장 + ReviewResponse 생성 (review/solved 공용) |
 
 ### 프론트엔드 스타일 (`static/css/`)
-순수 CSS 5개. 빌드 스텝이 없으므로 `index.html` 의 로드 순서가 곧 캐스케이드 순서다 —
+순수 CSS 6개. 빌드 스텝이 없으므로 `index.html` 의 로드 순서가 곧 캐스케이드 순서다 —
 서드파티(CodeMirror·KaTeX) CSS 를 먼저 걸고 앱 CSS 를 뒤에 두어야 오버라이드가 이긴다.
 
 | 파일 | 단일 책임 |
@@ -177,6 +178,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `css/components.css` | 버튼·폼·배지·태그·알림·스피너·코드블록·표·제출 원장(`.ledger`)·페이지네이션 |
 | `css/layout.css` | 헤더/탭바, 콘텐츠 성격별 컨테이너 3종(`.measure-work` / `.measure-list` / `.measure-prose`), 목록 행, 반응형 |
 | `css/surfaces.css` | 모달·오버레이·드롭다운·문제 풀기 모달(전체 화면, 3열 grid + 우측 상하 패널·분할 손잡이)·CodeMirror 오버라이드 |
+| `css/scratchpad.css` | 코드 연습장 — 여는 버튼, 떠 있는 창(위치는 JS, 크기는 `resize: both`, 상한은 뷰포트), 에디터·결과 높이 배분. CodeMirror 테두리·포커스 링은 surfaces.css 의 공통 규칙을 쓴다 |
 
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |
@@ -198,6 +200,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `problem-open.js` | 추천 탭 '문제 직접 열기' 카드 — 번호·slug·URL 을 `/api/problem/lookup` 으로 정규 ref·제목·난이도로 풀어 추천 카드와 같은 `openProblemModal` 로 뷰어를 연다. 플랫폼 select 는 뷰어가 있는 CF·LeetCode 만 |
 | `problem-ask.js` | 문제 뷰어 질문 — 본문 아래 질문 칸. 뷰어가 받은 섹션·예제를 텍스트로 묶고 질문·(선택) 에디터 코드·앞선 문답과 함께 `/api/problem/ask` 로 보낸다. 답은 `renderMarkdown` + KaTeX. 문제를 새로 열면(`resetProblemAsk`) 대화를 비우고, 늦게 온 답은 `_askProblem` 세대 확인으로 버린다 |
 | `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
+| `scratchpad.js` | 코드 연습장 — 풀이와 별개로 코드 조각을 stdin 과 함께 `/api/execute` 로 실행하는 창. 상단 헤더(`#scratch-open-btn`)와 문제 뷰어 헤더(`#pm-scratch-btn`)에서 연다. `aria-modal` 없는 창이라 뒤 화면을 마우스로 그대로 쓰고, 머리 줄 포인터 캡처로 옮기며 창 전체를 뷰포트 안에 둔다. 판정은 problem-modal.js 의 `sampleVerdict` 를 출력 비교 없이 쓴다(exit 0 = 정상 종료). 닫으면 숨기기만 해 코드·입력·결과가 새로고침 전까지 남는다. 포커스는 `registerModal`(`escapeCloses: false`) |
 | `stats.js` | 태그 통계 시각화 |
 | `tier-chart.js` | 티어 변화 Chart.js 그래프. 색은 CSS 변수에서 읽고 `data-theme` 변경을 감시해 재렌더한다 |
 | `history.js` | 리뷰 기록 목록 및 상세 모달 |
@@ -253,6 +256,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/auth.py` | `db.save_github_settings` | GitHub 토큰 저장 |
 | `problem-modal.js` | `GET /api/problem/cf/{ref}` · `GET /api/problem/lc/{slug}` | 문제 내용 조회 (플랫폼 표의 `viewerUrl`) |
 | `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행(CF) |
+| `scratchpad.js` | `POST /api/execute` | 코드 연습장 실행 |
 | `problem-open.js` | `GET /api/problem/lookup` | 번호·slug·URL → 정규 ref·제목·난이도(뷰어 열기용) |
 | `routes/problem_lookup.py` | `routes.problem_resolve.resolve_problem_info` | CF·LeetCode 문제 메타 조회(스냅샷) |
 | `leetcode-judge.js` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | LeetCode 채점기 예제 실행·제출 |
@@ -345,8 +349,8 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | outline 클리핑 | 래퍼에 `overflow:hidden` 이 있으면 **자식**의 `outline-offset` 링은 전량 잘린다 — 포커스 표시가 사라진 채 규칙은 남아 있다 | 링은 래퍼 자신의 `:focus-within` 에 그린다. 자기 overflow 는 자기 outline 을 자르지 않는다 |
 | 비텍스트 대비 | 텍스트 대비(1.4.3)만 검산하면 **1.4.11(비텍스트 3:1)** 이 빠진다. 폼·`.btn-secondary`·칩은 배경이 지면과 1.03~1.06:1 이라 테두리가 유일한 식별 수단인데 `--line`/`--line-strong` 은 1.15~1.68:1 이었다 | 컨트롤 경계 전용 `--line-control` 을 분리한다(카드 구분선은 장식이라 대상 아님 — 일괄 상향하면 화면이 시끄러워진다) |
 | ARIA 선언 vs 동작 | `role="tablist"` 를 선언하면 보조기술 사용자는 화살표 키 이동을 기대한다. 선언만 있고 동작이 없으면 없는 것보다 나쁘다 | 화살표·Home·End + roving tabindex 를 `tabs.js` 에 둔다. 마크업의 초기 `tabindex` 도 맞춘다(JS 실행 전 상태) |
-| 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달 셋 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |
-| 에디터 안의 Esc | CodeMirror 의 Esc(포커스 탈출)는 기본 동작만 막고 keydown 을 위로 흘려보낸다 — 모달 루트가 그것으로 닫히면 **작성 중이던 코드가 그대로 사라진다**(모달의 에디터 값은 닫는 순간 어디에도 남지 않는다) | 문제 뷰어만 `escapeCloses: false` 로 등록한다(닫기는 ✕ 버튼 — 전체 화면이라 바깥이 없다). 에디터가 없는 모달은 그대로 Esc 로 닫힌다 |
+| 모달 위치 | 탭 섹션 안에 있는 모달은 다른 탭 활성 시 조상이 `display:none` 이 되어 **열 수도, 포커스할 수도 없다** | 모달·창 넷(리뷰 기록·문제 뷰어·코드 연습장·명령 팔레트) 전부 body 직하위. Esc·포커스 트랩·초기 포커스·복원은 `modal-a11y.js` 한 곳에서 등록한다(모달마다 복제하면 새 모달에서 또 빠진다) |
+| 에디터 안의 Esc | CodeMirror 의 Esc(포커스 탈출)는 기본 동작만 막고 keydown 을 위로 흘려보낸다 — 모달 루트가 그것으로 닫히면 **작성 중이던 코드가 그대로 사라진다**(문제 뷰어의 에디터 값은 닫는 순간 어디에도 남지 않는다) | 에디터가 든 창(문제 뷰어·코드 연습장)만 `escapeCloses: false` 로 등록한다(닫기는 ✕ 버튼). 연습장은 닫아도 값이 남지만 같은 옵션이다 — Esc 는 에디터 탈출로만 쓴다. 에디터가 없는 모달은 그대로 Esc 로 닫힌다 |
 | 임시 저장 바인딩 순서 | 문제 뷰어는 열 때 에디터를 비운다. 임시 저장에 **먼저** 붙이면 그 비우기가 변경으로 잡혀 복원본이 빈 값으로 덮인다 | `setEditorValue('pm-code', '')` **뒤에** `bindDraft` 한다. 닫을 때는 `unbindDraft` 가 디바운스 대기분을 먼저 넘긴다. 기본 코드 스텁은 저장본 조회가 끝난 **뒤에** 채운다 — 먼저 채우면 복원이 "이미 내용 있음"으로 막힌다 |
 | 못 읽은 임시 저장본 | 조회가 실패했는데(온디맨드 DB 정지 등) 자동 저장을 켜면 **첫 타이핑이 읽지 못한 저장본을 덮어쓴다** — 실패한 순간이 곧 유실이다 | 조회 성공 시에만 `loaded` 를 세우고, 그때만 자동 저장한다. 실패한 자리는 '임시 저장' 버튼(수동)으로만 쓴다 |
 | 문자열 수준 테스트 | 빌드 스텝이 없어 JS/CSS 배선은 문자열 검사가 유일한 방어선이다. 정확 문자열은 공백·인용부호에 깨지고, 느슨한 부분문자열은 `ArrowRightX` 같은 오타를 통과시킨다. **결함을 설명하는 주석에 그 결함의 코드 형태가 적혀 있어** 거짓 빨강도 난다 | 정규식으로 쓰고, 규칙을 찾는 검사는 주석을 제거한 사본을 본다(`tests/test_frontend_invariants.py`) |
@@ -401,7 +405,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | 부분 실패 정책 | 같은 예외에 소비처마다 정책이 반대면 한쪽이 틀린 것이다 — 테마는 밴드별로 부분 성공을 살리는데 추천은 첫 실패에서 던져 이미 성공한 태그의 결과까지 버렸다 | 태그별로 격리하고 **전부 실패했을 때만** 실패로 본다 |
 | 포커스가 body 로 이탈 | 포커스를 가진 요소가 disabled 되거나(`setLoading`) DOM 에서 사라지면 브라우저가 포커스를 `<body>` 로 옮긴다. keydown 리스너가 모달 root 에 걸려 있으므로 그 순간 **Esc 로 닫을 수 없고 Tab 트랩도 무효**가 된다(10~20초짜리 작업에서 실제로 발생) | `modal-a11y` 가 `focusout` 으로 이탈을 되돌린다. root 에 `tabIndex = -1` 이 필요하다 — 없으면 마지막 수단인 `root.focus()` 가 **조용히 무효**다(안의 버튼이 전부 disabled 면 실제로 그 상황이 된다) |
 | 테스트 픽스처의 범위 | "전 파일" 이라 적어 놓고 목록을 고정하면, 그 밖의 파일에는 무엇을 넣어도 통과한다 | glob 으로 읽고 **개수 하한**을 함께 둔다(경로가 틀리면 빈 dict 로 모든 루프가 조용히 통과한다) |
-| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 25개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
+| 전역 스코프 합본 파싱 | 파일별 `node --check` 는 **파일 안**의 구문만 본다. 브라우저는 26개 파일을 하나의 전역 렉시컬 환경에서 평가하므로 `var x` × `const x`, `const a = 1, b = 2` 같은 교차 충돌은 파일별 검사로 볼 수 없다(grep 게이트도 첫 선언자만 본다) | 전부 이어 붙여 한 번 더 `node --check` 한다 — 실행 조건과 같아져 사양대로 잡힌다. 이어 붙여서 새로 생기는 오류는 없다(`function`끼리·`var`끼리 재선언은 합법). CDP `Runtime.compileScript` 로 사양을 실측 검증했고, 합본 파일은 반드시 `.js` 로 만든다 — Node 22 는 확장자로 모듈 타입을 판정해 `mktemp` 의 무확장자 파일에 `ERR_UNKNOWN_FILE_EXTENSION` 을 던진다(게이트 자체가 실패한다) |
 | stdout 폴백의 stderr | 예제 실행 결과를 `actual \|\| result.stderr` 로 그리면 stdout 이 비었을 때만 stderr 가 보인다 — 몇 줄 출력한 뒤 난 예외의 트레이스백이 통째로 사라지고, 부분 출력이 예상과 같으면 예상·실제가 같은 '실패' 만 남는다 | stderr 는 자기 블록(`.tc-stderr`)에 stdout 과 무관하게 그리고, `exit_code` 와 판정 라벨을 마크업에 싣는다. `tests/test_frontend_invariants.py` 가 폴백 패턴의 부재를 고정 |
 | `exit_code -1` 의 중의성 | 실행기는 시간 초과·컴파일 시간 초과·Python 없음·g++ 없음 네 경우에 같은 `-1` 을 주고, SIGHUP 으로 죽은 프로그램의 returncode 도 `-1` 이다(POSIX 시그널 종료는 `-N`). `-1` 만 보고 '시간 초과' 나 '실행 불가' 라고 쓰면 실행 환경 문제와 프로그램 종료가 뒤섞인다 | stderr 가 실행기 마커(`[시간 초과`·`[컴파일 시간 초과`·`[Python 실행 환경을 찾을 수 없습니다]`·`[g++ 컴파일러를 찾을 수 없습니다]`)로 시작할 때만 시간 초과·실행 불가로 가르고, 마커 없는 `-1` 은 런타임 오류다(`stage` 가 `compile` 이면 컴파일 오류, `sampleVerdict`). 컴파일 실패는 g++ returncode 가 그대로 실리므로 `stage: "compile"` 로 표시한다 |
 | CodeMirror 와 컨테이너 크기 | CodeMirror 는 창 크기 변화만 감시한다 — 손잡이로 패널 크기를 바꾸면 거터·스크롤 영역이 옛 크기로 남는다 | 비율을 적용할 때마다(`attachPaneSplitter` 의 `onResize`) `refreshViewerEditor` 가 `refresh()` 를 부른다. `refresh` 는 `change` 를 내지 않아 임시 저장이 오발화하지 않고, 인스턴스는 다시 만들지 않는다(`draft.js` 의 `change` 리스너가 붙어 있다) |
