@@ -30,12 +30,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css" />
 
-  <!-- 앱 스타일 — 책임별 분할. 순서 의존: tokens → base → components → layout → surfaces -->
+  <!-- 앱 스타일 — 책임별 분할. 순서 의존: tokens → base → components → layout → surfaces → scratchpad -->
   <link rel="stylesheet" href="/static/css/tokens.css?v=__V__" />
   <link rel="stylesheet" href="/static/css/base.css?v=__V__" />
   <link rel="stylesheet" href="/static/css/components.css?v=__V__" />
   <link rel="stylesheet" href="/static/css/layout.css?v=__V__" />
   <link rel="stylesheet" href="/static/css/surfaces.css?v=__V__" />
+  <link rel="stylesheet" href="/static/css/scratchpad.css?v=__V__" />
 
   <!-- 전부 이벤트 시점에만 쓰여 defer 안전. defer 는 선언 순서를 보존한다. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
@@ -81,6 +82,7 @@
         <button class="tab-btn" data-tab="import" role="tab" id="tabbtn-import" aria-selected="false" aria-controls="tab-import" tabindex="-1">기록 가져오기</button>
       </nav>
       <div class="header-actions">
+        <button type="button" id="scratch-open-btn" class="scratch-open-btn">코드 연습장</button>
         <div class="github-wrap">
           <button id="github-icon-btn" class="github-icon-btn" aria-label="GitHub 연결 설정" aria-expanded="false">
             <svg aria-hidden="true"><use href="#i-github" /></svg>
@@ -475,6 +477,8 @@
         <span id="pm-difficulty" class="tier-badge"></span>
         <span id="pm-meta" class="pm-meta"></span>
         <span id="pm-link" class="pm-link"></span>
+        <!-- 뷰어가 상단 헤더를 가리므로 연습장 여는 버튼을 여기에도 둔다 -->
+        <button type="button" id="pm-scratch-btn" class="scratch-open-btn">코드 연습장</button>
         <button id="pm-close-btn" class="pm-close" aria-label="닫기">
           <svg aria-hidden="true"><use href="#i-close" /></svg>
         </button>
@@ -537,6 +541,31 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 코드 연습장 ── 뒤 화면을 막지 않는 창이라 aria-modal 이 없다. 문제 뷰어와 z-index 가 같아
+       DOM 순서로 위에 그려진다 — 뷰어보다 뒤, 명령 팔레트보다 앞에 둔다. -->
+  <div id="scratch-window" class="scratch-window hidden" role="dialog" aria-labelledby="scratch-title">
+    <div id="scratch-head" class="scratch-head">
+      <h2 id="scratch-title">코드 연습장</h2>
+      <select id="scratch-language" aria-label="연습장 언어">
+        <option value="python3">Python 3</option>
+        <option value="cpp">C++ (GNU C++17)</option>
+      </select>
+      <button type="button" id="scratch-run-btn" class="btn-primary btn-sm">실행</button>
+      <button type="button" id="scratch-close-btn" class="pm-close" aria-label="코드 연습장 닫기">
+        <svg aria-hidden="true"><use href="#i-close" /></svg>
+      </button>
+    </div>
+    <div class="scratch-body">
+      <div id="scratch-code" class="scratch-code"></div>
+      <p id="scratch-code-escape-help" class="hint">Esc 를 누르면 에디터 밖으로 나갑니다.</p>
+      <label class="label" for="scratch-stdin">입력 (stdin)</label>
+      <textarea id="scratch-stdin" rows="3" spellcheck="false"></textarea>
+      <div id="scratch-result" class="scratch-result" aria-live="polite">
+        <p class="hint">실행하면 출력이 여기에 표시됩니다.</p>
       </div>
     </div>
   </div>
@@ -607,6 +636,8 @@
   <script src="/static/js/problem-open.js?v=__V__"></script>
   <script src="/static/js/problem-ask.js?v=__V__"></script>
   <script src="/static/js/leetcode-judge.js?v=__V__"></script>
+  <!-- 코드 연습장 (modal-a11y 의 registerModal 을 로드 시점에 쓴다) -->
+  <script src="/static/js/scratchpad.js?v=__V__"></script>
   <script src="/static/js/stats.js?v=__V__"></script>
   <script src="/static/js/history.js?v=__V__"></script>
   <script src="/static/js/import-history.js?v=__V__"></script>

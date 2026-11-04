@@ -146,12 +146,17 @@
 
   createEditor('code-input', 'python');
   createEditor('pm-code', 'python');
+  createEditor('scratch-code', 'python');
 
   document.getElementById('code-language')?.addEventListener('change', e => {
     window.switchEditorLang('code-input', LANG_MAP[e.target.value] || 'python');
   });
   document.getElementById('pm-language')?.addEventListener('change', e => {
     window.switchEditorLang('pm-code', PM_LANG_MAP[e.target.value] || 'python');
+  });
+  // 연습장 언어 값은 뷰어와 같은 실행기 값(python3·cpp)이다.
+  document.getElementById('scratch-language')?.addEventListener('change', e => {
+    window.switchEditorLang('scratch-code', PM_LANG_MAP[e.target.value] || 'python');
   });
 
   new MutationObserver(() => {

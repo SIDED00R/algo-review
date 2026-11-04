@@ -506,7 +506,7 @@ def test_editor_has_a_keyboard_escape_route(js, html):
     assert re.search(r"getInputField\(\)\.setAttribute\(\s*['\"]aria-describedby['\"]", body), \
         "안내가 포커스를 받는 요소(textarea)에 연결되지 않았다"
     # aria-describedby 는 가리키는 id 가 없으면 조용히 아무것도 읽지 않는다.
-    for editor_id in ("code-input", "pm-code"):
+    for editor_id in ("code-input", "pm-code", "scratch-code"):
         assert f'id="{editor_id}-escape-help"' in html, f"{editor_id} 안내 요소가 없다"
 
 
