@@ -4,7 +4,9 @@
 // 서버 상한(routes/models.py 의 MAX_ASK_TURNS·MAX_ANSWER_LENGTH)과 같다.
 const ASK_HISTORY_TURNS = 5;
 const ASK_ANSWER_MAX = 20000;
-const ASK_SECTION_LABELS = { statement: '문제', input: '입력', output: '출력', note: '노트' };
+const ASK_SECTION_LABELS = {
+  statement: '문제', input: '입력', output: '출력', limit: '제한', note: '노트', hint: '힌트',
+};
 
 // 대화가 속한 문제(problem-modal.js 의 _currentProblem 객체)와 그 문답 목록.
 let _askProblem = null;
@@ -25,7 +27,7 @@ function showProblemAsk() {
   document.getElementById('pm-ask').classList.remove('hidden');
 }
 
-// 뷰어가 받은 번역 본문을 텍스트 한 덩어리로. CF 는 섹션 + 예제(입력·출력), LeetCode 는 텍스트판
+// 뷰어가 받은 본문을 텍스트 한 덩어리로. CF·백준은 섹션 + 예제(입력·출력), LeetCode 는 텍스트판
 // 하나다 — LeetCode 예제는 입력만 있고 본문에 이미 실려 있어 붙이지 않는다.
 function problemContextText(problem) {
   const parts = Object.entries(problem.sections || {})

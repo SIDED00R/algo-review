@@ -6,6 +6,7 @@ from clients.solved_ac import (
     search_problems_by_tag,
     get_tag_key_by_name,
 )
+from clients.boj_problem import scrape_boj_problem
 from clients.codeforces import (
     normalize_codeforces_problem_ref,
     get_codeforces_problem_info,
@@ -52,6 +53,7 @@ from clients.utils import (
 __all__ = [
     "get_problems_bulk", "get_problem_info", "get_problem_statement",
     "get_boj_problem_sections", "search_problems_by_tag", "get_tag_key_by_name",
+    "scrape_boj_problem",
     "get_codeforces_problem_info",
     "get_codeforces_problem_statement", "get_cf_problem_sections", "scrape_cf_problem",
     "tex_markers_to_markdown",

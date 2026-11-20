@@ -43,14 +43,61 @@ def test_leetcode_number_resolves_to_the_slug_the_viewer_needs(client, monkeypat
         ("two-sum", 1, "Two Sum", "Easy")
 
 
-@pytest.mark.parametrize("platform", ["boj", "atcoder"])
-def test_platforms_without_a_viewer_are_rejected_before_any_lookup(client, monkeypatch, platform):
-    monkeypatch.setattr(api_client, "get_problem_info", lambda pid: pytest.fail("뷰어 없는 플랫폼을 조회했다"))
+def test_unsupported_platform_is_rejected_before_any_lookup(client, monkeypatch):
+    monkeypatch.setattr(api_client, "get_problem_info", lambda pid: pytest.fail("미지원 플랫폼을 조회했다"))
 
-    resp = _lookup(client, platform=platform, ref="1000")
+    resp = _lookup(client, platform="atcoder", ref="1000")
 
     assert resp.status_code == 400
-    assert "뷰어" in resp.json()["detail"] or "지원하지 않는 플랫폼" in resp.json()["detail"]
+    assert "지원하지 않는 플랫폼" in resp.json()["detail"]
+
+
+def test_boj_number_resolves_through_solved_ac_without_the_db(client, monkeypatch):
+    """백준은 DB 캐시(리뷰 기록)를 읽지 않는다 — DB 가 꺼져 있어도 뷰어를 열 수 있어야 한다."""
+    import db
+    monkeypatch.setattr(db, "get_cached_problem_info", lambda pid: pytest.fail("직접 열기가 DB 를 읽었다"))
+    calls = []
+    monkeypatch.setattr(api_client, "get_problem_info", lambda pid: calls.append(pid) or {
+        "id": pid, "title": "RGB거리", "tier": 10, "tier_name": "Silver I", "tags": ["다이나믹 프로그래밍"]})
+
+    resp = _lookup(client, platform="boj", ref=" 1149 ")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"platform": "boj", "problem_ref": "1149", "problem_id": 1149, "title": "RGB거리",
+                           "tier_name": "Silver I", "url": "https://boj.kr/1149"}
+    assert calls == [1149]
+
+
+@pytest.mark.parametrize("ref", ["", "abc", "12a", "-5"])
+def test_boj_non_numeric_ref_is_a_400_without_any_lookup(client, monkeypatch, ref):
+    monkeypatch.setattr(api_client, "get_problem_info", lambda pid: pytest.fail("형식 오류를 조회했다"))
+
+    resp = _lookup(client, platform="boj", ref=ref)
+
+    assert resp.status_code == 400
+    assert "숫자" in resp.json()["detail"]
+
+
+def test_boj_unknown_problem_is_400_and_solved_ac_outage_is_502(client, monkeypatch):
+    import requests
+
+    def missing(pid):
+        resp = requests.Response()
+        resp.status_code = 404
+        raise requests.HTTPError("404 Client Error", response=resp)
+
+    monkeypatch.setattr(api_client, "get_problem_info", missing)
+    resp = _lookup(client, platform="boj", ref="999999")
+    assert resp.status_code == 400
+    assert "없는 문제" in resp.json()["detail"]
+
+    def down(pid):
+        raise requests.ConnectionError("solved.ac unreachable")
+
+    monkeypatch.setattr(api_client, "get_problem_info", down)
+    resp = _lookup(client, platform="boj", ref="1000")
+    assert resp.status_code == 502
+    assert "ConnectionError" in resp.json()["detail"]
 
 
 def test_blank_ref_is_a_400_with_the_platform_hint(client, monkeypatch):

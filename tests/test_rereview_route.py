@@ -102,8 +102,7 @@ def test_stored_statement_reaches_the_llm(minimal_client, monkeypatch):
 def test_repush_passes_stored_statement_as_description(minimal_client, monkeypatch):
     """저장된 본문을 넘기면 push_review_bundle 이 스크래핑을 건너뛴다.
 
-    BOJ 는 acmicpc.net 종료로 스크래핑이 빈 섹션을 돌려주고, 그대로 README 를 재생성하면
-    이미 올라가 있던 문제 설명을 지운다.
+    스크래핑이 빈 섹션을 돌려줄 때 그대로 README 를 재생성하면 이미 올라가 있던 문제 설명을 지운다.
     """
     stored = "【문제】\n두 정수 A와 B를 입력받아 A+B를 출력한다."
     _save("good", feedback="f", problem_statement=stored)

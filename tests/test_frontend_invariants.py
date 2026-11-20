@@ -1374,7 +1374,7 @@ def test_open_problem_card_goes_through_lookup_and_the_shared_modal_opener(html,
     """번호로 여는 경로도 추천 카드와 같은 openProblemModal 을 쓴다 — 정규 ref 는 서버(lookup)가 준다.
 
     입력값을 그대로 ref 로 넘기면 임시 저장 키(`codeforces:4/a` 는 경로가 갈려 404)·LeetCode 채점기(번호는 400)·
-    push 본문 매칭이 어긋난다. BOJ 는 뷰어가 없으므로 select 에 있으면 안 된다.
+    push 본문 매칭이 어긋난다. 세 플랫폼 모두 뷰어가 있어 select 에 다 있어야 한다.
     """
     src = js["problem-open.js"]
     assert re.search(r"fetchJsonOk\(\s*[`'\"]/api/problem/lookup", src), "lookup 라우트를 거치지 않는다"
@@ -1383,8 +1383,8 @@ def test_open_problem_card_goes_through_lookup_and_the_shared_modal_opener(html,
     assert re.search(r"platformSpec\(", src) and "placeholder" in src, "플랫폼 표의 입력 규약을 쓰지 않는다"
     block = html[html.index('id="open-problem-platform"'):]
     block = block[:block.index("</select>")]
-    assert 'value="boj"' not in block, "뷰어 없는 백준이 직접 열기 select 에 있다"
-    assert 'value="codeforces"' in block and 'value="leetcode"' in block
+    for platform in ("boj", "codeforces", "leetcode"):
+        assert f'value="{platform}"' in block, f"직접 열기 select 에 {platform} 이 없다"
     order = re.findall(r"js/([a-z0-9-]+\.js)\?v=__V__", html)
     assert order.index("problem-modal.js") < order.index("problem-open.js"), "소비자가 정의 파일보다 먼저 실린다"
     assert order.index("utils.js") < order.index("problem-open.js")
@@ -1409,3 +1409,35 @@ def test_theme_list_is_loaded_per_platform(js):
     assert re.search(r"themes:list:v2:\$\{platform\}", src), "localStorage 키에 플랫폼이 없다"
     toggle = src[src.index("data-themes-platform]').forEach"):]
     assert "loadThemes()" in toggle, "플랫폼을 바꿔도 칩을 다시 그리지 않는다"
+
+
+def test_every_platform_opens_the_in_app_viewer(js):
+    """백준도 뷰어로 연다 — 플랫폼 표에 뷰어 주소가 없으면 추천·테마 카드 클릭이 throw 로 죽는다.
+
+    추천·테마 카드는 플랫폼과 무관하게 같은 클릭 카드(.is-clickable)로 그린다. 링크 카드로 갈라지는
+    분기가 되살아나면 백준 문제를 뷰어에서 풀 수 없다.
+    """
+    utils = js["utils.js"]
+    table = utils[utils.index("const PLATFORMS = {"):utils.index("function platformSpec")]
+    for platform in ("boj", "codeforces", "leetcode"):
+        spec = table[table.index(f"  {platform}: {{"):]
+        spec = spec[:spec.index("\n  },")]
+        assert "viewerUrl:" in spec and "viewerBadgeClass:" in spec and "sqlViewer:" in spec, \
+            f"{platform} 플랫폼 표에 뷰어 항목이 없다"
+    assert re.search(r"viewerUrl:\s*ref\s*=>\s*`/api/problem/boj/\$\{encodeURIComponent\(ref\)\}`", table)
+    for name in ("themes.js", "recommend.js"):
+        src = js[name]
+        assert "rec-problem-card is-clickable" in src, f"{name} 카드가 뷰어를 열지 않는다"
+        assert 'class="rec-problem-card">' not in src, f"{name} 에 뷰어 없는 카드 분기가 남아 있다"
+        assert "spec.viewer" not in src
+
+
+def test_boj_statement_html_is_sanitized_and_links_open_in_a_new_tab(js):
+    """백준 본문은 원문 HTML(statement_sections_html)이다 — 정화 없이 넣으면 본문으로 스크립트가 들어오고,
+    링크를 같은 탭으로 열면 앱이 닫힌다."""
+    body = _js_function_body(js["problem-modal.js"], "async function openProblemModal")
+    assert "data.statement_sections_html" in body
+    assert re.search(r"sanitizeHtml\(sections\[key\]\)", body), "HTML 섹션을 정화하지 않고 그린다"
+    assert re.search(r"a\.target\s*=\s*'_blank'", body) and "noopener" in body
+    for key, label in (("limit", "제한"), ("hint", "힌트")):
+        assert re.search(rf"key:\s*'{key}',\s*label:\s*'{label}'", body), f"{key} 섹션을 그리지 않는다"

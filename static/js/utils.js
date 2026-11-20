@@ -49,13 +49,12 @@ function lcDifficultyClass(tier) {
   return LC_DIFFICULTY_CLASSES[tier] || '';
 }
 
-// 플랫폼 표 — 라벨·문제 번호 입력 규약·URL·난이도 배지·인앱 뷰어 지원 여부를 한 곳에 둔다.
+// 플랫폼 표 — 라벨·문제 번호 입력 규약·URL·난이도 배지·인앱 뷰어 주소를 한 곳에 둔다.
 // 렌더 지점은 `platform === 'codeforces'` 로 갈리지 않고 이 표를 읽는다. 없는 플랫폼은
 // throw 한다 — else 로 BOJ 에 떨어지면 새 플랫폼이 boj.kr 링크와 BOJ 티어 배지로 조용히 그려진다.
 const PLATFORMS = {
   boj: {
     label: 'BOJ',
-    viewer: false,
     refField: 'problem_id',
     placeholder: '예) 1000',
     help: '백준: 숫자만 입력하세요. 예) 1000',
@@ -66,10 +65,16 @@ const PLATFORMS = {
     problemLabel: p => String(p.problem_id ?? p.problem_ref ?? ''),
     problemUrl: p => `https://boj.kr/${p.problem_id ?? p.problem_ref}`,
     difficultyClass: tier => tierClass(tier),
+    viewerUrl: ref => `/api/problem/boj/${encodeURIComponent(ref)}`,
+    // 카드의 data-tier 는 "Silver IV" 같은 티어 이름이다. 배지 색은 그룹(첫 단어)으로 정해진다.
+    viewerBadgeClass: tierName => {
+      const group = String(tierName).split(' ')[0].toLowerCase();
+      return group !== 'unrated' && group in TIER_GROUPS ? `tier-${group}` : '';
+    },
+    sqlViewer: false,
   },
   codeforces: {
     label: 'Codeforces',
-    viewer: true,
     refField: 'problem_ref',
     placeholder: '예) 4A 또는 4/A',
     help: 'Codeforces: contestId + index 형식. 예) 4A, 4/A',
@@ -87,7 +92,6 @@ const PLATFORMS = {
   },
   leetcode: {
     label: 'LeetCode',
-    viewer: true,
     refField: 'problem_ref',
     placeholder: '예) 175, two-sum 또는 문제 URL',
     help: 'LeetCode: 번호, slug, 문제 URL 중 하나. 예) 175, two-sum',

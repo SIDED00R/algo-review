@@ -152,8 +152,6 @@ def _get_boj_recommendations(weak_tags: list[str], extra_exclude: set | None = N
         problems = list({p["id"]: p for p in problems}.values())
 
         if problems:
-            for p in problems:
-                p["url"] = f"https://boj.kr/{p['id']}"
             recommendations.append({
                 "tag": tag_name,
                 "tag_key": tag_key,

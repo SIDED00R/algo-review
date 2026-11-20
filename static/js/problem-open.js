@@ -1,6 +1,6 @@
 // 문제 직접 열기 — 추천 탭 상단 카드. 입력(번호·slug·URL)을 서버(/api/problem/lookup)가 정규 ref 와
 // 제목·난이도로 풀어 주면 추천 카드와 같은 openProblemModal 로 뷰어를 연다. 입력값을 그대로 ref 로 쓰면
-// 임시 저장 키·LeetCode 채점기·push 본문 매칭이 어긋난다. BOJ 는 뷰어가 없어 select 에 없다.
+// 임시 저장 키·LeetCode 채점기·push 본문 매칭이 어긋난다.
 const openProblemPlatform = document.getElementById('open-problem-platform');
 const openProblemRef = document.getElementById('open-problem-ref');
 const openProblemHelp = document.getElementById('open-problem-help');

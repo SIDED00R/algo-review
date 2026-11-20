@@ -1,7 +1,6 @@
 """기존 리뷰 기록의 problem_statement 를 백필한다.
 
-소스: BOJ 는 GitHub 저장소 README(acmicpc.net 종료로 재수집 불가 — push 한 문제만),
-CF 는 codeforces.com 재수집.
+소스: BOJ 는 GitHub 저장소 README(push 한 문제만), CF 는 codeforces.com 재수집.
 
 기본은 dry-run 이다. `--apply` 를 줘야 DB 에 쓴다.
 
@@ -156,7 +155,7 @@ def main() -> int:
         token = gh_settings.get("access_token") or ""
         if not (repo and token):
             print("경고: GitHub 연결·저장소가 없어 BOJ 는 건너뜁니다 "
-                  "(acmicpc.net 종료로 README 가 유일한 소스입니다).\n")
+                  "(이 스크립트의 BOJ 소스는 README 뿐입니다).\n")
         else:
             # 트리는 한 번만 받는다. 폴더명 규칙이 문제마다 달라 개별 경로 요청은
             # 대부분 404 가 된다.

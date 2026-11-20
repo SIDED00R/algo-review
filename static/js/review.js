@@ -209,12 +209,10 @@ function renderReview(container, d) {
           code,
           language,
           url: d.problem_url,
-          ...(platformSpec(d.platform).viewer ? {
-            // 붙여넣은 본문이 먼저다 — 서버 resolve_statement 와 같은 우선순위여야 한다.
-            description: pastedStatement || viewerSections?.statement || '',
-            input_desc: viewerSections?.input || '',
-            output_desc: viewerSections?.output || '',
-          } : {}),
+          // 붙여넣은 본문이 먼저다 — 서버 resolve_statement 와 같은 우선순위여야 한다.
+          description: pastedStatement || viewerSections?.statement || '',
+          input_desc: viewerSections?.input || '',
+          output_desc: viewerSections?.output || '',
         }),
       }, 'push 실패');
       btn.disabled = true;
