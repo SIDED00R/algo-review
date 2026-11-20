@@ -96,8 +96,7 @@ function renderRecommend(container, data) {
       const label = escapeHtml(problemLabel({
         platform: data.platform, problem_id: p.problem_id, problem_ref: String(p.id),
       }));
-      if (spec.viewer) {
-        html += `
+      html += `
           <div class="rec-problem-card is-clickable"
                data-platform="${escapeHtml(data.platform)}"
                data-ref="${escapeHtml(String(p.id))}"
@@ -106,16 +105,6 @@ function renderRecommend(container, data) {
             <span>${label}. ${escapeHtml(p.title)}</span>
             ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
           </div>`;
-      } else {
-        const url = problemUrl({
-          platform: data.platform, problem_url: p.url, problem_id: p.id, problem_ref: String(p.id),
-        });
-        html += `
-          <div class="rec-problem-card">
-            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${label}. ${escapeHtml(p.title)}</a>
-            ${tierBadgeHtml(ptc, escapeHtml(p.tier_name))}
-          </div>`;
-      }
     }
     html += `</div>`;
   }

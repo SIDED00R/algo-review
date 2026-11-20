@@ -191,11 +191,12 @@
     <section id="tab-recommend" class="tab-content hidden measure-prose" role="tabpanel" aria-labelledby="tabbtn-recommend">
       <div class="card">
         <h2>문제 직접 열기</h2>
-        <p class="desc">Codeforces·LeetCode 문제 번호를 입력하면 인앱 뷰어로 바로 엽니다. (백준은 뷰어가 없습니다)</p>
+        <p class="desc">백준·Codeforces·LeetCode 문제 번호를 입력하면 인앱 뷰어로 바로 엽니다.</p>
         <div class="field-row cols-2">
           <div>
             <label class="label" for="open-problem-platform">플랫폼</label>
             <select id="open-problem-platform">
+              <option value="boj">백준</option>
               <option value="codeforces" selected>Codeforces</option>
               <option value="leetcode">LeetCode</option>
             </select>
@@ -233,7 +234,7 @@
       <div class="list-head">
         <h2>테마별 문제</h2>
         <p class="desc">알고리즘 분야별 대표 문제를 사이트별 난이도로 보여줍니다. 이미 푼 문제는 제외됩니다.
-          Codeforces·LeetCode 문제는 클릭하면 인앱 뷰어로 열립니다. SQL 테마는 LeetCode 에 있습니다.</p>
+          문제를 클릭하면 인앱 뷰어로 열립니다. SQL 테마는 LeetCode 에 있습니다.</p>
       </div>
       <div class="toolbar">
         <div class="platform-toggle">

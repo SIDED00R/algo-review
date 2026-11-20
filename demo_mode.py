@@ -68,6 +68,34 @@ DEMO_CF_PROBLEM = {
     "index": "A",
 }
 
+# /api/problem/boj 응답과 같은 모양 — DEMO_PROBLEM_INFO(1929) 문제다.
+DEMO_BOJ_PROBLEM = {
+    "problem_id": 1929,
+    "title": "소수 구하기",
+    "time_limit": "2 초",
+    "memory_limit": "256 MB",
+    "statement_sections_html": {
+        "statement": "<p>M이상 N이하의 소수를 모두 출력하는 프로그램을 작성하시오.</p>",
+        "input": ("<p>첫째 줄에 자연수 M과 N이 빈 칸을 사이에 두고 주어진다. (1 ≤ M ≤ N ≤ 1,000,000) "
+                  "M이상 N이하의 소수가 하나 이상 있는 입력만 주어진다.</p>"),
+        "output": "<p>한 줄에 하나씩, 증가하는 순서대로 소수를 출력한다.</p>",
+        "limit": "",
+        "hint": "",
+    },
+    "statement_sections_ko": {
+        "statement": "M이상 N이하의 소수를 모두 출력하는 프로그램을 작성하시오.",
+        "input": ("첫째 줄에 자연수 M과 N이 빈 칸을 사이에 두고 주어진다. (1 ≤ M ≤ N ≤ 1,000,000) "
+                  "M이상 N이하의 소수가 하나 이상 있는 입력만 주어진다."),
+        "output": "한 줄에 하나씩, 증가하는 순서대로 소수를 출력한다.",
+        "limit": "",
+        "hint": "",
+    },
+    "samples": [
+        {"input": "3 16", "output": "3\n5\n7\n11\n13"},
+    ],
+    "url": "https://www.acmicpc.net/problem/1929",
+}
+
 DEMO_RECOMMENDATIONS = {
     "avg_tier": 0,
     "tier_name": "CF 1200",
@@ -312,7 +340,7 @@ DEMO_THEME_PROBLEMS = {
 }
 
 # 문제 뷰어 질문의 데모 답. 데모 뷰어는 플랫폼마다 문제 하나(CF 는 DEMO_CF_PROBLEM, LeetCode 는
-# DEMO_LC_PROBLEM)만 돌려주므로 그 문제에 맞춘다. 백준은 데모 뷰어가 없다.
+# DEMO_LC_PROBLEM, 백준은 DEMO_BOJ_PROBLEM)만 돌려주므로 그 문제에 맞춘다.
 DEMO_PROBLEM_ANSWERS = {
     "codeforces": (
         "**접근 힌트**\n\n"
@@ -329,8 +357,11 @@ DEMO_PROBLEM_ANSWERS = {
         "_(데모 버전의 고정 답변입니다.)_"
     ),
     "boj": (
-        "데모 버전의 고정 답변입니다. 실제 서비스에서는 문제 본문과 질문을 바탕으로 "
-        "힌트·풀이 방향·반례를 답합니다."
+        "**접근 힌트**\n\n"
+        "수마다 $\\sqrt{N}$ 까지 나눠 보는 방식은 $N = 1{,}000{,}000$ 에서 느릴 수 있습니다. "
+        "에라토스테네스의 체로 $N$ 까지의 소수를 한 번에 표시해 두고 $M$ 부터 출력해 보세요.\n\n"
+        "→ $O(N \\log \\log N)$ 에 풀 수 있습니다.\n\n"
+        "_(데모 버전의 고정 답변입니다.)_"
     ),
 }
 

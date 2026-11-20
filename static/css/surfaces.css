@@ -147,6 +147,8 @@
 .pm-html code { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .pm-html ul, .pm-html ol { padding-left: var(--s-5); margin-bottom: var(--s-2); }
 .pm-html img { max-width: 100%; }
+.pm-html table { border-collapse: collapse; margin: var(--s-2) 0; }
+.pm-html th, .pm-html td { border: 1px solid var(--line); padding: var(--s-1) var(--s-2); }
 .pm-sample { margin-top: var(--s-4); }
 .pm-sample-title { font-size: var(--fs-label); font-weight: 600; color: var(--fg-dim);
   letter-spacing: .02em; margin-bottom: var(--s-1); }

@@ -1,9 +1,9 @@
 import logging
 import time
 import requests
-from bs4 import BeautifulSoup
 
 # TIER_NAMES 의 정본은 constants.py 다 — 여기 두면 DB 레이어가 이 모듈을 import 하게 된다.
+from clients.boj_problem import fetch_boj_soup
 from clients.utils import BROWSER_USER_AGENT, ProblemSearchError
 from constants import TIER_NAMES
 
@@ -86,10 +86,7 @@ def get_problem_info(problem_id: int) -> dict:
 
 def _fetch_boj_sections(problem_id: int) -> dict:
     """BOJ 문제 페이지의 세 섹션을 담은 dict. 페이지에 없는 섹션은 값이 None 이다. 요청 실패는 예외 전파."""
-    url = f"https://www.acmicpc.net/problem/{problem_id}"
-    resp = requests.get(url, headers=HEADERS, timeout=10)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = fetch_boj_soup(problem_id)
 
     def _text(sel):
         el = soup.select_one(sel)

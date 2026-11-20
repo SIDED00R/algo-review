@@ -153,7 +153,7 @@ async function openProblemModal(platform, ref, title, tierName) {
     // 나중에 연 문제의 본문·samples·sections 를 덮는다.
     if (_currentProblem?.ref !== ref) return;
 
-    // 예제는 CF(stdin/stdout, 이 앱의 실행기)와 LeetCode(judge: 'leetcode', LeetCode 채점기)에 있다.
+    // 예제는 CF·백준(stdin/stdout, 이 앱의 실행기)과 LeetCode(judge: 'leetcode', LeetCode 채점기)에 있다.
     // 없는 응답은 실행 영역을 숨긴 채 둔다. 제출 버튼은 채점기가 있는 플랫폼에만 보인다.
     const hasSamples = Array.isArray(data.samples);
     _currentProblem.samples  = hasSamples ? data.samples : [];
@@ -200,16 +200,28 @@ async function openProblemModal(platform, ref, title, tierName) {
         <pre class="pm-pre">${escapeHtml(s.output)}</pre>
       </div>`).join('');
 
-    const sections = data.statement_sections_ko || {};
+    // 백준은 섹션이 원문 HTML 로 온다(statement_sections_html) — 정화해 그대로 그린다.
+    // CF 는 번역 텍스트(statement_sections_ko)라 이스케이프하고 수식 구간만 살린다.
+    const htmlSections = data.statement_sections_html;
+    const sections = htmlSections || data.statement_sections_ko || {};
     const sectionDefs = [
       { key: 'statement', label: '문제' },
       { key: 'input',     label: '입력' },
       { key: 'output',    label: '출력' },
+      { key: 'limit',     label: '제한' },
       { key: 'note',      label: '노트' },
+      { key: 'hint',      label: '힌트' },
     ];
     const sectionsHtml = sectionDefs
       .filter(({ key }) => sections[key])
       .map(({ key, label }) => {
+        if (htmlSections) {
+          return `
+        <div class="pm-section-card">
+          <h3>${label}</h3>
+          <div class="pm-html">${sanitizeHtml(sections[key])}</div>
+        </div>`;
+        }
         const parts = sections[key].split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/);
         const escaped = parts.map((part, i) => {
           // 수식 구간도 escape 한다 — KaTeX 는 엔티티가 디코딩된 DOM 텍스트를 읽으므로
@@ -229,16 +241,24 @@ async function openProblemModal(platform, ref, title, tierName) {
       .join('');
 
     stmtEl.innerHTML = sectionsHtml + samplesHtml;
+    // 본문 링크는 새 탭으로 연다 — 같은 탭으로 이동하면 앱이 닫힌다.
+    stmtEl.querySelectorAll('.pm-html a[href]').forEach(a => {
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    });
     stmtEl.classList.remove('hidden');
     showProblemAsk();
     if (typeof renderMathInElement !== 'undefined') {
-      renderMathInElement(stmtEl, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false },
-        ],
-        throwOnError: false,
-      });
+      const delimiters = [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+      ];
+      // 백준 본문은 MathJax 구분자 \[…\]·\(…\) 도 쓴다.
+      if (htmlSections) {
+        delimiters.push({ left: '\\[', right: '\\]', display: true },
+                        { left: '\\(', right: '\\)', display: false });
+      }
+      renderMathInElement(stmtEl, { delimiters, throwOnError: false });
     }
   } catch (e) {
     // 성공 경로와 같은 세대 가드 — 없으면 늦게 도착한 실패가 다른 모달에 그려진다.

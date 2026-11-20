@@ -20,7 +20,7 @@
 │  problem · problem_leetcode · execute · recommend · themes      │
 │  history · solved · stats · report · drafts · problem_lookup    │
 │  import_github · import_codeforces · import_leetcode            │
-│  leetcode_judge · problem_ask · google_auth                     │
+│  leetcode_judge · problem_ask · google_auth · problem_boj       │
 └────────┬───────────────────────────────┬───────────────────────┘
          │                               │
 ┌────────▼────────┐             ┌────────▼─────────────────────────┐
@@ -128,6 +128,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | 파일 | 단일 책임 |
 |------|----------|
 | `clients/solved_ac.py` | solved.ac API, BOJ 스크래핑. `TIER_NAMES` 의 정본은 `constants.py` 다. `get_boj_problem_sections()` 는 실패 시 `None` — CF 쌍둥이 함수와 같은 계약이다 |
+| `clients/boj_problem.py` | 백준 문제 페이지 요청(`fetch_boj_soup`, 404 는 `ProblemNotFound`)과 뷰어용 추출(`scrape_boj_problem` — 제목·시간/메모리 제한·섹션 HTML(그림·링크 절대 URL)·텍스트판(첨자는 `2^{31}`)·예제). `clients/solved_ac.py` 의 본문 수집도 이 요청을 쓴다 |
 | `clients/codeforces.py` | Codeforces API, 문제 메타/본문 스크래핑 |
 | `clients/leetcode.py` | LeetCode 공개 GraphQL(문제 목록 스냅샷·본문·태그 검색) + 세션 쿠키로 내 제출 코드. 문제 식별자는 titleSlug, 번호는 스냅샷으로 대응. 스냅샷은 42 요청이라 `api_cache` 에 하루 저장한다(`db` 는 지연 import) |
 | `clients/github.py` | GitHub OAuth, 파일 push, BaekjoonHub import, 저장소 트리 조회(`fetch_repo_tree`·`get_boj_readme_paths`) |
@@ -148,9 +149,10 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem_resolve.py` | — | 문제 식별자 → 문제 메타/본문 해석 (review·pending·rereview 공용). `is_scrape_failure()` 로 수집 실패 문자열을 걸러 LLM 프롬프트에 들어가지 않게 한다 |
 | `routes/problem.py` | `GET /api/problem/cf/{ref}` | CF 문제 조회 라우트 (스크래핑 + 번역) |
 | `routes/problem_leetcode.py` | `GET /api/problem/lc/{slug}` | LeetCode 문제 조회 라우트 — 본문 HTML 을 태그 보존 번역. `samples`(공식 예제 입력만)와 `judge: "leetcode"`, `code_snippets`(뷰어 언어별 공식 코드 스텁), `statement_text_ko`(번역 본문의 텍스트판 — GitHub README 본문. 없으면 push 가 영문 원문을 긁어 넣는다)를 함께 준다. 유료 문제는 본문 없이 |
-| `routes/problem_lookup.py` | `GET /api/problem/lookup?platform=&ref=` | 문제 번호·slug·URL → 뷰어가 여는 정규 ref + 제목·난이도 라벨(`resolve_problem_info` 재사용, LLM 미사용). 뷰어가 없는 플랫폼(BOJ)·미지원 플랫폼·빈 입력·없는 문제 400, 상류 502. 데모는 조회 없이 입력을 그대로(비어 있으면 `4A`) 돌려준다(데모 뷰어는 고정 문제를 보여준다) |
+| `routes/problem_boj.py` | `GET /api/problem/boj/{번호}` | 백준 문제 조회 라우트 — 번역하지 않는다. `statement_sections_html`(화면이 DOMPurify 로 정화해 그리는 원문 HTML)과 `statement_sections_ko`(같은 섹션의 텍스트판 — 질문 칸 문맥·GitHub README 본문), 키는 `statement`·`input`·`output`·`limit`·`hint`. `samples` 는 이 앱의 실행기로 채점한다. 숫자 아닌 번호 400, 없는 문제 404, 상류 502. 성공 결과는 만료 없이 캐시 |
+| `routes/problem_lookup.py` | `GET /api/problem/lookup?platform=&ref=` | 문제 번호·slug·URL → 뷰어가 여는 정규 ref + 제목·난이도 라벨(CF·LeetCode 는 `resolve_problem_info` 재사용, 백준은 DB 를 읽지 않고 solved.ac 를 직접 조회, LLM 미사용). 미지원 플랫폼·빈 입력·형식 오류·없는 문제 400, 상류 502. 데모는 조회 없이 입력을 그대로(비어 있으면 `4A`) 돌려준다(데모 뷰어는 고정 문제를 보여준다) |
 | `routes/leetcode_judge.py` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | 뷰어의 예제 실행·제출을 LeetCode 채점기로 위임. 언어는 `python3`·`cpp`·`mysql`(뷰어 select 값 = langSlug). 데모 403, 세션 없음·만료 401, 429(프로세스 전역 분당 20회 상한 또는 LeetCode 자체 제한 — 연속 실행 서너 번이면 걸린다), 상류 502 |
-| `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}` 키로 쓴다 |
+| `routes/problem_cache.py` | — | 문제 뷰어 응답의 프로세스 캐시 + 같은 문제 동시 요청 병합. 라우터가 `cf:{ref}`·`lc:{slug}`·`boj:{번호}` 키로 쓴다 |
 | `routes/execute.py` | `POST /api/execute` | Python/C++ 코드 실행을 실행 전용 서비스로 **위임**(`EXECUTOR_URL`) + IP 레이트리밋. `EXECUTOR_URL` 이 없으면 403 — 앱은 어떤 경로로도 직접 실행하지 않는다 |
 | `routes/recommend.py` | `GET /api/recommend` | 문제 추천 API |
 | `routes/themes.py` | `GET /api/themes?platform=`, `GET /api/themes/{theme_id}/problems` | 플랫폼별 테마 목록 + 테마 문제 조회 (푼 문제 제외). 그 플랫폼에 없는 테마는 404 |
@@ -183,7 +185,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 ### 프론트엔드 (`static/js/`)
 | 파일 | 단일 책임 |
 |------|----------|
-| `utils.js` | 공통 유틸 — 플랫폼 표(`PLATFORMS`·`platformSpec`: 라벨·입력 규약·URL·난이도 배지·뷰어 여부를 한 곳에), 순수 함수(tierClass, cfRatingClass, lcDifficultyClass, tierBadgeHtml, escapeHtml, sanitizeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk). 다른 JS 는 플랫폼 문자열을 직접 비교하지 않는다(불변식 테스트) |
+| `utils.js` | 공통 유틸 — 플랫폼 표(`PLATFORMS`·`platformSpec`: 라벨·입력 규약·URL·난이도 배지·뷰어 주소를 한 곳에), 순수 함수(tierClass, cfRatingClass, lcDifficultyClass, tierBadgeHtml, escapeHtml, sanitizeHtml, detectLanguage 등) + fetch 골격(fetchJsonOk). 다른 JS 는 플랫폼 문자열을 직접 비교하지 않는다(불변식 테스트) |
 | `editor.js` | CodeMirror 에디터 초기화 및 관리 |
 | `load-submission.js` | 지난 제출을 리뷰 폼에 채워 편집 가능한 상태로 만든다. 진입점 넷(메인 탭 버튼·리뷰 기록 모달·⌘K 팔레트·문제 풀기 모달의 '코드 리뷰 진행')이 이 파일의 `fillReviewForm` 을 쓴다 |
 | `command-palette.js` | ⌘K 팔레트 — 탭 이동 + 문제 검색 → 회차 선택 → 불러오기 |
@@ -196,7 +198,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `recommend.js` | 문제 추천 표시 |
 | `themes.js` | 테마별 문제 탭 — 플랫폼 토글, 테마 칩, 3계층 캐시(메모리/localStorage/서버), 유휴 프리페치 |
 | `pane-splitter.js` | 분할 손잡이 — `role="separator"` 요소를 포인터 캡처·화살표 키(PageUp/Down·Home/End, 더블클릭은 기본값)로 움직여 첫 패널 비율을 컨테이너 CSS 변수(%)에 쓰고 localStorage(`viewer:split:v1:*`)에 저장한다. 최소 크기는 CSS 가 지키고(clamp() 의 양 끝 — 상하 분할의 아래 패널은 낮은 창에서 min-height 가 지킨다) 여기서는 같은 수치로 aria-valuenow·저장값을 맞춘다. 요소 ID 를 모른다(배선은 problem-modal.js) |
-| `problem-modal.js` | 문제 뷰어 모달(CF·LeetCode, 전체 화면·닫기는 ✕ 버튼) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 샘플 결과는 `sampleVerdict` 가 판정(통과·출력 불일치·런타임 오류·컴파일 오류·시간 초과·실행 불가)하고 `renderSampleResult` 가 그린다 — stderr 는 stdout 과 별개의 블록에 항상 보인다(통과 케이스는 접힘). 본문이 HTML 한 덩어리인 응답은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만). 분할 손잡이 2개(`#pm-split-v`·`#pm-split-h`)를 `attachPaneSplitter` 로 붙이고(최소 px 는 surfaces.css 의 clamp() 와 같다) 패널 크기가 바뀌면 `refreshViewerEditor` 가 CodeMirror 를 refresh 한다 |
+| `problem-modal.js` | 문제 뷰어 모달(백준·CF·LeetCode, 전체 화면·닫기는 ✕ 버튼) — 조회, 샘플 실행(`samples` 가 있는 응답에서만; `judge: 'leetcode'` 면 `leetcode-judge.js` 로 넘긴다), 리뷰 이동. 샘플 결과는 `sampleVerdict` 가 판정(통과·출력 불일치·런타임 오류·컴파일 오류·시간 초과·실행 불가)하고 `renderSampleResult` 가 그린다 — stderr 는 stdout 과 별개의 블록에 항상 보인다(통과 케이스는 접힘). 본문이 HTML 한 덩어리인 응답(LeetCode)과 섹션별 HTML 응답(백준 `statement_sections_html`, 링크는 새 탭)은 `sanitizeHtml` 로 그린다. `fillCodeSnippet` 이 선택 언어의 공식 스텁을 채운다(에디터가 비었거나 직전 스텁 그대로일 때만). 분할 손잡이 2개(`#pm-split-v`·`#pm-split-h`)를 `attachPaneSplitter` 로 붙이고(최소 px 는 surfaces.css 의 clamp() 와 같다) 패널 크기가 바뀌면 `refreshViewerEditor` 가 CodeMirror 를 refresh 한다 |
 | `problem-open.js` | 추천 탭 '문제 직접 열기' 카드 — 번호·slug·URL 을 `/api/problem/lookup` 으로 정규 ref·제목·난이도로 풀어 추천 카드와 같은 `openProblemModal` 로 뷰어를 연다. 플랫폼 select 는 뷰어가 있는 CF·LeetCode 만 |
 | `problem-ask.js` | 문제 뷰어 질문 — 본문 아래 질문 칸. 뷰어가 받은 섹션·예제를 텍스트로 묶고 질문·(선택) 에디터 코드·앞선 문답과 함께 `/api/problem/ask` 로 보낸다. 답은 `renderMarkdown` + KaTeX. 문제를 새로 열면(`resetProblemAsk`) 대화를 비우고, 늦게 온 답은 `_askProblem` 세대 확인으로 버린다 |
 | `leetcode-judge.js` | LeetCode 채점기 경로 — 예제 실행(`/api/leetcode/run`, 케이스 전부 한 요청)·제출(`/api/leetcode/submit`, `#pm-submit-btn`) 결과 렌더. `_currentProblem`·`_runToken`·`resetRunButton`·`setReviewOutcome` 을 problem-modal.js 와 공유한다 |
@@ -232,6 +234,7 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/problem.py` | `statement_translator.translate_statement` | CF 본문 OpenAI 한국어 번역 |
 | `routes/problem.py` | `routes.problem_cache.run_deduplicated` · `cache_set` | 응답 캐시 조회·동시 요청 병합·저장 |
 | `routes/problem_leetcode.py` | `clients.scrape_lc_problem` · `clients.leetcode_judge.split_example_cases` · `statement_translator.translate_statement(html=True)` · `routes.problem_cache` | LeetCode 본문 조회·예제 케이스 분할·HTML 보존 번역·캐시 |
+| `routes/problem_boj.py` | `clients.scrape_boj_problem` · `routes.problem_cache` | 백준 본문·제한·예제 수집·캐시 |
 | `routes/leetcode_judge.py` | `clients.scrape_lc_problem`(question_id) · `clients.leetcode_judge.run_examples / submit_solution` | LeetCode 채점기 예제 실행·제출 |
 | `routes/import_leetcode.py` | `clients.get_leetcode_user_submissions` | LeetCode AC 제출 조회(세션 쿠키 유무에 따라 코드 포함 여부) |
 | `routes/helpers.py` | `clients.tex_markers_to_markdown` | README push 시 수식 이미지 마커 → 마크다운 |
@@ -254,11 +257,12 @@ SQLAlchemy 2.0 ORM 을 쓴다. SQLite(로컬/데모) ↔ PostgreSQL(운영) 은 
 | `routes/auth.py` | `clients.exchange_github_code` | GitHub OAuth 토큰 교환 |
 | `routes/google_auth.py` | `clients.google_auth_url` · `clients.exchange_google_code` · `login_gate.make_session` | 구글 로그인 → 세션 쿠키 |
 | `routes/auth.py` | `db.save_github_settings` | GitHub 토큰 저장 |
-| `problem-modal.js` | `GET /api/problem/cf/{ref}` · `GET /api/problem/lc/{slug}` | 문제 내용 조회 (플랫폼 표의 `viewerUrl`) |
-| `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행(CF) |
+| `problem-modal.js` | `GET /api/problem/boj/{번호}` · `GET /api/problem/cf/{ref}` · `GET /api/problem/lc/{slug}` | 문제 내용 조회 (플랫폼 표의 `viewerUrl`) |
+| `problem-modal.js` | `POST /api/execute` | 샘플 테스트 코드 실행(백준·CF) |
 | `scratchpad.js` | `POST /api/execute` | 코드 연습장 실행 |
 | `problem-open.js` | `GET /api/problem/lookup` | 번호·slug·URL → 정규 ref·제목·난이도(뷰어 열기용) |
 | `routes/problem_lookup.py` | `routes.problem_resolve.resolve_problem_info` | CF·LeetCode 문제 메타 조회(스냅샷) |
+| `routes/problem_lookup.py` | `clients.get_problem_info` | 백준 문제 메타 조회(solved.ac) |
 | `leetcode-judge.js` | `POST /api/leetcode/run` · `POST /api/leetcode/submit` | LeetCode 채점기 예제 실행·제출 |
 | `review.js` | `POST /api/review` | AI 코드 리뷰 요청 |
 | `review.js` | `POST /api/review/pending` | 리뷰 실패 시 리뷰 없이 GitHub 등록 |
@@ -332,7 +336,7 @@ DB 가 컨테이너 임시 파일이다. DB 쓰기 자체는 열려 있다(리�
 | LeetCode 행의 `problem_id`·`tier` | `problem_id` 는 LeetCode 번호(1, 175 …)라 BOJ 번호와 겹치고, `tier` 1~3 은 BOJ 티어 1~3(Bronze) 과 겹친다. 플랫폼 필터 없는 조회에 흘러들면 BOJ 통계·추천 제외 목록이 오염된다. `tier_name` 이 비면 `db/normalize.resolve_tier_name` 이 `Bronze V` 로 되돌린다 | BOJ 전용 조회(`get_solved_problem_ids`·`get_cached_problem_info`·`get_average_tier`·`get_tier_history`)는 전부 `platform == "boj"` 를 건다. LeetCode 저장 경로는 항상 `lc_difficulty_label` 로 `tier_name` 을 채운다(`tests/test_helpers_leetcode.py`·`test_import_leetcode_route.py`) |
 | `reviews.language` | 자유 문자열이다 — import 경로가 CF/BOJ 원문(`"GNU G++17 7.3.0"`)을 그대로 저장한다. `select.value` 에 없는 값을 넣으면 조용히 실패해 빈 select 가 된다 | `submissionLanguageOption()` 이 option 존재를 확인하고, 없으면 `detectLanguage(code)` 로 재추론한다(반환 도메인이 option value 와 같다) |
 | 탭 전환 | 전환 로직을 복제하면 탭별 lazy loader 와 모바일 메뉴 닫기를 건너뛴다 | `activateTab()` 한 곳만 둔다. 배선 테스트가 다른 JS 에 `.tab-content` 토글이 없음을 확인 |
-| 본문 수집 함수 | `get_problem_statement()`·`get_codeforces_problem_statement()` 는 예외를 던지지 않고 **실패 문자열**을 반환한다. 그대로 넘기면 프롬프트의 문제 설명 자리에 `"크롤링 실패: 404 …"` 가 들어간다. BOJ 는 acmicpc.net 종료로 수집이 상시 실패한다 | LLM 에 본문을 넘기는 **세 경로 전부**(`review`·`rereview`·`review-imported`)가 `resolve_statement()` 를 쓴다 — `is_scrape_failure()` 로 걸러 빈 본문을 준다. 백필도 저장 직전에 같은 검사를 한다(저장하면 그 문제의 리뷰가 영구히 오염된다). **수집 함수를 직접 부르는 경로를 새로 만들면 안 된다** — 그 경로는 이 필터를 우회한다 |
+| 본문 수집 함수 | `get_problem_statement()`·`get_codeforces_problem_statement()` 는 예외를 던지지 않고 **실패 문자열**을 반환한다. 그대로 넘기면 프롬프트의 문제 설명 자리에 `"크롤링 실패: 404 …"` 가 들어간다 | LLM 에 본문을 넘기는 **세 경로 전부**(`review`·`rereview`·`review-imported`)가 `resolve_statement()` 를 쓴다 — `is_scrape_failure()` 로 걸러 빈 본문을 준다. 백필도 저장 직전에 같은 검사를 한다(저장하면 그 문제의 리뷰가 영구히 오염된다). **수집 함수를 직접 부르는 경로를 새로 만들면 안 된다** — 그 경로는 이 필터를 우회한다 |
 | BOJ README 경로 |  저장소 폴더명은 BaekjoonHub 규칙이라 공백이 `U+2005`, 특수문자가 전각(`A＋B`)이고 `번` 이 없다. 티어 폴더도 저장 당시 값이라 DB 와 다르다(acmicpc 종료 후 조회 실패로 `Unrated` 인 행이 많다) → 경로를 조립하면 거의 다 404 다 | `get_boj_readme_paths()` 로 트리를 한 번 받아 번호로 찾는다. 번호 경계를 느슨하게 보면 `2024 대회 후기` 를 2024번 문제로 오인한다 |
 | BOJ README 재푸시 | 수집 실패를 빈 섹션으로 오인하면 본문 없는 README 로 덮어써 **이미 올라간 문제 설명이 지워진다** | 두 겹으로 막는다 — ① `get_boj_problem_sections()` 가 `get_cf_problem_sections()` 와 같은 계약으로 실패 시 `None` 을 반환한다(200 인데 세 섹션이 다 빈 경우도 실패로 본다), ② `require_sections` 가드가 `None` 뿐 아니라 "모든 섹션이 빈 dict" 도 502 로 막는다. 여기에 `rereview`·`github_push` 가 저장된 `problem_statement` 를 `description` 으로 넘겨 스크래핑 자체를 건너뛴다. `tests/test_push_review_bundle_sections.py` 가 두 플랫폼 × 두 실패 표현을 고정 |
 | 재업로드 '제출 일자' | `db.save_review` 는 `timestamps.utc_now_iso()` 로 오프셋 있는 UTC 를 저장한다. 오프셋 없이 저장된 옛 행이 남아 있어, 읽는 쪽이 그 값을 어떤 시간대로 볼지 규칙을 정해야 한다 | `_format_kst` 가 naive 값을 UTC 로 간주해 KST 로 변환한다. `tests/test_helpers_readme.py` 가 naive·UTC·KST 세 입력을 고정 |

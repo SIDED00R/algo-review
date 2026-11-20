@@ -245,8 +245,7 @@ def test_set_problem_statement_rejects_empty():
 def test_resolve_statement_never_returns_failure_string(monkeypatch):
     """수집 실패 문자열이 LLM 프롬프트의 문제 설명 자리로 흘러가면 안 된다.
 
-    BOJ 는 acmicpc.net 종료로 수집이 상시 실패하므로 이 판별이 없으면 매 리뷰가
-    `"크롤링 실패: 404 …"` 를 본문으로 받는다.
+    이 판별이 없으면 수집이 실패한 리뷰가 `"크롤링 실패: 404 …"` 를 본문으로 받는다.
     """
     from routes import problem_resolve
 

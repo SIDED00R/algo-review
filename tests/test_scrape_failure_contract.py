@@ -26,7 +26,7 @@ def _html(body: str) -> MagicMock:
 
 
 def test_boj_request_failure_is_recognised():
-    """요청 자체가 실패하는 경로 — acmicpc.net 종료로 상시 이 상태다."""
+    """요청 자체가 실패하는 경로 — acmicpc.net 장애·차단."""
     with patch.object(solved_ac.requests, "get", side_effect=RuntimeError("blocked")):
         result = api_client.get_problem_statement(1000)
     assert is_scrape_failure(result), f"판별자가 놓친 실패 문자열: {result!r}"

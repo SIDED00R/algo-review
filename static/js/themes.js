@@ -122,7 +122,6 @@ async function loadThemeProblems({ force = false } = {}) {
 function renderThemeProblems(container, data) {
   const problems = data.problems || [];
   const label = data.theme ? data.theme.label : '';
-  const spec = platformSpec(data.platform);
 
   let html = '<div class="result-card">';
   html += `
@@ -146,8 +145,7 @@ function renderThemeProblems(container, data) {
       const label = escapeHtml(problemLabel({
         platform: data.platform, problem_id: p.problem_id, problem_ref: String(p.id),
       }));
-      if (spec.viewer) {
-        html += `
+      html += `
         <div class="rec-problem-card is-clickable"
              data-platform="${escapeHtml(data.platform)}"
              data-ref="${escapeHtml(String(p.id))}"
@@ -156,14 +154,6 @@ function renderThemeProblems(container, data) {
           <span>${label}. ${escapeHtml(p.title)}</span>
           ${badge}
         </div>`;
-      } else {
-        // 백준 본체(acmicpc)가 서비스 종료라 링크 없이 정보만 표시한다.
-        html += `
-        <div class="rec-problem-card">
-          <span>${label}. ${escapeHtml(p.title)}</span>
-          ${badge}
-        </div>`;
-      }
     }
     html += '</div>';
   }
